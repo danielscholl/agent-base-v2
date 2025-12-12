@@ -109,7 +109,7 @@ type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 ### 5. Skills System (Redesigned)
 
 **From:** SKILL.md manifests + PEP 723 scripts + `uv run`
-**To:** `skill.json` manifests + Node.js scripts + sandboxed execution
+**To:** `skill.json` manifests + Bun subprocess execution (sandboxed)
 
 ```
 skills/
@@ -434,9 +434,9 @@ agent-ts/
 │           └── toolsets/
 │               └── index.ts
 ├── tests/
-│   ├── unit/
-│   ├── integration/
-│   └── fixtures/
+│   ├── integration/            # Cross-module integration tests
+│   └── fixtures/               # Shared test fixtures and mocks
+│   # Note: Unit tests are co-located in src/**/__tests__/
 ├── docs/
 │   ├── decisions/                # TypeScript ADRs
 │   └── migration.md              # Python → TypeScript guide
@@ -450,31 +450,13 @@ agent-ts/
 
 ## Dependencies
 
-```json
-{
-  "dependencies": {
-    "@langchain/anthropic": "^0.3.0",
-    "@langchain/core": "^0.3.0",
-    "@langchain/google-genai": "^0.1.0",
-    "@langchain/ollama": "^0.1.0",
-    "@langchain/openai": "^0.3.0",
-    "dotenv": "^16.0.0",
-    "ink": "^5.0.0",
-    "ink-spinner": "^5.0.0",
-    "ink-text-input": "^6.0.0",
-    "react": "^18.0.0",
-    "tiktoken": "^1.0.0",
-    "zod": "^3.23.0"
-  },
-  "devDependencies": {
-    "@types/bun": "latest",
-    "@types/react": "^18.0.0",
-    "jest": "^29.0.0",
-    "ts-jest": "^29.0.0",
-    "typescript": "^5.0.0"
-  }
-}
-```
+Use latest stable versions per `CLAUDE.md` Tech Stack:
+- **React 19** + **Ink 6** for terminal UI
+- **Zod 4.x** for schema validation
+- **LangChain.js 1.x** for LLM integration
+- **TypeScript 5.x** with strict mode
+
+See `package.json` for exact versions (source of truth for dependencies).
 
 ---
 

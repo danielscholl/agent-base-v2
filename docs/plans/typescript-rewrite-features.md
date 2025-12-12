@@ -9,10 +9,17 @@ This document decomposes `docs/plans/typescript-rewrite.md` into an ordered set 
 **Goal:** Establish core architecture and single provider
 
 ### Feature 1: Initialize Bun + TypeScript workspace
-Create a fresh `agent-ts/` project using Bun, enable strict TypeScript, set up module resolution, and add baseline tooling (Jest/ts-jest, ESLint, formatting). Mirror the final folder layout from the plan so later ports land in stable locations, and ensure a minimal `index.tsx` boots an Ink app.
+Create a fresh `agent-ts/` project using Bun, enable strict TypeScript, set up module resolution, and add baseline tooling (Jest/ts-jest via `bun run test`, ESLint, Prettier). Mirror the final folder layout from the plan so later ports land in stable locations. Unit tests are co-located in `src/**/__tests__/` directories. Ensure a minimal `index.tsx` boots an Ink app.
 
 ### Feature 2: Port configuration schemas and config manager
-Recreate `agent-base/src/agent/config/schema.py` as Zod schemas with inferred TS types, including agent settings, providers, memory, skills, and paths. Implement a config manager that loads defaults, merges env overrides (via dotenv), validates on load/save, and writes to disk in a stable JSON format. This is the foundation every other feature depends on.
+Recreate `agent-base/src/agent/config/schema.py` as Zod schemas with inferred TS types, including agent settings, providers, memory, skills, and paths. Implement a config manager that:
+- Loads defaults from Zod schemas
+- Merges project-level config (`./.agent-ts/settings.json` - committable)
+- Merges user-level config (`~/.agent-ts/settings.json` - personal)
+- Applies environment variable overrides (highest priority)
+- Validates on load/save and writes to disk in a stable JSON format
+
+This is the foundation every other feature depends on.
 
 ### Feature 3: Define the LangChain tool wrapper and response contract
 Introduce a `tools/base.ts` that standardizes the `{ success, result|error, message }` response shape and provides helpers to turn internal tools into LangChain `StructuredTool`s via Zod. This replaces `AgentToolset`/Pydantic annotations and sets the contract for built-in tools and skills.
@@ -144,7 +151,7 @@ Add comprehensive `--help` for all commands and a `/help` interactive command. D
 **Goal:** Production readiness
 
 ### Feature 36: Establish Jest test patterns and fixtures
-Set up test infrastructure with unit tests for schemas, providers, tools, skills loader, and persistence. Create mock fixtures for LLM responses that don't require real API calls. Target 85% coverage.
+Set up test infrastructure with co-located unit tests (`src/**/__tests__/`) for schemas, providers, tools, skills loader, and persistence. Integration tests live in `tests/integration/`. Create mock fixtures in `tests/fixtures/` for LLM responses that don't require real API calls. Target 85% coverage.
 
 ### Feature 37: Add integration tests for agent loop
 Write integration tests that exercise the full agent flow: prompt → LLM → tool call → response. Use mocked providers to ensure deterministic results.
