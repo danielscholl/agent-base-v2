@@ -9,7 +9,7 @@ This document decomposes `docs/plans/typescript-rewrite.md` into an ordered set 
 **Goal:** Establish core architecture and validate the agent loop
 
 ### Feature 1: Initialize Bun + TypeScript workspace
-Create a fresh `agent-ts/` project using Bun, enable strict TypeScript, set up module resolution, and add baseline tooling (Jest/ts-jest via `bun run test`, ESLint, Prettier). Mirror the final folder layout from the plan so later ports land in stable locations. Unit tests are co-located in `src/**/__tests__/` directories. Ensure a minimal `index.tsx` boots an Ink app.
+Create a fresh `agent` project using Bun, enable strict TypeScript, set up module resolution, and add baseline tooling (Jest/ts-jest via `bun run test`, ESLint, Prettier). Mirror the final folder layout from the plan so later ports land in stable locations. Unit tests are co-located in `src/**/__tests__/` directories. Ensure a minimal `index.tsx` boots an Ink app.
 
 ### Feature 2: Port configuration schemas and config manager
 Recreate `agent-base/src/agent/config/schema.py` as Zod schemas with inferred TS types, including agent settings, providers, memory, skills, and paths. Implement a config manager that:
