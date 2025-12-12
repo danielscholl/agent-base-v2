@@ -162,8 +162,8 @@ Write a converter that reads existing agent-base config (`~/.agent/settings.json
 ### Feature 39: Implement system prompt template system
 Finalize `agent/prompts.ts` with three-tier loading (env → user → package), placeholder replacement, and YAML front matter stripping. Document customization options.
 
-### Feature 40: Create CLAUDE.md for the new codebase
-Write comprehensive AI coding guidance covering architecture patterns, testing requirements, code style, and key files. This enables AI-assisted development on the TypeScript codebase.
+### Feature 40: Maintain CLAUDE.md alignment ✅
+CLAUDE.md governance document has been created. During Phase 6, ensure it stays in sync with implementation reality and any ADRs added during development.
 
 ### Feature 41: Write README and migration documentation
 Document installation, configuration, usage, and migration from Python. Include examples for each provider and common workflows.

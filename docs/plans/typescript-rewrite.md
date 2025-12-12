@@ -368,7 +368,7 @@ src/
 - [ ] Error handling refinement
 - [ ] Configuration migration tool (Python → TypeScript)
 - [ ] System prompt template system (three-tier, placeholders)
-- [ ] CLAUDE.md for the new codebase
+- [x] CLAUDE.md for the new codebase (created pre-implementation)
 - [ ] README and migration documentation
 
 ---
@@ -513,7 +513,9 @@ See `package.json` for exact versions (source of truth for dependencies).
 
 ## Next Steps
 
-1. Create new `agent-ts/` directory
-2. Initialize Bun project with TypeScript
-3. Begin Week 1 foundation work
+1. Initialize Bun project with TypeScript in repo root (`agent-base-v2/`)
+2. Set up `src/` directory structure per Project Structure section
+3. Begin Phase 1 foundation work
 4. Port configuration schema first (validates Zod approach)
+
+> **Note**: This plan references `agent-ts/` as the conceptual project name. The actual implementation lives in `agent-base-v2/` with `src/` at the repo root.
