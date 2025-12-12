@@ -64,6 +64,12 @@ export default tseslint.config(
   {
     // Test files can have looser rules
     files: ['**/__tests__/**/*.{ts,tsx}', '**/tests/**/*.{ts,tsx}'],
+    languageOptions: {
+      parserOptions: {
+        project: './tsconfig.test.json',
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
     rules: {
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-unsafe-assignment': 'off',

@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
-import { render, Text, Box, useApp } from 'ink';
+import { render, useApp } from 'ink';
+import { App } from './components/App.js';
 
 /**
- * Minimal Ink application entry point.
- * Validates the React 19 + Ink 6 setup works correctly.
+ * Wrapper component that exits after initial render (demo mode).
  */
-function App(): React.ReactElement {
+function Main(): React.ReactElement {
   const { exit } = useApp();
 
   useEffect(() => {
@@ -13,16 +13,8 @@ function App(): React.ReactElement {
     exit();
   }, [exit]);
 
-  return (
-    <Box flexDirection="column" padding={1}>
-      <Text color="green" bold>
-        Agent Framework v2
-      </Text>
-      <Text>Hello, World!</Text>
-      <Text dimColor>TypeScript + Bun + React + Ink</Text>
-    </Box>
-  );
+  return <App />;
 }
 
-const { waitUntilExit } = render(<App />);
+const { waitUntilExit } = render(<Main />);
 await waitUntilExit();

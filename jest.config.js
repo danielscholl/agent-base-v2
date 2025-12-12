@@ -14,7 +14,13 @@ export default {
 
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    '^(\\.{1,2}/.*)\\.js$': '$1', // Handle .js -> .ts/.tsx imports
   },
+
+  // Transform ESM packages from node_modules
+  transformIgnorePatterns: [
+    'node_modules/(?!(ink-testing-library|ink|cli-truncate|string-width|strip-ansi|ansi-regex|ansi-styles|wrap-ansi|slice-ansi|emoji-regex)/)',
+  ],
 
   transform: {
     '^.+\\.tsx?$': [
