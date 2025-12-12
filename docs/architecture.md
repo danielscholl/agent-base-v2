@@ -157,17 +157,20 @@ settings.json
 ─────────────
 {
   "providers": {
-    "enabled": ["openai", "anthropic"],  ← Active providers
+    "default": "openai",                  ← Selected provider
     "openai": {
-      "api_key": "...",
-      "model": "gpt-4o"                   ← Model for this provider
+      "apiKey": "...",
+      "model": "gpt-4o"
     },
     "anthropic": {
-      "api_key": "...",
+      "apiKey": "...",
       "model": "claude-sonnet-4-5"
     }
   }
 }
+
+Note: Config uses camelCase consistently (TypeScript convention).
+On-disk JSON matches in-memory TypeScript objects without transformation.
 ```
 
 ### Provider Registry
@@ -205,16 +208,31 @@ settings.json
 
 ## Configuration Architecture
 
+### Config Directory
+
+The config directory is `.agent/` (matches Python for easier migration):
+- **Project config**: `./.agent/settings.json` (committable, team-shared)
+- **User config**: `~/.agent/settings.json` (personal, never committed)
+- **Sessions**: `~/.agent/sessions/`
+- **Context**: `~/.agent/context/` (cleared per session)
+- **Skills**: `~/.agent/skills/` (user plugins)
+
+### Config Conventions
+
+- **Casing**: camelCase for all keys (TypeScript convention)
+- **On-disk format**: JSON matches in-memory objects (no transformation)
+- **Validation**: Zod schemas with TypeScript type inference
+
 ### Hierarchy (Highest to Lowest Priority)
 
 ```
 1. Environment Variables     ─► OPENAI_API_KEY, AGENT_MODEL, etc.
          │
          ▼
-2. Project Config            ─► ./<config-dir>/settings.json
+2. Project Config            ─► ./.agent/settings.json
          │                       (committable, team-shared)
          ▼
-3. User Config               ─► ~/.<config-dir>/settings.json
+3. User Config               ─► ~/.agent/settings.json
          │                       (personal, never committed)
          ▼
 4. Schema Defaults           ─► Zod schema .default() values
@@ -449,6 +467,22 @@ Each file contains:
 2. **During answer:** LLM selects relevant pointers, full data loaded
 3. **End of session:** Context directory cleared
 
+### Session Resume and Context
+
+**Important:** Context is ephemeral and not preserved across session resume.
+
+When a session is resumed (`--continue`):
+- **Conversation history** is restored (messages, timestamps)
+- **Event logs** are available (LLM calls, tool calls)
+- **Context data is NOT restored** (large tool outputs are lost)
+
+This is a deliberate trade-off:
+- **Rationale:** Context can be very large (search results, file contents)
+- **Implication:** Resumed sessions may need to re-execute tools to regenerate context
+- **Future consideration:** Post-MVP could add context summaries stored with session
+
+For MVP, users should understand that resuming a session provides conversation continuity but not full context restoration.
+
 ---
 
 ## Skills Architecture
@@ -459,12 +493,20 @@ Each file contains:
 skills/
 └── hello-extended/
     ├── SKILL.md              # Manifest (YAML front matter + instructions)
-    ├── toolsets/
-    │   ├── __init__.py       # Exports toolset classes
-    │   └── hello.py          # Tool implementations
-    └── scripts/
-        └── advanced_greeting.py  # Standalone scripts (sandboxed)
+    └── toolsets/
+        └── index.ts          # Exported tool classes
 ```
+
+**MVP Scope:** Toolsets only. Script execution deferred to post-MVP.
+
+**Toolsets vs Scripts:**
+| Aspect | Toolsets | Scripts (Post-MVP) |
+|--------|----------|-------------------|
+| Context | Loaded into LLM | Not loaded |
+| Latency | Low (in-process) | Higher (subprocess) |
+| Dependencies | Shared with agent | Isolated per-script |
+| Testing | Synchronous, mockable | Async subprocess |
+| MVP Status | **Included** | Deferred |
 
 ### Manifest Format (SKILL.md)
 
@@ -474,11 +516,12 @@ name: hello-extended
 description: Extended greeting capabilities
 version: 1.0.0
 toolsets:
-  - "toolsets.hello:HelloToolset"     # module:Class format
+  - "toolsets/index:HelloToolset"     # path:Class format
 triggers:
   keywords: ["hello", "greet", "greeting"]
   verbs: ["say", "wave"]
   patterns: ["greet\\s+\\w+"]
+default_enabled: true                  # For bundled skills
 ---
 
 # Hello Extended Skill
@@ -493,30 +536,35 @@ Instructions for using this skill...
 | `name` | Yes | Skill identifier (alphanumeric, hyphens, max 64 chars) |
 | `description` | Yes | Brief description (max 500 chars) |
 | `version` | No | Semantic version (e.g., "1.0.0") |
-| `toolsets` | No | Python toolset classes ("module:Class" format) |
-| `scripts` | No | Script list (auto-discovered if omitted) |
-| `triggers.keywords` | No | Direct keyword matches |
-| `triggers.verbs` | No | Action verbs |
+| `toolsets` | No | TypeScript toolset classes ("path:Class" format) |
+| `scripts` | No | Script list (parsed but not executed in MVP) |
+| `triggers.keywords` | No | Direct keyword matches (word boundary) |
+| `triggers.verbs` | No | Action verbs (word boundary) |
 | `triggers.patterns` | No | Regex patterns |
-| `permissions` | No | Environment variable allowlist for scripts |
+| `default_enabled` | No | For bundled skills (default: true) |
+| `brief_description` | No | Auto-generated from first sentence if omitted |
 
 ### Progressive Disclosure
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Three-Tier Disclosure                         │
+│                    Four-Tier Disclosure                          │
+│                                                                  │
+│  Tier 0: Nothing                                                │
+│  └── When: No skills loaded or no match                         │
 │                                                                  │
 │  Tier 1: Breadcrumb (~10 tokens)                                │
-│  ├── When: Skills exist but don't match query                   │
-│  └── Shows: "Skills available. Ask about capabilities."         │
+│  ├── When: Skills exist with triggers but don't match query     │
+│  └── Shows: "[N skills available]"                              │
 │                                                                  │
 │  Tier 2: Registry (~15 tokens/skill)                            │
 │  ├── When: User asks "what can you do?" / "list skills"         │
+│  │   OR skills have no triggers defined                         │
 │  └── Shows: Skill names + brief descriptions                    │
 │                                                                  │
 │  Tier 3: Full Documentation (hundreds of tokens)                │
 │  ├── When: Triggers match user query                            │
-│  └── Shows: Complete skill instructions                         │
+│  └── Shows: Complete skill instructions from SKILL.md           │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -556,13 +604,17 @@ User Query
 | User plugins | `~/<config-dir>/skills/` | Installed by user |
 | Project | `./<config-dir>/skills/` | Project-specific |
 
-### Script Execution
+### Script Execution (Post-MVP)
 
-Scripts run in a sandboxed Bun subprocess:
-- Working directory restricted to skill directory
-- Timeout enforced (configurable)
-- Environment variables filtered by `permissions` allowlist
-- Returns structured `ToolResponse` format
+Scripts will run as isolated Bun subprocesses with safety limits:
+- Process isolation via `Bun.spawn()` (not true sandboxing)
+- Timeout enforcement: 60s default, configurable
+- Output size limits: 1MB default
+- Argument validation: max 100 args, 4096 bytes total
+- Working directory: restricted to skill directory
+- Returns structured `ToolResponse` format via JSON
+
+**Note:** Script execution is deferred to post-MVP. Toolsets provide the primary extensibility mechanism.
 
 ---
 
@@ -649,9 +701,10 @@ src/
 │   └── AnswerBox.tsx
 │
 ├── skills/                   # Phase 4
-│   ├── loader.ts
-│   ├── registry.ts
-│   └── scripts.ts
+│   ├── manifest.ts           # Zod schemas, YAML parsing
+│   ├── loader.ts             # Discovery, dynamic import
+│   ├── registry.ts           # Persistent metadata
+│   └── context-provider.ts   # Progressive disclosure
 │
 ├── commands/                 # Phase 5
 │   ├── config.tsx
@@ -669,8 +722,8 @@ src/
 ### Adding a Provider
 
 1. Create factory in `model/providers/<name>.ts`
-2. Register prefix in provider registry
-3. Add config schema section
+2. Register factory in `PROVIDER_FACTORIES` by config name
+3. Add config schema section for provider-specific options
 4. (Phase 5) Add setup wizard
 
 ### Adding a Tool
@@ -688,7 +741,7 @@ src/
 
 ### Adding a Skill (Phase 4)
 
-1. Create `skill.json` manifest
+1. Create `SKILL.md` manifest (YAML frontmatter + instructions)
 2. Implement toolsets in `toolsets/index.ts`
 3. (Optional) Add scripts in `scripts/`
 4. Register triggers for progressive disclosure

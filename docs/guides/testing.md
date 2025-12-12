@@ -206,16 +206,17 @@ import { Agent } from '../agent.js';
 import type { AgentCallbacks } from '../callbacks.js';
 
 describe('Agent callbacks', () => {
-  it('invokes onLLMRequest before LLM call', async () => {
+  it('invokes onLLMStart before LLM call', async () => {
     const callbacks: AgentCallbacks = {
-      onLLMRequest: jest.fn(),
-      onLLMResponse: jest.fn(),
+      onLLMStart: jest.fn(),
+      onLLMEnd: jest.fn(),
     };
 
     const agent = new Agent({ model: 'gpt-4o', callbacks });
     await agent.run('Hello');
 
-    expect(callbacks.onLLMRequest).toHaveBeenCalledWith(
+    expect(callbacks.onLLMStart).toHaveBeenCalledWith(
+      expect.any(Object), // SpanContext
       'gpt-4o',
       expect.arrayContaining([
         expect.objectContaining({ role: 'user' }),
@@ -223,10 +224,10 @@ describe('Agent callbacks', () => {
     );
   });
 
-  it('invokes onToolStart and onToolComplete for tool calls', async () => {
+  it('invokes onToolStart and onToolEnd for tool calls', async () => {
     const callbacks: AgentCallbacks = {
       onToolStart: jest.fn(),
-      onToolComplete: jest.fn(),
+      onToolEnd: jest.fn(),
     };
 
     // Mock LLM to return tool call
@@ -240,8 +241,13 @@ describe('Agent callbacks', () => {
     const agent = new Agent({ model: 'gpt-4o', callbacks });
     await agent.run('Greet me');
 
-    expect(callbacks.onToolStart).toHaveBeenCalledWith('hello', { name: 'World' });
-    expect(callbacks.onToolComplete).toHaveBeenCalledWith(
+    expect(callbacks.onToolStart).toHaveBeenCalledWith(
+      expect.any(Object), // SpanContext
+      'hello',
+      { name: 'World' }
+    );
+    expect(callbacks.onToolEnd).toHaveBeenCalledWith(
+      expect.any(Object), // SpanContext
       'hello',
       expect.objectContaining({ success: true })
     );
@@ -367,10 +373,14 @@ describe('Agent tool execution flow', () => {
     const result = await agent.run('Say hello to Alice');
 
     // Verify the full flow
-    expect(callbacks.onLLMRequest).toHaveBeenCalled();
-    expect(callbacks.onToolStart).toHaveBeenCalledWith('hello', { name: 'Alice' });
-    expect(callbacks.onToolComplete).toHaveBeenCalled();
-    expect(callbacks.onLLMResponse).toHaveBeenCalled();
+    expect(callbacks.onLLMStart).toHaveBeenCalled();
+    expect(callbacks.onToolStart).toHaveBeenCalledWith(
+      expect.any(Object), // SpanContext
+      'hello',
+      { name: 'Alice' }
+    );
+    expect(callbacks.onToolEnd).toHaveBeenCalled();
+    expect(callbacks.onLLMEnd).toHaveBeenCalled();
     expect(result).toContain('Hello');
   });
 });

@@ -40,6 +40,14 @@ Create ADRs for:
 
 ## ADR Index
 
-_No ADRs yet._
+| ADR | Title | Status |
+|-----|-------|--------|
+| [0001](0001-skills-execution-model.md) | Skills Execution Model: Toolsets vs Scripts | Accepted |
+| [0002](0002-llm-integration-langchain.md) | LLM Integration: LangChain.js | Accepted |
+| [0003](0003-runtime-bun.md) | Runtime: Bun | Accepted |
+| [0004](0004-validation-zod.md) | Validation: Zod 4.x | Accepted |
+| [0005](0005-terminal-ui-react-ink.md) | Terminal UI: React 19 + Ink 6 | Accepted |
+| [0006](0006-testing-jest.md) | Testing: Jest over Bun Test | Accepted |
+| [0007](0007-callbacks-over-eventbus.md) | Event System: Callbacks over EventBus | Accepted |
 
 

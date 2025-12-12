@@ -74,7 +74,7 @@ All LLM calls and external API calls include fallback handling. If summarization
 | Runtime | Bun 1.x | Development and runtime |
 | UI Framework | React 19 + Ink 6 | Terminal UI rendering |
 | LLM Integration | LangChain.js 1.x | Multi-provider abstraction |
-| Schema Validation | Zod 4.x | Runtime validation + type inference |
+| Schema Validation | Zod 4.x | Runtime validation + type inference (see ADR-0004) |
 | Observability | OpenTelemetry | OTLP export, GenAI semantic conventions |
 | Testing | Jest + ts-jest | Run via `bun run test` |
 | Linting | ESLint + Prettier | Consistent code style |
@@ -113,7 +113,7 @@ Note: Only the Agent Layer invokes the Model Layer. Tools and Utils never call L
 | Pattern | Purpose | Location |
 |---------|---------|----------|
 | Callback Interface | Agent→UI communication | `agent/callbacks.ts` |
-| Provider Routing | Multi-model support via prefix | `model/llm.ts` |
+| Provider Routing | Multi-model support via config name | `model/llm.ts` |
 | Tool Wrapper | Zod schema + structured response | `tools/base.ts` |
 | Context Manager | Size-aware tool output storage | `utils/context.ts` |
 | Skill Registry | Progressive disclosure index | `skills/registry.ts` |
@@ -239,13 +239,6 @@ We are porting `agent-base` (Python/Microsoft Agent Framework) to TypeScript. Ke
 
 ### Feature Implementation Order
 Follow the phase-ordered features in `docs/plans/typescript-rewrite-features.md`. Each feature should be implementable independently after its dependencies are complete.
-
-### When Porting from Python
-1. Read the Python source first to understand behavior
-2. Check if dexter has a similar pattern to reference
-3. Adapt to TypeScript idioms (callbacks vs events, Zod vs Pydantic)
-4. Write tests alongside the implementation
-5. Update the feature checklist when complete
 
 ---
 

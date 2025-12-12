@@ -35,22 +35,27 @@ Full rewrite of `agent-base` (Python/Microsoft Agent Framework) to TypeScript us
 ### 1. LLM Provider Layer
 
 **From:** Microsoft Agent Framework `BaseChatClient`
-**To:** LangChain.js `BaseChatModel` with prefix routing
+**To:** LangChain.js `BaseChatModel` with config-based provider selection
 
 ```typescript
-// Pattern from dexter/src/model/llm.ts
-const MODEL_PROVIDERS: Record<string, ModelFactory> = {
-  'claude-': (name, opts) => new ChatAnthropic({ model: name, ...opts }),
-  'gemini-': (name, opts) => new ChatGoogleGenerativeAI({ model: name, ...opts }),
-  'gpt-': (name, opts) => new ChatOpenAI({ model: name, ...opts }),
+// Provider selected by config name, not model prefix
+const PROVIDER_FACTORIES: Record<string, ProviderFactory> = {
+  'openai': (config) => new ChatOpenAI({ model: config.model, ...config }),
+  'anthropic': (config) => new ChatAnthropic({ model: config.model, ...config }),
+  'gemini': (config) => new ChatGoogleGenerativeAI({ model: config.model, ...config }),
+  // ... 7 providers total
 };
+
+// Usage: config.providers.default determines which factory to use
+const provider = config.providers.default; // e.g., "openai"
+const model = PROVIDER_FACTORIES[provider](config.providers[provider]);
 ```
 
 **New providers to implement:**
 - Azure OpenAI → `@langchain/openai` with Azure config
 - Azure AI Foundry → Custom implementation
 - GitHub Models → OpenAI-compatible endpoint
-- Local (Ollama) → `@langchain/ollama`
+- Local (Docker Model Runner) → OpenAI-compatible API
 
 ### 2. Event System
 
@@ -59,12 +64,13 @@ const MODEL_PROVIDERS: Record<string, ModelFactory> = {
 
 ```typescript
 interface AgentCallbacks {
-  onLLMRequest?: (model: string, messages: Message[]) => void;
-  onLLMResponse?: (response: string, usage: TokenUsage) => void;
-  onToolStart?: (toolName: string, args: Record<string, unknown>) => void;
-  onToolComplete?: (toolName: string, result: ToolResponse) => void;
-  onTaskStart?: (taskId: string) => void;
-  onTaskComplete?: (taskId: string, success: boolean) => void;
+  onLLMStart?: (ctx: SpanContext, model: string, messages: Message[]) => void;
+  onLLMStream?: (ctx: SpanContext, chunk: string) => void;
+  onLLMEnd?: (ctx: SpanContext, response: string, usage: TokenUsage) => void;
+  onToolStart?: (ctx: SpanContext, toolName: string, args: Record<string, unknown>) => void;
+  onToolEnd?: (ctx: SpanContext, toolName: string, result: ToolResponse) => void;
+  onAgentStart?: (ctx: SpanContext, query: string) => void;
+  onAgentEnd?: (ctx: SpanContext, answer: string) => void;
 }
 ```
 
@@ -106,25 +112,30 @@ const ProviderConfigSchema = z.object({
 type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 ```
 
-### 5. Skills System (Redesigned)
+### 5. Skills System (Ported from Python)
 
 **From:** SKILL.md manifests + PEP 723 scripts + `uv run`
-**To:** `skill.json` manifests + Bun subprocess execution (sandboxed)
+**To:** SKILL.md manifests (YAML frontmatter) + TypeScript toolsets
 
 ```
 skills/
 ├── hello-extended/
-│   ├── skill.json          # Manifest (replaces SKILL.md YAML)
-│   ├── toolsets/
-│   │   └── index.ts        # Exported tools
-│   └── scripts/
-│       └── greet.ts        # Standalone scripts (Bun runtime)
+│   ├── SKILL.md            # Manifest (YAML frontmatter + markdown instructions)
+│   └── toolsets/
+│       └── index.ts        # Exported tool classes
 ```
 
+**MVP Scope:** Toolsets only. Scripts deferred to post-MVP.
+
+**Toolsets vs Scripts:**
+- **Toolsets**: TypeScript classes loaded into LLM context, low latency, testable
+- **Scripts**: Subprocess execution with process isolation (post-MVP)
+
 **Progressive disclosure preserved:**
-1. Skill registry (minimal metadata)
-2. Trigger-based activation
-3. Full docs on demand
+1. Tier 0: Nothing (no skills)
+2. Tier 1: Breadcrumb "[N skills available]"
+3. Tier 2: Registry with brief descriptions
+4. Tier 3: Full documentation for matched triggers
 
 ### 6. Memory System
 
@@ -220,7 +231,7 @@ interface AgentCallbacks {
 | Azure OpenAI | `@langchain/openai` (Azure config) | New |
 | Azure AI Foundry | Custom `BaseChatModel` | New |
 | GitHub Models | OpenAI-compatible | New |
-| Local (Ollama) | `@langchain/ollama` | New |
+| Local (Docker Model Runner) | OpenAI-compatible API | New |
 
 ### CLI (`src/cli/`)
 
@@ -242,9 +253,9 @@ interface AgentCallbacks {
 
 ## MVP Scope (6 Phases)
 
-### Phase 1: Foundation + Observability
+### Phase 1a: Foundation (Core)
 
-**Goal:** Establish core architecture with telemetry instrumentation from day one
+**Goal:** Establish core architecture and validate the agent loop
 
 **Deliverables:**
 - [ ] Project setup (Bun, TypeScript strict, Jest, ESLint)
@@ -252,11 +263,18 @@ interface AgentCallbacks {
 - [ ] Tool base class and response format (`tools/base.ts`)
 - [ ] OpenAI provider via LangChain.js (`model/llm.ts`)
 - [ ] Basic agent orchestration (`agent/agent.ts`)
-- [ ] Callback system with OpenTelemetry-compatible spans (`agent/callbacks.ts`)
+- [ ] Callback system (`agent/callbacks.ts`)
 - [ ] Structured error types (`errors/index.ts`)
+- [ ] Hello tool to validate the agent loop
+
+### Phase 1b: Foundation (Observability)
+
+**Goal:** Add telemetry instrumentation before expanding providers
+
+**Deliverables:**
 - [ ] OpenTelemetry setup with OTLP exporter (`telemetry/`)
-- [ ] Aspire Dashboard integration (`/telemetry start|stop|status`)
 - [ ] GenAI semantic conventions for LLM spans
+- [ ] Aspire Dashboard integration (`/telemetry start|stop|status`)
 
 **Key Files:**
 ```
@@ -285,7 +303,7 @@ src/
 
 ### Phase 2: Multi-Provider + CLI
 
-**Goal:** Provider parity for core 3 + interactive shell
+**Goal:** Provider parity for core 3, interactive shell, and essential tools
 
 **Deliverables:**
 - [ ] Anthropic provider
@@ -295,6 +313,7 @@ src/
 - [ ] React/Ink CLI shell (`cli.tsx`)
 - [ ] Input handling and command parsing
 - [ ] Basic display components
+- [ ] FileSystem tools (`tools/filesystem.ts`)
 
 **Key Files:**
 ```
@@ -304,6 +323,8 @@ src/
 │   ├── Input.tsx
 │   ├── Spinner.tsx
 │   └── TaskProgress.tsx
+├── tools/
+│   └── filesystem.ts
 └── model/
     └── providers/
         ├── openai.ts
@@ -323,7 +344,7 @@ src/
 - [ ] Answer streaming display
 - [ ] Token counting/usage tracking
 - [ ] GitHub Models provider
-- [ ] Local (Ollama) provider
+- [ ] Local (Docker Model Runner) provider
 
 **Key Files:**
 ```
@@ -344,28 +365,27 @@ src/
 
 ### Phase 4: Skills System
 
-**Goal:** Full skills system port with script execution
+**Goal:** Skills system with toolsets (scripts deferred to post-MVP)
 
 **Deliverables:**
-- [ ] Skill manifest format (`skill.json`)
-- [ ] Skill loader and discovery
-- [ ] Skill registry with progressive disclosure
-- [ ] Script execution (Bun subprocess)
+- [ ] SKILL.md manifest format with Zod validation
+- [ ] Skill loader and discovery (3-state enablement)
+- [ ] Skill registry with atomic persistence
+- [ ] Progressive disclosure context injection (4-tier)
 - [ ] Azure AI Foundry provider
-- [ ] Context injection via callbacks
-- [ ] Bundled hello-extended skill
+- [ ] Bundled hello-extended skill (toolsets only)
 
 **Key Files:**
 ```
 src/
 ├── skills/
-│   ├── loader.ts
-│   ├── registry.ts
-│   ├── injector.ts
-│   └── scripts.ts
+│   ├── manifest.ts         # Zod schemas, YAML parsing
+│   ├── loader.ts           # Discovery, dynamic import
+│   ├── registry.ts         # Persistent metadata
+│   └── context-provider.ts # Progressive disclosure
 └── _bundled_skills/
     └── hello-extended/
-        ├── skill.json
+        ├── SKILL.md
         └── toolsets/
             └── index.ts
 ```
@@ -471,7 +491,7 @@ agent-ts/
 │   │   └── index.ts              # Typed error hierarchy
 │   └── _bundled_skills/          # Default skills
 │       └── hello-extended/
-│           ├── skill.json
+│           ├── SKILL.md
 │           └── toolsets/
 │               └── index.ts
 ├── tests/
@@ -493,7 +513,7 @@ agent-ts/
 
 Use latest stable versions per `CLAUDE.md` Tech Stack:
 - **React 19** + **Ink 6** for terminal UI
-- **Zod 4.x** for schema validation
+- **Zod 4.x** for schema validation (see ADR-0004)
 - **LangChain.js 1.x** for LLM integration
 - **TypeScript 5.x** with strict mode
 
@@ -530,10 +550,18 @@ See `package.json` for exact versions (source of truth for dependencies).
 
 | Feature | Rationale for Deferral |
 |---------|------------------------|
+| Skill script execution | Toolsets cover 80%+ of use cases; scripts add process isolation complexity |
 | Git-based skill installation | Complex; bundled skills sufficient for MVP |
 | Semantic memory (Mem0) | In-memory history sufficient for MVP |
 | npm package publishing | Focus on functionality first |
-| Azure Monitor exporter | OTLP covers most use cases; add vendor exporters later |
+
+**Script Execution Details (Post-MVP):**
+When implemented, scripts will use Bun subprocess execution with:
+- Process isolation via `Bun.spawn()`
+- Timeout enforcement (60s default)
+- Output size limits (1MB default)
+- Argument validation (max 100 args, 4096 bytes total)
+- JSON response format `{success, result|error, message}`
 
 ---
 

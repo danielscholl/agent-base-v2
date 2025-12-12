@@ -4,9 +4,9 @@ This document decomposes `docs/plans/typescript-rewrite.md` into an ordered set 
 
 ---
 
-## Phase 1: Foundation + Observability
+## Phase 1a: Foundation (Core)
 
-**Goal:** Establish core architecture with telemetry instrumentation from day one
+**Goal:** Establish core architecture and validate the agent loop
 
 ### Feature 1: Initialize Bun + TypeScript workspace
 Create a fresh `agent-ts/` project using Bun, enable strict TypeScript, set up module resolution, and add baseline tooling (Jest/ts-jest via `bun run test`, ESLint, Prettier). Mirror the final folder layout from the plan so later ports land in stable locations. Unit tests are co-located in `src/**/__tests__/` directories. Ensure a minimal `index.tsx` boots an Ink app.
@@ -14,10 +14,13 @@ Create a fresh `agent-ts/` project using Bun, enable strict TypeScript, set up m
 ### Feature 2: Port configuration schemas and config manager
 Recreate `agent-base/src/agent/config/schema.py` as Zod schemas with inferred TS types, including agent settings, providers, memory, skills, and paths. Implement a config manager that:
 - Loads defaults from Zod schemas
-- Merges project-level config (`./.agent-ts/settings.json` - committable)
-- Merges user-level config (`~/.agent-ts/settings.json` - personal)
+- Merges project-level config (`./.agent/settings.json` - committable)
+- Merges user-level config (`~/.agent/settings.json` - personal)
 - Applies environment variable overrides (highest priority)
 - Validates on load/save and writes to disk in a stable JSON format
+- Uses camelCase for all config keys (TypeScript convention)
+
+Config directory is `.agent/` (matches Python for easier migration).
 
 This is the foundation every other feature depends on.
 
@@ -25,7 +28,7 @@ This is the foundation every other feature depends on.
 Introduce a `tools/base.ts` that standardizes the `{ success, result|error, message }` response shape and provides helpers to turn internal tools into LangChain `StructuredTool`s via Zod. This replaces `AgentToolset`/Pydantic annotations and sets the contract for built-in tools and skills.
 
 ### Feature 4: Implement the multi-provider LLM abstraction with OpenAI
-Build `model/llm.ts` following `dexter/src/model/llm.ts`, with prefix or config-based routing to concrete LangChain models. Start with OpenAI (`@langchain/openai`) and wire it into config so the agent can make a single end-to-end LLM call. Include basic streaming support.
+Build `model/llm.ts` with config-based provider routing. Provider is selected by `config.providers.default` (e.g., "openai"), not by parsing model name prefixes. Start with OpenAI (`@langchain/openai`) and wire it into config so the agent can make a single end-to-end LLM call. Include basic streaming support.
 
 ### Feature 5: Create the core Agent orchestration loop
 Port the responsibilities of `agent-base/src/agent/agent.py` into `agent/agent.ts`: system prompt loading (three-tier: env var → user file → package default), placeholder replacement (`{{MODEL}}`, `{{DATA_DIR}}`), message assembly, tool binding, and the main `run()` loop. Keep the architecture compatible with LangChain calling patterns while preserving agent-base behavior (tool choice, retries, error surfaces).
@@ -38,6 +41,12 @@ Port `agent-base/src/agent/exceptions.py` to `errors/index.ts` with typed error 
 
 ### Feature 8: Port the built-in Hello tool
 Reimplement `agent-base/src/agent/tools/hello.py` in TypeScript using the new tool base. This validates the tool wrapper pattern and provides a simple test case for the agent loop.
+
+---
+
+## Phase 1b: Foundation (Observability)
+
+**Goal:** Add telemetry instrumentation before expanding providers
 
 ### Feature 9: Implement OpenTelemetry setup and OTLP exporter
 Port `agent-base/src/agent/observability.py` patterns to `telemetry/setup.ts`. Create a singleton setup function that:
@@ -61,13 +70,13 @@ Port the `/telemetry start|stop|status|url` commands from `agent-base/src/agent/
 - Auto-enable telemetry in config when dashboard starts
 - Provide clear error messages when Docker is unavailable
 
-This enables local observability validation before adding more providers.
+This completes the foundation with full observability before expanding providers.
 
 ---
 
 ## Phase 2: Multi-Provider + CLI
 
-**Goal:** Provider parity for core 3 + interactive shell
+**Goal:** Provider parity for core 3, interactive shell, and essential tools
 
 ### Feature 12: Add Anthropic provider
 Following the OpenAI pattern, implement Anthropic in `model/providers/anthropic.ts` using `@langchain/anthropic`. Validate streaming, token usage reporting, and option mapping.
@@ -90,62 +99,59 @@ Port the interactive affordances from `agent-base/src/agent/cli/interactive.py` 
 ### Feature 18: Add basic terminal display components
 Implement Ink equivalents of Rich UI pieces as `components/Spinner.tsx`, `TaskProgress.tsx`, and an initial `AnswerBox.tsx`. Wire them via callbacks so planning/execution state is visible without relying on global events.
 
+### Feature 19: Port FileSystem tools
+Reimplement `agent-base/src/agent/tools/filesystem.py` in TypeScript. Ensure parity on behaviors like path validation, error formatting, and large file handling. These fundamental tools enable real-world agent testing and demos.
+
 ---
 
 ## Phase 3: Memory + Session
 
 **Goal:** Conversation persistence and remaining providers
 
-### Feature 19: Introduce message history memory
+### Feature 20: Introduce message history memory
 Port the conversational memory surface from `agent-base/src/agent/memory/` into `utils/message-history.ts`, supporting add/retrieve and relevance selection for multi-turn context. Start with simple recency-based retrieval; semantic search can be added post-MVP.
 
-### Feature 20: Implement tool context persistence
+### Feature 21: Implement tool context persistence
 Recreate `dexter/src/utils/context.ts` behavior as `utils/context.ts`: save tool inputs/outputs to the filesystem, index by query/task, and provide "relevant contexts" retrieval for answer generation. This replaces Python's context provider hooks and enables memory-efficient tool use.
 
-### Feature 21: Add session save/restore and history management
+### Feature 22: Add session save/restore and history management
 Port `agent-base/src/agent/cli/session.py` and persistence helpers so chats are stored as sessions, can be listed/picked, resumed (`--continue`), or purged. Keep on-disk formats stable and aligned with the config/migration tooling.
 
-### Feature 22: Implement streaming answer display
+### Feature 23: Implement streaming answer display
 Complete `components/AnswerBox.tsx` with proper streaming support: character-by-character or chunk-by-chunk rendering, cursor indication, and clean completion handling. Ensure consistent behavior across all providers.
 
-### Feature 23: Add token counting utilities
+### Feature 24: Add token counting utilities
 Implement `utils/tokens.ts` using tiktoken for accurate token counting. Expose via callbacks for display (tokens used per request/response) and for context window management.
 
-### Feature 24: Implement GitHub Models provider
+### Feature 25: Implement GitHub Models provider
 Add GitHub Models provider using OpenAI-compatible endpoints (`https://models.github.ai/inference`). Support both personal and org-scoped tokens. Implement in `model/providers/github.ts`.
 
-### Feature 25: Implement Local (Ollama) provider
-Add local inference via `@langchain/ollama` in `model/providers/local.ts`. Support configurable base URL for Docker or native Ollama installations. Ensure streaming works correctly.
+### Feature 26: Implement Local (Docker Model Runner) provider
+Add local inference via OpenAI-compatible API in `model/providers/local.ts`. Target Docker Desktop's Model Runner which exposes models at `http://model-runner.docker.internal/`. Support configurable base URL and ensure streaming works correctly.
 
 ---
 
 ## Phase 4: Skills System
 
-**Goal:** Full skills system port with script execution
+**Goal:** Skills system with toolsets (scripts deferred to post-MVP)
 
-### Feature 26: Define the new `skill.json` manifest format
-Specify and validate a JSON manifest schema (metadata, triggers, toolsets, scripts, docs pointers) to replace SKILL.md YAML. Provide Zod schemas and document the on-disk layout under `skills/` and `_bundled_skills/`.
+### Feature 27: Define SKILL.md manifest format with Zod validation
+Port the SKILL.md manifest format (YAML frontmatter + markdown instructions) with Zod validation. Fields: name, description, version, triggers (keywords, verbs, patterns), toolsets. Scripts field parsed but not executed in MVP. Document on-disk layout under `skills/` and `_bundled_skills/`.
 
-### Feature 27: Port skill discovery and registry
-Reimplement `agent-base/src/agent/skills/loader.py` and `documentation_index.py` so skills are found on disk (bundled and plugin directories), validated against the manifest schema, and indexed for progressive disclosure. Expose skill metadata through the registry.
+### Feature 28: Port skill discovery and loader
+Reimplement `agent-base/src/agent/skills/loader.py` to scan bundled and plugin directories for SKILL.md files, validate manifests, and dynamically import toolset classes. Implement 3-state enablement logic (user override → explicit setting → manifest default).
 
-### Feature 28: Implement skill enablement and configuration
-Port enable/disable logic from `agent-base` so skills can be toggled via config. Track which skills are active and ensure disabled skills don't register tools or inject context.
+### Feature 29: Implement skill registry and documentation index
+Port `registry.py` for persistent skill metadata (`~/.agent/skills/registry.json`) and `documentation_index.py` for runtime context injection. Support atomic writes and case-insensitive lookups via canonical name normalization.
 
-### Feature 29: Add Bun-sandboxed skill script execution
-Replace `script_tools.py`/`uv run` with a Bun subprocess runner that executes per-skill scripts, enforces timeouts and working directory limits, and returns structured results. Integrate with the tool wrapper so scripts behave like first-class tools.
-
-### Feature 30: Implement context injection for skills
-Port `skills/context_provider.py` semantics: allow skills to contribute prompt fragments and tool context through the callback layer based on trigger matching. This preserves agent-base's progressive skill activation without a global event bus.
+### Feature 30: Implement progressive disclosure context injection
+Port `skills/context_provider.py` with 4-tier disclosure: (0) nothing, (1) breadcrumb, (2) registry listing, (3) full documentation. Implement trigger matching (skill name, keywords, verbs, regex patterns) through callbacks.
 
 ### Feature 31: Implement Azure AI Foundry provider
 Build a custom LangChain `BaseChatModel` adapter that maps agent-base Foundry settings to the Foundry API in `model/providers/azure-foundry.ts`. This completes seven-provider parity.
 
-### Feature 32: Port bundled hello-extended skill
-Migrate the `hello-extended` skill from Python to TypeScript as a reference implementation in `_bundled_skills/hello-extended/`. Include both toolsets and scripts to validate the full skill system.
-
-### Feature 33: Port FileSystem tools
-Reimplement `agent-base/src/agent/tools/filesystem.py` in TypeScript. Ensure parity on behaviors like path validation, error formatting, and large file handling.
+### Feature 32: Port bundled hello-extended skill (toolsets only)
+Migrate the `hello-extended` skill toolsets from Python to TypeScript as a reference implementation in `_bundled_skills/hello-extended/`. Validates the full toolset loading and context injection flow.
 
 ---
 
@@ -153,19 +159,19 @@ Reimplement `agent-base/src/agent/tools/filesystem.py` in TypeScript. Ensure par
 
 **Goal:** Full CLI parity with Python version
 
-### Feature 34: Implement config subcommands
+### Feature 33: Implement config subcommands
 Recreate `config init`, `config show`, `config edit` commands in `commands/config.tsx`. Use Ink forms for interactive setup and Zod validation for all inputs.
 
-### Feature 35: Add provider setup wizards
+### Feature 34: Add provider setup wizards
 Port provider-specific setup flows from `agent-base/src/agent/config/providers/` that guide users through API key entry, endpoint configuration, and validation. Make each provider testable before saving.
 
-### Feature 36: Implement skill management commands
+### Feature 35: Implement skill management commands
 Add `skill list`, `skill enable`, `skill disable` commands in `commands/skills.tsx`. Show skill status, available triggers, and registered tools.
 
-### Feature 37: Add session management commands
+### Feature 36: Add session management commands
 Implement `session list`, `session continue`, `session purge` in `commands/session.tsx`. Allow users to manage conversation history from the CLI.
 
-### Feature 38: Implement help system
+### Feature 37: Implement help system
 Add comprehensive `--help` for all commands and a `/help` interactive command. Document available slash commands, keyboard shortcuts, and configuration options.
 
 ---
@@ -174,25 +180,25 @@ Add comprehensive `--help` for all commands and a `/help` interactive command. D
 
 **Goal:** Production readiness
 
-### Feature 39: Establish Jest test patterns and fixtures
+### Feature 38: Establish Jest test patterns and fixtures
 Set up test infrastructure with co-located unit tests (`src/**/__tests__/`) for schemas, providers, tools, skills loader, and persistence. Integration tests live in `tests/integration/`. Create mock fixtures in `tests/fixtures/` for LLM responses that don't require real API calls. Target 85% coverage.
 
-### Feature 40: Add integration tests for agent loop
+### Feature 39: Add integration tests for agent loop
 Write integration tests that exercise the full agent flow: prompt → LLM → tool call → response. Use mocked providers to ensure deterministic results. Include telemetry span assertions.
 
-### Feature 41: Build Python → TypeScript config migration tool
+### Feature 40: Build Python → TypeScript config migration tool
 Write a converter that reads existing agent-base config (`~/.agent/settings.json`), maps fields to the new Zod schema, and writes a TS-compatible config file with clear warnings on unsupported options. Provide dry-run mode.
 
-### Feature 42: Implement system prompt template system
+### Feature 41: Implement system prompt template system
 Finalize `agent/prompts.ts` with three-tier loading (env → user → package), placeholder replacement, and YAML front matter stripping. Document customization options.
 
-### Feature 43: Maintain CLAUDE.md alignment ✅
+### Feature 42: Maintain CLAUDE.md alignment ✅
 CLAUDE.md governance document has been created. During Phase 6, ensure it stays in sync with implementation reality and any ADRs added during development.
 
-### Feature 44: Write README and migration documentation
+### Feature 43: Write README and migration documentation
 Document installation, configuration, usage, and migration from Python. Include examples for each provider and common workflows. Include telemetry setup guide.
 
-### Feature 45: Error handling and UX polish
+### Feature 44: Error handling and UX polish
 Review all error paths for clear, actionable messages. Ensure graceful degradation when providers are unavailable. Verify keyboard interrupt handling works cleanly.
 
 ---
@@ -201,8 +207,11 @@ Review all error paths for clear, actionable messages. Ensure graceful degradati
 
 These features are explicitly deferred to keep MVP scope manageable:
 
+### Feature 45: Skill script execution
+Add Bun subprocess execution for skill scripts. Port `script_tools.py` patterns: process isolation via `Bun.spawn()`, timeout enforcement (60s default), output size limits (1MB), argument validation (max 100 args, 4096 bytes). Scripts must return JSON with `{success, result|error, message}` format. This completes full parity with Python skills system.
+
 ### Feature 46: Git-based skill installation
-Support `skill install <git-url>` for installing skills from repositories. Track installed skills in config with update/remove lifecycle.
+Support `skill install <git-url>` for installing skills from repositories. Port `manager.py` patterns: shallow clone, structure detection (single-skill, subdirectory, monorepo), atomic installation to `~/.agent/skills/`.
 
 ### Feature 47: Semantic memory (Mem0)
 Add optional Mem0 integration for vector-based semantic memory retrieval.
@@ -210,19 +219,19 @@ Add optional Mem0 integration for vector-based semantic memory retrieval.
 ### Feature 48: npm package publishing
 Prepare package.json for npm publication, set up CI/CD for releases.
 
-### Feature 49: Azure Monitor exporter
-Add Azure Application Insights exporter for production telemetry. OTLP covers most use cases; this is for Azure-native deployments.
-
 ---
 
 ## Feature → Phase Summary
 
-| Phase | Features | Focus |
-|-------|----------|-------|
-| 1 | 1-11 | Foundation, config, tools, OpenAI, agent loop, callbacks, errors, **OpenTelemetry, Aspire Dashboard** |
-| 2 | 12-18 | Anthropic, Gemini, Azure, retry, CLI shell, input, display |
-| 3 | 19-25 | Memory, context, sessions, streaming, tokens, GitHub, Local |
-| 4 | 26-33 | Skills manifest, loader, scripts, context injection, Foundry, bundled skill, filesystem tools |
-| 5 | 34-38 | Config commands, wizards, skill commands, session commands, help |
-| 6 | 39-45 | Tests, migration tool, prompts, CLAUDE.md, docs, polish |
-| Post | 46-49 | Git skills, Mem0, npm publish, Azure Monitor exporter |
+| Phase | Features | Count | Focus |
+|-------|----------|-------|-------|
+| 1a | 1-8 | 8 | Foundation core: config, tools, OpenAI, agent loop, callbacks, errors, hello tool |
+| 1b | 9-11 | 3 | Foundation observability: OpenTelemetry, GenAI conventions, Aspire Dashboard |
+| 2 | 12-19 | 8 | Anthropic, Gemini, Azure, retry, CLI shell, input, display, **FileSystem tools** |
+| 3 | 20-26 | 7 | Memory, context, sessions, streaming, tokens, GitHub, Local (Docker Model Runner) |
+| 4 | 27-32 | 6 | Skills: SKILL.md manifest, loader, registry, progressive disclosure, Foundry, bundled skill (**toolsets only**) |
+| 5 | 33-37 | 5 | Config commands, wizards, skill commands, session commands, help |
+| 6 | 38-44 | 7 | Tests, migration tool, prompts, CLAUDE.md, docs, polish |
+| Post | 45-48 | 4 | **Script execution**, git skills, Mem0, npm publish |
+
+**MVP Total: 44 features** (script execution deferred to post-MVP)
