@@ -26,22 +26,22 @@ jobs:
 
       # Update bun.lock when release PR is created/updated
       - name: Checkout release PR branch
-        if: ${{ steps.release.outputs.pr }}
+        if: ${{ steps.release.outputs.pr != '' }}
         uses: actions/checkout@v4
         with:
           ref: ${{ fromJson(steps.release.outputs.pr).headBranchName }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Bun
-        if: ${{ steps.release.outputs.pr }}
+        if: ${{ steps.release.outputs.pr != '' }}
         uses: oven-sh/setup-bun@v2
 
       - name: Update bun.lock
-        if: ${{ steps.release.outputs.pr }}
+        if: ${{ steps.release.outputs.pr != '' }}
         run: bun install
 
       - name: Commit updated bun.lock
-        if: ${{ steps.release.outputs.pr }}
+        if: ${{ steps.release.outputs.pr != '' }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'

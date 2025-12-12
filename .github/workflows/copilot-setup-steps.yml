@@ -19,11 +19,8 @@ jobs:
     # Set the permissions to the lowest permissions possible needed for your steps.
     # Copilot will be given its own token for its operations.
     permissions:
-      # If you want to clone the repository as part of your setup steps, for example to install dependencies, you'll need the `contents: read` permission. If you don't clone the repository in your setup steps, Copilot will do this for you automatically after the steps complete.
       contents: read
 
-    # You can define any steps you want, and they will run before the agent starts.
-    # If you do not check out your code, Copilot will do this for you.
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -33,11 +30,17 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Verify Bun installation
-        run: bun --version
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        continue-on-error: true
         run: |
           # Retry dependency installation to handle intermittent network failures
           MAX_ATTEMPTS=3
@@ -61,28 +64,12 @@ jobs:
             fi
           done
 
-      - name: Verify environment
-        continue-on-error: true
+      - name: Display environment info
         run: |
           echo "===== Environment Information ====="
           echo "Bun: $(bun --version)"
           echo "Node: $(node --version)"
           echo "TypeScript: $(bunx tsc --version)"
-
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.bun/install/cache
-            node_modules
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
-
-      - name: Display environment info
-        run: |
-          echo "===== Environment Information ====="
-          echo "Bun: $(bun --version)"
           echo "OS: $(uname -a)"
           echo "Working Directory: $(pwd)"
           echo "===== Repository Structure ====="
