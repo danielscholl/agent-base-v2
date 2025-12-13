@@ -6,25 +6,26 @@
 import type { ProviderName } from '../config/constants.js';
 import type { ProviderFactory } from './types.js';
 import { createOpenAIClient } from './providers/openai.js';
+import { createAnthropicClient } from './providers/anthropic.js';
+import { createGeminiClient } from './providers/gemini.js';
+import { createAzureOpenAIClient } from './providers/azure-openai.js';
 
 /**
  * Registry mapping provider names to their factory functions.
  *
  * Providers are added incrementally:
- * - Feature 4: OpenAI (this feature)
- * - Feature 12: Anthropic
- * - Feature 13: Gemini
- * - Feature 14: Azure OpenAI
+ * - Feature 4: OpenAI
+ * - Feature 12: Anthropic, Gemini, Azure OpenAI
  * - Feature 25: GitHub Models
  * - Feature 26: Local (Docker)
  * - Feature 31: Azure AI Foundry
  */
 export const PROVIDER_REGISTRY: Partial<Record<ProviderName, ProviderFactory>> = {
   openai: createOpenAIClient,
-  // Future providers will be added here:
-  // anthropic: createAnthropicClient,
-  // gemini: createGeminiClient,
-  // azure: createAzureOpenAIClient,
+  anthropic: createAnthropicClient,
+  gemini: createGeminiClient,
+  azure: createAzureOpenAIClient,
+  // Future providers:
   // github: createGitHubClient,
   // local: createLocalClient,
   // foundry: createFoundryClient,
@@ -47,7 +48,7 @@ export function getProviderFactory(providerName: ProviderName): ProviderFactory 
  * @returns true if the provider has a registered factory
  */
 export function isProviderSupported(providerName: ProviderName): boolean {
-  return providerName in PROVIDER_REGISTRY;
+  return PROVIDER_REGISTRY[providerName] !== undefined;
 }
 
 /**

@@ -17,7 +17,7 @@ import type {
   TokenUsage,
 } from './types.js';
 import { successResponse, errorResponse, mapErrorToCode, extractTokenUsage } from './base.js';
-import { getProviderFactory, isProviderSupported } from './registry.js';
+import { getProviderFactory, getSupportedProviders, isProviderSupported } from './registry.js';
 
 /**
  * Options for creating an LLMClient.
@@ -80,9 +80,10 @@ export class LLMClient {
 
     // Check if provider is supported
     if (!isProviderSupported(providerName)) {
+      const supportedProviders = getSupportedProviders().join(', ');
       return errorResponse(
         'PROVIDER_NOT_SUPPORTED',
-        `Provider '${providerName}' is not yet supported. Supported providers: openai`
+        `Provider '${providerName}' is not yet supported. Supported providers: ${supportedProviders}`
       );
     }
 

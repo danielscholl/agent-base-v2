@@ -58,11 +58,13 @@ const mockInvokeResponse: MockResponse = {
 const mockIsProviderSupported = jest.fn<(name: string) => boolean>();
 const mockGetProviderFactory =
   jest.fn<() => ((config: Record<string, unknown>) => ModelResponse<BaseChatModel>) | undefined>();
+const mockGetSupportedProviders = jest.fn<() => string[]>();
 
 // Mock registry module before importing LLMClient
 jest.unstable_mockModule('../registry.js', () => ({
   isProviderSupported: mockIsProviderSupported,
   getProviderFactory: mockGetProviderFactory,
+  getSupportedProviders: mockGetSupportedProviders,
 }));
 
 // Dynamic import after mock setup
@@ -104,6 +106,7 @@ describe('LLMClient', () => {
       result: mockModel as unknown as BaseChatModel,
       message: 'Client created',
     }));
+    mockGetSupportedProviders.mockReturnValue(['openai']);
   });
 
   describe('constructor', () => {

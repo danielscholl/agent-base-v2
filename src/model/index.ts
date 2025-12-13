@@ -71,3 +71,6 @@ export type { LLMClientOptions } from './llm.js';
 // Provider Factories
 // -----------------------------------------------------------------------------
 export { createOpenAIClient } from './providers/openai.js';
+export { createAnthropicClient } from './providers/anthropic.js';
+export { createGeminiClient } from './providers/gemini.js';
+export { createAzureOpenAIClient } from './providers/azure-openai.js';

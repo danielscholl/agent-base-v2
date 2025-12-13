@@ -16,20 +16,53 @@ describe('Provider Registry', () => {
       expect(PROVIDER_REGISTRY.openai).toBeDefined();
     });
 
-    it('openai factory is a function', () => {
+    it('has anthropic provider registered', () => {
+      expect(PROVIDER_REGISTRY.anthropic).toBeDefined();
+    });
+
+    it('has gemini provider registered', () => {
+      expect(PROVIDER_REGISTRY.gemini).toBeDefined();
+    });
+
+    it('has azure provider registered', () => {
+      expect(PROVIDER_REGISTRY.azure).toBeDefined();
+    });
+
+    it('all registered factories are functions', () => {
       expect(typeof PROVIDER_REGISTRY.openai).toBe('function');
+      expect(typeof PROVIDER_REGISTRY.anthropic).toBe('function');
+      expect(typeof PROVIDER_REGISTRY.gemini).toBe('function');
+      expect(typeof PROVIDER_REGISTRY.azure).toBe('function');
     });
   });
 
   describe('getProviderFactory', () => {
-    it('returns factory for supported provider', () => {
+    it('returns factory for openai provider', () => {
       const factory = getProviderFactory('openai');
       expect(factory).toBeDefined();
       expect(typeof factory).toBe('function');
     });
 
-    it('returns undefined for unsupported provider', () => {
+    it('returns factory for anthropic provider', () => {
       const factory = getProviderFactory('anthropic');
+      expect(factory).toBeDefined();
+      expect(typeof factory).toBe('function');
+    });
+
+    it('returns factory for gemini provider', () => {
+      const factory = getProviderFactory('gemini');
+      expect(factory).toBeDefined();
+      expect(typeof factory).toBe('function');
+    });
+
+    it('returns factory for azure provider', () => {
+      const factory = getProviderFactory('azure');
+      expect(factory).toBeDefined();
+      expect(typeof factory).toBe('function');
+    });
+
+    it('returns undefined for unsupported provider', () => {
+      const factory = getProviderFactory('github');
       expect(factory).toBeUndefined();
     });
   });
@@ -39,16 +72,16 @@ describe('Provider Registry', () => {
       expect(isProviderSupported('openai')).toBe(true);
     });
 
-    it('returns false for anthropic (not yet implemented)', () => {
-      expect(isProviderSupported('anthropic')).toBe(false);
+    it('returns true for anthropic', () => {
+      expect(isProviderSupported('anthropic')).toBe(true);
     });
 
-    it('returns false for gemini (not yet implemented)', () => {
-      expect(isProviderSupported('gemini')).toBe(false);
+    it('returns true for gemini', () => {
+      expect(isProviderSupported('gemini')).toBe(true);
     });
 
-    it('returns false for azure (not yet implemented)', () => {
-      expect(isProviderSupported('azure')).toBe(false);
+    it('returns true for azure', () => {
+      expect(isProviderSupported('azure')).toBe(true);
     });
 
     it('returns false for local (not yet implemented)', () => {
@@ -69,19 +102,21 @@ describe('Provider Registry', () => {
       const providers = getSupportedProviders();
       expect(Array.isArray(providers)).toBe(true);
       expect(providers).toContain('openai');
+      expect(providers).toContain('anthropic');
+      expect(providers).toContain('gemini');
+      expect(providers).toContain('azure');
     });
 
-    it('only includes registered providers', () => {
+    it('does not include unregistered providers', () => {
       const providers = getSupportedProviders();
-      expect(providers).not.toContain('anthropic');
-      expect(providers).not.toContain('gemini');
-      expect(providers).not.toContain('azure');
       expect(providers).not.toContain('local');
+      expect(providers).not.toContain('github');
+      expect(providers).not.toContain('foundry');
     });
 
-    it('returns at least one provider', () => {
+    it('returns four providers', () => {
       const providers = getSupportedProviders();
-      expect(providers.length).toBeGreaterThan(0);
+      expect(providers.length).toBe(4);
     });
   });
 });
