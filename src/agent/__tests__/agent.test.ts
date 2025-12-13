@@ -9,6 +9,8 @@ import type { AgentCallbacks } from '../callbacks.js';
 import type { SpanContext, Message } from '../types.js';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { AIMessage } from '@langchain/core/messages';
+import type { StructuredToolInterface } from '@langchain/core/tools';
+import type { ToolResponse } from '../../tools/types.js';
 
 // Create mock functions at module level
 const mockInvoke =
@@ -60,7 +62,7 @@ function createMockStream(chunks: string[]): AsyncIterable<MockChunk> {
       return {
         next(): Promise<IteratorResult<MockChunk>> {
           if (index < chunks.length) {
-            const chunk = chunks[index];
+            const chunk = chunks[index] ?? '';
             index++;
             return Promise.resolve({
               done: false,
@@ -407,17 +409,19 @@ describe('Agent', () => {
       const mockTool = {
         name: 'greeting',
         description: 'Greet someone',
-        invoke: jest.fn().mockResolvedValue({
-          success: true,
-          result: { message: 'Hello, World!' },
-          message: 'Greeted successfully',
-        }),
+        invoke: jest
+          .fn<(args: Record<string, unknown>) => Promise<ToolResponse>>()
+          .mockResolvedValue({
+            success: true,
+            result: { message: 'Hello, World!' },
+            message: 'Greeted successfully',
+          }),
       };
 
       // Set up model to return tool calls
       const mockModelWithTools = {
         invoke: jest
-          .fn()
+          .fn<(messages: unknown) => Promise<AIMessage>>()
           .mockResolvedValueOnce(
             new AIMessage({
               content: '',
@@ -431,7 +435,7 @@ describe('Agent', () => {
             })
           )
           .mockResolvedValueOnce(new AIMessage({ content: 'I greeted World!' })),
-        bindTools: jest.fn().mockReturnThis(),
+        bindTools: jest.fn<(tools: StructuredToolInterface[]) => unknown>().mockReturnThis(),
       };
 
       mockGetModel.mockReturnValue({
@@ -443,7 +447,7 @@ describe('Agent', () => {
       const agent = new Agent({
         config,
         callbacks,
-        tools: [mockTool as never],
+        tools: [mockTool as unknown as StructuredToolInterface],
       });
 
       const result = await agent.run('Say hello to World');
@@ -461,13 +465,13 @@ describe('Agent', () => {
       const existingTool = {
         name: 'existing',
         description: 'An existing tool',
-        invoke: jest.fn(),
+        invoke: jest.fn<(args: Record<string, unknown>) => Promise<ToolResponse>>(),
       };
 
       // Set up model to return tool call for non-existent tool
       const mockModelWithTools = {
         invoke: jest
-          .fn()
+          .fn<(messages: unknown) => Promise<AIMessage>>()
           .mockResolvedValueOnce(
             new AIMessage({
               content: '',
@@ -481,7 +485,7 @@ describe('Agent', () => {
             })
           )
           .mockResolvedValueOnce(new AIMessage({ content: 'Tool not found response' })),
-        bindTools: jest.fn().mockReturnThis(),
+        bindTools: jest.fn<(tools: StructuredToolInterface[]) => unknown>().mockReturnThis(),
       };
 
       mockGetModel.mockReturnValue({
@@ -493,7 +497,7 @@ describe('Agent', () => {
       const agent = new Agent({
         config,
         callbacks,
-        tools: [existingTool as never], // Provide a tool so tool binding happens
+        tools: [existingTool as unknown as StructuredToolInterface], // Provide a tool so tool binding happens
       });
 
       await agent.run('Use the nonexistent tool');
@@ -522,12 +526,14 @@ describe('Agent', () => {
       const failingTool = {
         name: 'failing',
         description: 'A tool that fails',
-        invoke: jest.fn().mockRejectedValue(new Error('Tool execution failed')),
+        invoke: jest
+          .fn<(args: Record<string, unknown>) => Promise<ToolResponse>>()
+          .mockRejectedValue(new Error('Tool execution failed')),
       };
 
       const mockModelWithTools = {
         invoke: jest
-          .fn()
+          .fn<(messages: unknown) => Promise<AIMessage>>()
           .mockResolvedValueOnce(
             new AIMessage({
               content: '',
@@ -541,7 +547,7 @@ describe('Agent', () => {
             })
           )
           .mockResolvedValueOnce(new AIMessage({ content: 'Handled tool error' })),
-        bindTools: jest.fn().mockReturnThis(),
+        bindTools: jest.fn<(tools: StructuredToolInterface[]) => unknown>().mockReturnThis(),
       };
 
       mockGetModel.mockReturnValue({
@@ -553,7 +559,7 @@ describe('Agent', () => {
       const agent = new Agent({
         config,
         callbacks,
-        tools: [failingTool as never],
+        tools: [failingTool as unknown as StructuredToolInterface],
       });
 
       await agent.run('Use the failing tool');
@@ -572,7 +578,7 @@ describe('Agent', () => {
     it('respects max iterations limit', async () => {
       // Set up model to always return tool calls (infinite loop scenario)
       const mockModelWithTools = {
-        invoke: jest.fn().mockResolvedValue(
+        invoke: jest.fn<(messages: unknown) => Promise<AIMessage>>().mockResolvedValue(
           new AIMessage({
             content: '',
             tool_calls: [
@@ -584,7 +590,7 @@ describe('Agent', () => {
             ],
           })
         ),
-        bindTools: jest.fn().mockReturnThis(),
+        bindTools: jest.fn<(tools: StructuredToolInterface[]) => unknown>().mockReturnThis(),
       };
 
       mockGetModel.mockReturnValue({
@@ -596,17 +602,19 @@ describe('Agent', () => {
       const loopTool = {
         name: 'loop',
         description: 'Loop forever',
-        invoke: jest.fn().mockResolvedValue({
-          success: true,
-          result: {},
-          message: 'Looped',
-        }),
+        invoke: jest
+          .fn<(args: Record<string, unknown>) => Promise<ToolResponse>>()
+          .mockResolvedValue({
+            success: true,
+            result: {},
+            message: 'Looped',
+          }),
       };
 
       const agent = new Agent({
         config,
         callbacks,
-        tools: [loopTool as never],
+        tools: [loopTool as unknown as StructuredToolInterface],
         maxIterations: 3,
       });
 
@@ -650,10 +658,11 @@ describe('Agent', () => {
       await agent.run('Hello');
 
       expect(contexts).toHaveLength(2);
+      const [agentContext, llmContext] = contexts;
       // LLM context should have same trace ID but different span ID
-      expect(contexts[1].traceId).toBe(contexts[0].traceId);
-      expect(contexts[1].spanId).not.toBe(contexts[0].spanId);
-      expect(contexts[1].parentSpanId).toBe(contexts[0].spanId);
+      expect(llmContext?.traceId).toBe(agentContext?.traceId);
+      expect(llmContext?.spanId).not.toBe(agentContext?.spanId);
+      expect(llmContext?.parentSpanId).toBe(agentContext?.spanId);
     });
   });
 });

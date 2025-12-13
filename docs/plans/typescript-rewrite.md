@@ -76,6 +76,8 @@ interface AgentCallbacks {
 
 **Rationale:** Better React integration, type-safe, easier testing
 
+**Note:** `SpanContext` here is an internal correlation type, not the OTel type. See Section 7 (Observability System) for details on how telemetry maps these callbacks to OTel spans.
+
 ### 3. Tool System
 
 **From:** Class-based `AgentToolset` with Pydantic annotations
@@ -160,20 +162,25 @@ class ToolContextManager {
 **To:** OpenTelemetry-native callbacks with OTLP export
 
 ```typescript
-// Callbacks emit span-compatible events
+// Internal correlation context for UI + logs
+// SpanContext is NOT an OpenTelemetry type; telemetry maps it to OTel spans
 interface SpanContext {
   traceId: string;
   spanId: string;
   parentSpanId?: string;
   attributes: Record<string, string | number | boolean>;
 }
-
-interface AgentCallbacks {
-  onSpanStart?(ctx: SpanContext, name: string, attributes?: SpanAttributes): void;
-  onSpanEnd?(ctx: SpanContext, status: 'ok' | 'error', error?: Error): void;
-  // LLM/Tool callbacks include SpanContext for correlation
-}
 ```
+
+**SpanContext Design:**
+- `SpanContext` is an internal correlation context used by callbacks for UI updates and structured logging
+- When telemetry is enabled (`ENABLE_OTEL=true`), the telemetry layer starts real OTel spans and optionally copies the OTel `traceId`/`spanId` into `SpanContext` for correlation
+- This decouples callback-based event flow from OTel instrumentation
+
+**Span Inference Strategy:**
+- We infer spans from existing callbacks (`onAgentStart`, `onLLMStart`, `onToolStart`, etc.)
+- No separate `onSpanStart`/`onSpanEnd` callbacks; the telemetry layer wraps lifecycle callbacks to create spans
+- Example: `onAgentStart` → starts `agent.run` span; `onAgentEnd` → ends the span
 
 **Key Features (ported from Python):**
 - OTLP exporter for Aspire Dashboard / Jaeger / custom endpoints
@@ -271,10 +278,15 @@ interface AgentCallbacks {
 
 **Goal:** Add telemetry instrumentation before expanding providers
 
-**Deliverables:**
-- [ ] OpenTelemetry setup with OTLP exporter (`telemetry/`)
-- [ ] GenAI semantic conventions for LLM spans
-- [ ] Aspire Dashboard integration (`/telemetry start|stop|status`)
+**Bun Compatibility:**
+- Manual spans only; no Node auto-instrumentation (incompatible with Bun)
+- If `@opentelemetry/sdk-node` is incompatible with Bun, use `@opentelemetry/sdk-trace-base` + OTLP exporter instead
+
+**Deliverables (ordered):**
+1. [ ] **Bun + OTel smoke test** (acceptance criteria): With `ENABLE_OTEL=true` and `OTLP_ENDPOINT=http://localhost:4318/v1/traces`, running a single `Agent.run()` produces at least one exported trace
+2. [ ] OpenTelemetry setup with OTLP exporter (`telemetry/`)
+3. [ ] GenAI semantic conventions for LLM spans
+4. [ ] Aspire Dashboard integration (`/telemetry start|stop|status`)
 
 **Key Files:**
 ```
@@ -517,10 +529,10 @@ Use latest stable versions per `CLAUDE.md` Tech Stack:
 - **LangChain.js 1.x** for LLM integration
 - **TypeScript 5.x** with strict mode
 
-**Observability (Phase 1):**
+**Observability (Phase 1b):**
 - `@opentelemetry/api` - Core OTel API
-- `@opentelemetry/sdk-node` - Node SDK (Bun compatible)
-- `@opentelemetry/exporter-trace-otlp-http` - OTLP export
+- `@opentelemetry/sdk-node` - Node SDK (primary); fallback to `@opentelemetry/sdk-trace-base` if Bun incompatible
+- `@opentelemetry/exporter-trace-otlp-http` - OTLP export (works under Bun)
 - `@opentelemetry/semantic-conventions` - Standard attributes
 
 **Utilities:**

@@ -202,7 +202,7 @@ describe('Agent Error Types', () => {
 
   describe('error mapping functions', () => {
     describe('mapModelErrorCodeToAgentErrorCode', () => {
-      it.each([
+      it.each<[Parameters<typeof mapModelErrorCodeToAgentErrorCode>[0], AgentErrorCode]>([
         ['PROVIDER_NOT_CONFIGURED', 'PROVIDER_NOT_CONFIGURED'],
         ['PROVIDER_NOT_SUPPORTED', 'PROVIDER_NOT_SUPPORTED'],
         ['AUTHENTICATION_ERROR', 'AUTHENTICATION_ERROR'],
@@ -213,13 +213,13 @@ describe('Agent Error Types', () => {
         ['TIMEOUT', 'TIMEOUT'],
         ['INVALID_RESPONSE', 'INVALID_RESPONSE'],
         ['UNKNOWN', 'UNKNOWN'],
-      ] as const)('maps ModelErrorCode %s to AgentErrorCode %s', (input, expected) => {
+      ])('maps ModelErrorCode %s to AgentErrorCode %s', (input, expected) => {
         expect(mapModelErrorCodeToAgentErrorCode(input)).toBe(expected);
       });
     });
 
     describe('mapToolErrorCodeToAgentErrorCode', () => {
-      it.each([
+      it.each<[Parameters<typeof mapToolErrorCodeToAgentErrorCode>[0], AgentErrorCode]>([
         ['VALIDATION_ERROR', 'VALIDATION_ERROR'],
         ['IO_ERROR', 'IO_ERROR'],
         ['CONFIG_ERROR', 'CONFIG_ERROR'],
@@ -229,7 +229,7 @@ describe('Agent Error Types', () => {
         ['LLM_ASSIST_REQUIRED', 'LLM_ASSIST_REQUIRED'],
         ['TIMEOUT', 'TIMEOUT'],
         ['UNKNOWN', 'UNKNOWN'],
-      ] as const)('maps ToolErrorCode %s to AgentErrorCode %s', (input, expected) => {
+      ])('maps ToolErrorCode %s to AgentErrorCode %s', (input, expected) => {
         expect(mapToolErrorCodeToAgentErrorCode(input)).toBe(expected);
       });
     });

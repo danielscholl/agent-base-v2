@@ -43,12 +43,19 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * @param source - Object to merge in (overrides target)
  * @returns Merged object
  */
-export function deepMerge<T extends Record<string, unknown>>(target: T, source: Partial<T>): T {
+type DeepPartial<T> =
+  T extends Array<infer U>
+    ? Array<U>
+    : T extends Record<string, unknown>
+      ? { [K in keyof T]?: DeepPartial<T[K]> } & Record<string, unknown>
+      : T;
+
+export function deepMerge<T extends Record<string, unknown>>(target: T, source: DeepPartial<T>): T {
   const result = { ...target };
 
-  for (const key of Object.keys(source) as Array<keyof T>) {
-    const sourceValue = source[key];
-    const targetValue = result[key];
+  for (const key of Object.keys(source)) {
+    const sourceValue = (source as Record<string, unknown>)[key];
+    const targetValue = (result as Record<string, unknown>)[key];
 
     if (sourceValue === undefined) {
       continue;
@@ -56,13 +63,13 @@ export function deepMerge<T extends Record<string, unknown>>(target: T, source: 
 
     if (isPlainObject(sourceValue) && isPlainObject(targetValue)) {
       // Recursively merge nested objects
-      result[key] = deepMerge(
+      (result as Record<string, unknown>)[key] = deepMerge(
         targetValue,
-        sourceValue as Partial<typeof targetValue>
-      ) as T[keyof T];
+        sourceValue as DeepPartial<typeof targetValue>
+      );
     } else {
       // Replace value (including arrays)
-      result[key] = sourceValue as T[keyof T];
+      (result as Record<string, unknown>)[key] = sourceValue;
     }
   }
 

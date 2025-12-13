@@ -22,7 +22,7 @@ function createMockStream(chunks: string[]): AsyncIterable<MockChunk> {
       return {
         next(): Promise<IteratorResult<MockChunk>> {
           if (index < chunks.length) {
-            const chunk = chunks[index];
+            const chunk = chunks[index] ?? '';
             index++;
             return Promise.resolve({
               done: false,
@@ -70,14 +70,16 @@ const { LLMClient } = await import('../llm.js');
 
 // Mock BaseChatModel
 function createMockModel(invokeResponse: MockResponse = mockInvokeResponse): {
-  invoke: ReturnType<typeof jest.fn>;
-  stream: ReturnType<typeof jest.fn>;
-  bind: ReturnType<typeof jest.fn>;
+  invoke: jest.MockedFunction<() => Promise<MockResponse>>;
+  stream: jest.MockedFunction<() => Promise<AsyncIterable<MockChunk>>>;
+  bind: jest.MockedFunction<(options: Record<string, unknown>) => unknown>;
 } {
   return {
-    invoke: jest.fn().mockResolvedValue(invokeResponse),
-    stream: jest.fn().mockResolvedValue(createMockStream(['Hello', ' world', '!'])),
-    bind: jest.fn().mockReturnThis(),
+    invoke: jest.fn<() => Promise<MockResponse>>().mockResolvedValue(invokeResponse),
+    stream: jest
+      .fn<() => Promise<AsyncIterable<MockChunk>>>()
+      .mockResolvedValue(createMockStream(['Hello', ' world', '!'])),
+    bind: jest.fn<(options: Record<string, unknown>) => unknown>().mockReturnThis(),
   };
 }
 

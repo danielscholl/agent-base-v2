@@ -5,10 +5,12 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 // Mock @langchain/openai before importing
-const mockChatOpenAI = jest.fn().mockImplementation((config) => ({
-  model: config.model,
-  _type: 'chat_model',
-}));
+const mockChatOpenAI = jest
+  .fn<(config: { model: string }) => { model: string; _type: string }>()
+  .mockImplementation((config) => ({
+    model: config.model,
+    _type: 'chat_model',
+  }));
 
 jest.unstable_mockModule('@langchain/openai', () => ({
   ChatOpenAI: mockChatOpenAI,

@@ -7,8 +7,8 @@ import { getDefaultConfig } from '../../config/schema.js';
 import type { AppConfig } from '../../config/schema.js';
 
 // Create mock functions that we can reference
-const mockReadFile = jest.fn();
-const mockAccess = jest.fn();
+const mockReadFile = jest.fn<(path: string, encoding: BufferEncoding) => Promise<string>>();
+const mockAccess = jest.fn<(path: string, mode?: number) => Promise<void>>();
 
 // Mock fs/promises BEFORE any imports that use it
 jest.unstable_mockModule('node:fs/promises', () => ({
