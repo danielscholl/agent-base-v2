@@ -25,10 +25,12 @@ import type { ToolResponse } from '../tools/types.js';
 import type { TokenUsage } from '../model/types.js';
 import type { AgentOptions, Message, SpanContext } from './types.js';
 import type { AgentCallbacks } from './callbacks.js';
+import type { AgentErrorCode, AgentErrorResponse, ProviderErrorMetadata } from '../errors/index.js';
 import { LLMClient } from '../model/llm.js';
 import { loadSystemPrompt } from './prompts.js';
 import { createSpanContext, createChildSpanContext } from './callbacks.js';
 import { extractTokenUsage } from '../model/base.js';
+import { errorResponse, mapModelErrorCodeToAgentErrorCode } from '../errors/index.js';
 
 /** Default maximum iterations for tool execution loop */
 const DEFAULT_MAX_ITERATIONS = 10;
@@ -321,12 +323,19 @@ export class Agent {
           try {
             aiMessage = await modelWithTools.invoke(messages);
             // Extract usage from response metadata if available
-            const metadata = aiMessage.response_metadata as Record<string, unknown> | undefined;
-            usage = extractTokenUsage(metadata);
+            const responseMetadata = aiMessage.response_metadata as
+              | Record<string, unknown>
+              | undefined;
+            usage = extractTokenUsage(responseMetadata);
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+            const errorCode = this.mapErrorToAgentErrorCode(error);
             this.callbacks?.onSpinnerStop?.();
-            this.callbacks?.onAgentEnd?.(rootCtx, `Error: ${errorMsg}`);
+            this.emitError(rootCtx, errorCode, errorMsg, {
+              provider: this.getProviderName(),
+              model: this.getModelName(),
+              originalError: error,
+            });
             return `Error: ${errorMsg}`;
           }
         } else {
@@ -335,7 +344,16 @@ export class Agent {
 
           if (!response.success) {
             this.callbacks?.onSpinnerStop?.();
-            this.callbacks?.onAgentEnd?.(rootCtx, `Error: ${response.message}`);
+            // Map model error code to agent error code for type safety
+            this.emitError(
+              rootCtx,
+              mapModelErrorCodeToAgentErrorCode(response.error),
+              response.message,
+              {
+                provider: this.getProviderName(),
+                model: this.getModelName(),
+              }
+            );
             return `Error: ${response.message}`;
           }
 
@@ -391,13 +409,18 @@ export class Agent {
       // Max iterations reached
       const errorMsg = `Maximum iterations (${String(this.maxIterations)}) reached`;
       this.callbacks?.onSpinnerStop?.();
-      this.callbacks?.onAgentEnd?.(rootCtx, errorMsg);
-      return errorMsg;
+      this.emitError(rootCtx, 'MAX_ITERATIONS_EXCEEDED', errorMsg);
+      return `Error: ${errorMsg}`;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      const errorCode = this.mapErrorToAgentErrorCode(error);
       this.callbacks?.onSpinnerStop?.();
       this.callbacks?.onDebug?.('Agent.run error', { error: errorMsg });
-      this.callbacks?.onAgentEnd?.(rootCtx, `Error: ${errorMsg}`);
+      this.emitError(rootCtx, errorCode, errorMsg, {
+        provider: this.getProviderName(),
+        model: this.getModelName(),
+        originalError: error,
+      });
       return `Error: ${errorMsg}`;
     }
   }
@@ -443,6 +466,16 @@ export class Agent {
 
       if (!streamResponse.success) {
         this.callbacks?.onSpinnerStop?.();
+        // Emit structured error with mapped error code for type safety
+        this.emitError(
+          rootCtx,
+          mapModelErrorCodeToAgentErrorCode(streamResponse.error),
+          streamResponse.message,
+          {
+            provider: this.getProviderName(),
+            model: this.getModelName(),
+          }
+        );
         yield `Error: ${streamResponse.message}`;
         return;
       }
@@ -465,8 +498,13 @@ export class Agent {
       this.callbacks?.onAgentEnd?.(rootCtx, fullResponse);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      const errorCode = this.mapErrorToAgentErrorCode(error);
       this.callbacks?.onSpinnerStop?.();
-      this.callbacks?.onAgentEnd?.(rootCtx, `Error: ${errorMsg}`);
+      this.emitError(rootCtx, errorCode, errorMsg, {
+        provider: this.getProviderName(),
+        model: this.getModelName(),
+        originalError: error,
+      });
       yield `Error: ${errorMsg}`;
     }
   }
@@ -502,5 +540,74 @@ export class Agent {
    */
   getProviderName(): string {
     return this.llmClient.getProviderName();
+  }
+
+  /**
+   * Emit an error via the onError callback and return an AgentErrorResponse.
+   * Also emits the error message via onAgentEnd for backward compatibility.
+   */
+  private emitError(
+    ctx: SpanContext,
+    code: AgentErrorCode,
+    message: string,
+    metadata?: ProviderErrorMetadata
+  ): AgentErrorResponse {
+    const agentError = errorResponse(code, message, metadata);
+
+    // Emit structured error via onError callback
+    this.callbacks?.onError?.(ctx, agentError);
+
+    // Emit string error via onAgentEnd for backward compatibility
+    this.callbacks?.onAgentEnd?.(ctx, `Error: ${message}`);
+
+    return agentError;
+  }
+
+  /**
+   * Map an error to an AgentErrorCode based on error message patterns.
+   */
+  private mapErrorToAgentErrorCode(error: unknown): AgentErrorCode {
+    if (!(error instanceof Error)) {
+      return 'UNKNOWN';
+    }
+
+    const message = error.message.toLowerCase();
+
+    if (
+      message.includes('api key') ||
+      message.includes('authentication') ||
+      message.includes('unauthorized')
+    ) {
+      return 'AUTHENTICATION_ERROR';
+    }
+    if (
+      message.includes('rate limit') ||
+      message.includes('429') ||
+      message.includes('too many requests')
+    ) {
+      return 'RATE_LIMITED';
+    }
+    if (message.includes('model') && message.includes('not found')) {
+      return 'MODEL_NOT_FOUND';
+    }
+    if (
+      message.includes('context length') ||
+      message.includes('too long') ||
+      message.includes('token limit')
+    ) {
+      return 'CONTEXT_LENGTH_EXCEEDED';
+    }
+    if (message.includes('timeout') || message.includes('timed out')) {
+      return 'TIMEOUT';
+    }
+    if (
+      message.includes('network') ||
+      message.includes('econnrefused') ||
+      message.includes('fetch failed')
+    ) {
+      return 'NETWORK_ERROR';
+    }
+
+    return 'UNKNOWN';
   }
 }

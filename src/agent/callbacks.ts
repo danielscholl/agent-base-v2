@@ -9,6 +9,7 @@
 import type { SpanContext, Message } from './types.js';
 import type { TokenUsage } from '../model/types.js';
 import type { ToolResponse } from '../tools/types.js';
+import type { AgentErrorResponse } from '../errors/index.js';
 
 /**
  * Callbacks for agent lifecycle events.
@@ -47,6 +48,14 @@ export interface AgentCallbacks {
    * The CLI shell may use onAnswerStream to receive the stream via callback.
    */
   onAnswerStream?: (stream: AsyncGenerator<string>) => void;
+
+  // ─── Error Handling ────────────────────────────────────────────────────
+  /**
+   * Called when an error occurs during agent execution.
+   * Provides structured error information for programmatic handling.
+   * Note: onAgentEnd continues to receive error strings for backward compatibility.
+   */
+  onError?: (ctx: SpanContext, error: AgentErrorResponse) => void;
 
   // ─── Debug/Logging ───────────────────────────────────────────────────
   /** Debug-level logging */

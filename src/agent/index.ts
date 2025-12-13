@@ -18,6 +18,25 @@ export type {
 
 export type { AgentCallbacks } from './callbacks.js';
 
+// ─── Error Types ─────────────────────────────────────────────────────────
+export type {
+  AgentErrorCode,
+  AgentErrorResponse,
+  AgentSuccessResponse,
+  AgentResponse,
+  ProviderErrorMetadata,
+} from '../errors/index.js';
+
+export {
+  successResponse,
+  errorResponse,
+  isAgentSuccess,
+  isAgentError,
+  mapModelErrorCodeToAgentErrorCode,
+  mapToolErrorCodeToAgentErrorCode,
+  getUserFriendlyMessage,
+} from '../errors/index.js';
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 export { createSpanContext, createChildSpanContext } from './callbacks.js';
 export {

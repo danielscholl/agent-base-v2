@@ -86,6 +86,7 @@ describe('Agent', () => {
     callbacks = {
       onAgentStart: jest.fn(),
       onAgentEnd: jest.fn(),
+      onError: jest.fn(),
       onLLMStart: jest.fn(),
       onLLMStream: jest.fn(),
       onLLMEnd: jest.fn(),
@@ -239,6 +240,19 @@ describe('Agent', () => {
       expect(callbacks.onAgentEnd).toHaveBeenCalledWith(
         expect.any(Object),
         'Error: Network connection failed'
+      );
+      // Verify structured error is also emitted via onError callback
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        expect.objectContaining({ traceId: expect.any(String) }),
+        expect.objectContaining({
+          success: false,
+          error: 'NETWORK_ERROR',
+          message: 'Network connection failed',
+          metadata: expect.objectContaining({
+            provider: 'openai',
+            model: 'gpt-4o',
+          }),
+        })
       );
     });
 
@@ -598,7 +612,7 @@ describe('Agent', () => {
 
       const result = await agent.run('Loop forever');
 
-      expect(result).toBe('Maximum iterations (3) reached');
+      expect(result).toBe('Error: Maximum iterations (3) reached');
       expect(mockModelWithTools.invoke).toHaveBeenCalledTimes(3);
     });
   });
