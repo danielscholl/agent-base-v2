@@ -40,7 +40,12 @@ export interface AgentCallbacks {
   onSpinnerStart?: (message: string) => void;
   /** Called to hide loading indicator */
   onSpinnerStop?: () => void;
-  /** Called with streaming answer generator */
+  /**
+   * Called with streaming answer generator.
+   * Note: This callback is designed for CLI shell integration (Feature 16).
+   * Currently, runStream() yields chunks directly and emits onLLMStream.
+   * The CLI shell may use onAnswerStream to receive the stream via callback.
+   */
   onAnswerStream?: (stream: AsyncGenerator<string>) => void;
 
   // ─── Debug/Logging ───────────────────────────────────────────────────

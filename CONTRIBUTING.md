@@ -18,6 +18,94 @@ bun run test
 bun run build
 ```
 
+## AI-Assisted Development
+
+This project is optimized for development with [Claude Code](https://claude.ai/code). We use structured workflows and tooling to streamline AI-assisted development.
+
+### Recommended Tools
+
+| Tool | Purpose | Link |
+|------|---------|------|
+| **Claude Code** | AI coding assistant | [claude.ai/code](https://claude.ai/code) |
+| **claude-sdlc** | SDLC workflow plugin for Claude Code | [github.com/danielscholl/claude-sdlc](https://github.com/danielscholl/claude-sdlc) |
+| **Archon** | Task management & knowledge base (MCP server) | [github.com/coleam00/Archon](https://github.com/coleam00/Archon) |
+
+### Claude SDLC Workflows
+
+Install the [claude-sdlc](https://github.com/danielscholl/claude-sdlc) plugin to access structured development commands:
+
+```bash
+# Create feature specifications
+/sdlc:feature <description>
+
+# Implement from a spec file
+/sdlc:implement docs/specs/feature-xxx.md
+
+# Create bug fix specifications
+/sdlc:bug <description>
+
+# Maintenance tasks
+/sdlc:chore <description>
+```
+
+These workflows generate detailed specs in `docs/specs/`, integrate with Archon for task tracking, and follow the patterns defined in [CLAUDE.md](CLAUDE.md).
+
+### Archon Integration
+
+When using AI coding assistants (Claude Code, Cursor, Windsurf, etc.) on this project, we recommend [Archon](https://github.com/coleam00/Archon) as a backing system for task management and knowledge sharing.
+
+**What is Archon?**
+
+Archon is an MCP (Model Context Protocol) server that provides:
+- **Task Management**: Track project tasks with status (todo → doing → review → done)
+- **Knowledge Base**: RAG-powered documentation search for your AI assistant
+- **Project Organization**: Manage features, documents, and version history
+
+**Setup:**
+
+1. Clone and run Archon via Docker (see [Archon README](https://github.com/coleam00/Archon#readme))
+2. Configure your AI coding assistant to connect to the Archon MCP server
+3. Create a project for your feature work
+
+**Usage with this project:**
+
+```bash
+# AI assistant commands (via MCP tools)
+find_tasks(filter_by="status", filter_value="todo")  # Get pending tasks
+manage_task("update", task_id="...", status="doing") # Start working
+manage_task("update", task_id="...", status="done")  # Complete task
+```
+
+See [CLAUDE.md](CLAUDE.md) for detailed Archon workflow integration.
+
+## Git Hooks (Automatic Quality Gates)
+
+Git hooks are automatically installed when you run `bun install` (via Husky).
+
+### Pre-commit Hook
+
+Runs `lint-staged` on staged files before each commit:
+
+| File Type | Checks |
+|-----------|--------|
+| `*.ts`, `*.tsx` | Prettier format + ESLint fix |
+| `*.json`, `*.md` | Prettier format |
+
+If any check fails, the commit is blocked until you fix the issues.
+
+### Commit Message Hook
+
+Enforces commit message standards:
+- Blocks commits with `Co-Authored-By: Claude` in the footer
+- Use `aipr` tool to generate commit messages (see Commit Convention below)
+
+### Bypassing Hooks (Not Recommended)
+
+```bash
+# Skip pre-commit checks (emergency only)
+git commit --no-verify -m "message"
+```
+
 ## Development Workflow
 
 ### 1. Run Quality Checks Before Changes
@@ -266,7 +354,36 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 
 **Scopes:** `agent`, `tools`, `skills`, `config`, `cli`, `model`, `utils`, `tests`
 
-**Examples:**
+### Using `aipr` for Commit Messages (Recommended)
+
+This project uses `aipr` (AI Pull Request) to generate commit messages and PR descriptions.
+
+**Install from PyPI:**
+
+```bash
+# Install globally with pip
+pip install aipr
+
+# Or with pipx (recommended for CLI tools)
+pipx install aipr
+```
+
+**PyPI:** https://pypi.org/project/aipr/
+
+**Usage:**
+
+```bash
+# Generate commit message from staged changes
+git commit -m "$(aipr commit -s)"
+
+# Generate PR description
+gh pr create --title "feat: add new feature" --body "$(aipr pr -s)"
+```
+
+The commit-msg hook blocks manually-added `Co-Authored-By: Claude` footers to encourage using `aipr`.
+
+### Manual Commit Examples
+
 ```bash
 git commit -m "feat(config): add Azure Foundry provider support"
 git commit -m "fix(agent): handle empty tool list gracefully"
