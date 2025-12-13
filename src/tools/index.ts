@@ -18,3 +18,6 @@ export { successResponse, errorResponse, createTool, wrapWithToolResponse } from
 
 // Types for tool creation
 export type { CreateToolOptions } from './base.js';
+
+// Hello tools (reference implementation)
+export { helloWorldTool, greetUserTool } from './hello.js';
