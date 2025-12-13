@@ -5,6 +5,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { helloWorldTool, greetUserTool } from '../hello.js';
 import type { ToolResponse } from '../index.js';
+import { isSuccessResponse, isErrorResponse } from '../index.js';
 
 // Type helper for test assertions
 interface HelloWorldResult {
@@ -41,7 +42,7 @@ describe('helloWorldTool', () => {
     const result = (await helloWorldTool.invoke({ name: '' })) as ToolResponse<HelloWorldResult>;
 
     expect(result.success).toBe(true);
-    if (result.success) {
+    if (isSuccessResponse(result)) {
       expect(result.result.greeting).toBe('Hello, !');
     }
   });
@@ -52,7 +53,7 @@ describe('helloWorldTool', () => {
     })) as ToolResponse<HelloWorldResult>;
 
     expect(result.success).toBe(true);
-    if (result.success) {
+    if (isSuccessResponse(result)) {
       expect(result.result.greeting).toContain("O'Brien");
     }
   });
@@ -63,7 +64,7 @@ describe('helloWorldTool', () => {
     })) as ToolResponse<HelloWorldResult>;
 
     expect(result.success).toBe(true);
-    if (result.success) {
+    if (isSuccessResponse(result)) {
       expect(result.result.greeting).toBe('Hello, 日本語!');
     }
   });
@@ -123,7 +124,7 @@ describe('greetUserTool', () => {
       })) as ToolResponse<GreetUserResult>;
 
       expect(result.success).toBe(true);
-      if (result.success) {
+      if (isSuccessResponse(result)) {
         expect(result.result.language).toBe(language);
       }
     });
@@ -147,7 +148,7 @@ describe('greetUserTool', () => {
       })) as ToolResponse<GreetUserResult>;
 
       expect(result.success).toBe(false);
-      if (!result.success) {
+      if (isErrorResponse(result)) {
         expect(result.error).toBe('VALIDATION_ERROR');
       }
     });
@@ -159,7 +160,7 @@ describe('greetUserTool', () => {
       })) as ToolResponse<GreetUserResult>;
 
       expect(result.success).toBe(false);
-      if (!result.success) {
+      if (isErrorResponse(result)) {
         expect(result.error).toBe('VALIDATION_ERROR');
         expect(result.message).toContain('xyz');
         expect(result.message).toContain('en, es, fr');
@@ -174,7 +175,7 @@ describe('greetUserTool', () => {
       })) as ToolResponse<GreetUserResult>;
 
       expect(result.success).toBe(false);
-      if (!result.success) {
+      if (isErrorResponse(result)) {
         expect(result.error).toBe('VALIDATION_ERROR');
         expect(result.message).toContain('toString');
       }
@@ -189,7 +190,7 @@ describe('greetUserTool', () => {
       })) as ToolResponse<GreetUserResult>;
 
       expect(result.success).toBe(true);
-      if (result.success) {
+      if (isSuccessResponse(result)) {
         expect(result.result.greeting).toBe('Hello, !');
       }
     });
@@ -201,7 +202,7 @@ describe('greetUserTool', () => {
       })) as ToolResponse<GreetUserResult>;
 
       expect(result.success).toBe(true);
-      if (result.success) {
+      if (isSuccessResponse(result)) {
         expect(result.result.greeting).toContain('José María');
       }
     });
