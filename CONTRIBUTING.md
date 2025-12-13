@@ -18,6 +18,34 @@ bun run test
 bun run build
 ```
 
+## AI-Assisted Development with Archon
+
+When using AI coding assistants (Claude Code, Cursor, Windsurf, etc.) on this project, we recommend [Archon](https://github.com/coleam00/Archon) as a backing system for task management and knowledge sharing.
+
+**What is Archon?**
+
+Archon is an MCP (Model Context Protocol) server that provides:
+- **Task Management**: Track project tasks with status (todo → doing → review → done)
+- **Knowledge Base**: RAG-powered documentation search for your AI assistant
+- **Project Organization**: Manage features, documents, and version history
+
+**Setup:**
+
+1. Clone and run Archon via Docker (see [Archon README](https://github.com/coleam00/Archon#readme))
+2. Configure your AI coding assistant to connect to the Archon MCP server
+3. Create a project for your feature work
+
+**Usage with this project:**
+
+```bash
+# AI assistant commands (via MCP tools)
+find_tasks(filter_by="status", filter_value="todo")  # Get pending tasks
+manage_task("update", task_id="...", status="doing") # Start working
+manage_task("update", task_id="...", status="done")  # Complete task
+```
+
+See [CLAUDE.md](CLAUDE.md) for detailed Archon workflow integration.
+
 ## Git Hooks (Automatic Quality Gates)
 
 Git hooks are automatically installed when you run `bun install` (via Husky).
