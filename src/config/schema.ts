@@ -89,6 +89,10 @@ export type FoundryProviderConfig = z.infer<typeof FoundryProviderConfigSchema>;
 
 /**
  * Google Gemini provider configuration.
+ *
+ * Note: This implementation currently supports only the Gemini Developer API
+ * via @langchain/google-genai. Vertex AI support requires the separate
+ * @langchain/google-vertexai package and is not yet implemented.
  */
 export const GeminiProviderConfigSchema = z.object({
   apiKey: z.string().optional().describe('Gemini API key'),
@@ -96,12 +100,19 @@ export const GeminiProviderConfigSchema = z.object({
   useVertexai: z
     .boolean()
     .default(DEFAULT_GEMINI_USE_VERTEXAI)
-    .describe('Use Vertex AI instead of Gemini API'),
-  projectId: z.string().optional().describe('Google Cloud project ID (for Vertex AI)'),
+    .describe(
+      '[RESERVED] Use Vertex AI instead of Gemini API. ' +
+        'Not yet implemented - requires @langchain/google-vertexai package. ' +
+        'Keep as false to use Gemini Developer API.'
+    ),
+  projectId: z
+    .string()
+    .optional()
+    .describe('[RESERVED] Google Cloud project ID for future Vertex AI support'),
   location: z
     .string()
     .default(DEFAULT_GEMINI_LOCATION)
-    .describe('Google Cloud location (for Vertex AI)'),
+    .describe('[RESERVED] Google Cloud location for future Vertex AI support'),
 });
 
 export type GeminiProviderConfig = z.infer<typeof GeminiProviderConfigSchema>;
