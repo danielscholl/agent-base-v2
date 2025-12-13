@@ -291,7 +291,6 @@ export class Agent {
       // Assemble messages
       let messages = this.assembleMessages(query, history);
       let iteration = 0;
-      let totalUsage: TokenUsage | undefined;
 
       // Get model with tools if available
       const modelWithTools = this.getModelWithTools();
@@ -343,17 +342,6 @@ export class Agent {
           // Create AIMessage from response
           aiMessage = new AIMessage(response.result.content);
           usage = response.result.usage;
-        }
-
-        // Track token usage
-        if (usage) {
-          if (!totalUsage) {
-            totalUsage = { ...usage };
-          } else {
-            totalUsage.promptTokens += usage.promptTokens;
-            totalUsage.completionTokens += usage.completionTokens;
-            totalUsage.totalTokens += usage.totalTokens;
-          }
         }
 
         // Get content from message

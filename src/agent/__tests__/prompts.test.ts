@@ -248,7 +248,7 @@ Actual content here.`;
         provider: 'openai',
       });
 
-      expect(result).toBe('Model: gpt-4o, Provider: openai, Data: /my/data, Memory: true');
+      expect(result).toBe('Model: gpt-4o, Provider: openai, Data: /my/data, Memory: enabled');
     });
 
     it('strips YAML front matter from loaded prompt', async () => {

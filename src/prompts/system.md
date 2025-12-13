@@ -24,4 +24,4 @@ Your working data directory is: {{DATA_DIR}}
 
 ## Memory
 
-Memory is {{MEMORY_ENABLED}}.
+Memory: {{MEMORY_ENABLED}}

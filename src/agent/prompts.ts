@@ -184,7 +184,7 @@ export async function loadSystemPrompt(options: PromptOptions): Promise<string> 
     MODEL: model,
     PROVIDER: provider,
     DATA_DIR: config.agent.dataDir,
-    MEMORY_ENABLED: config.memory.enabled ? 'true' : 'false',
+    MEMORY_ENABLED: config.memory.enabled ? 'enabled' : 'disabled',
   };
 
   // Replace placeholders
