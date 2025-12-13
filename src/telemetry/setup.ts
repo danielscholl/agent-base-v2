@@ -47,8 +47,14 @@ let initResult: TelemetryInitResult | null = null;
 // -----------------------------------------------------------------------------
 
 /**
- * Check if an endpoint is reachable via fast socket check.
- * Returns true if the endpoint responds within timeout.
+ * Check if an OTLP endpoint is reachable via fast HTTP check.
+ * Returns true if the endpoint origin responds within timeout.
+ *
+ * Note: Uses GET on the origin (not the full /v1/traces path) since
+ * OTLP collectors only accept POST on trace endpoints. This check
+ * verifies the collector is running, not that the trace endpoint is
+ * correctly configured. Some collectors may return 404/405 which is
+ * acceptable - we only care that the service is reachable.
  */
 async function isEndpointReachable(
   endpoint: string,
@@ -62,9 +68,9 @@ async function isEndpointReachable(
     }, timeoutMs);
 
     try {
-      // Check the actual endpoint (any response means reachable)
-      await fetch(url.href, {
-        method: 'HEAD',
+      // Check the origin only - OTLP collectors only accept POST on /v1/traces
+      await fetch(url.origin, {
+        method: 'GET',
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
