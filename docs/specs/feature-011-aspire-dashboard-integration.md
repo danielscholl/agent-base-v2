@@ -97,9 +97,11 @@ From `agent-base/src/agent/cli/commands.py`:
 1. Check CLI: `docker --version` (5s timeout)
 2. Check daemon: `docker info` (10s timeout)
 3. Check running: `docker ps --filter name=<name> --format {{.Names}}`
-4. Start container: `docker run --rm -d -p 18888:18888 -p 4317:18889 --name aspire-dashboard -e DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true mcr.microsoft.com/dotnet/aspire-dashboard:latest`
+4. Start container: `docker run --rm -d -p 127.0.0.1:18888:18888 -p 127.0.0.1:4317:18889 --name aspire-dashboard -e DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true mcr.microsoft.com/dotnet/aspire-dashboard:latest`
 5. Stop container: `docker stop <name>`
 6. Get uptime: `docker ps --filter name=<name> --format {{.Status}}`
+
+**Security Note**: Ports are bound to `127.0.0.1` (localhost-only) to prevent network exposure of the unsecured dashboard. The `DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true` environment variable is required for development use but should never be exposed on network-accessible interfaces.
 
 **Auto-Config Update**:
 - On start: Set `telemetry.enabled = true`
@@ -451,9 +453,9 @@ export async function startAspireDashboard(
       '--rm',
       '-d',
       '-p',
-      '18888:18888',
+      '127.0.0.1:18888:18888',
       '-p',
-      '4317:18889',
+      '127.0.0.1:4317:18889',
       '--name',
       ASPIRE_CONTAINER_NAME,
       '-e',
@@ -1135,10 +1137,12 @@ It's the recommended local observability solution for .NET Aspire applications b
 ### Port Mapping
 
 The container exposes:
-- **18888:18888** - Dashboard UI (HTTP)
-- **4317:18889** - OTLP gRPC endpoint (internal 18889 mapped to standard 4317)
+- **127.0.0.1:18888:18888** - Dashboard UI (HTTP, localhost-only)
+- **127.0.0.1:4317:18889** - OTLP gRPC endpoint (internal 18889 mapped to standard 4317, localhost-only)
 
-The OTLP HTTP endpoint (4318) is not exposed by default. If needed, add `-p 4318:18890` to the run command.
+**Security Consideration**: All ports are bound to `127.0.0.1` (localhost) to prevent network exposure of the unsecured dashboard. The dashboard runs with `DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true` for local development convenience, which allows unauthenticated access to telemetry data. Binding to localhost ensures this data is only accessible from the development machine and not from the local network or internet.
+
+The OTLP HTTP endpoint (4318) is not exposed by default. If needed, add `-p 127.0.0.1:4318:18890` to the run command.
 
 ### Config Update Behavior
 

@@ -151,7 +151,9 @@ async function spawnWithBun(
         new Promise<'timeout'>((resolve) => {
           timeoutId = setTimeout(() => {
             try {
-              proc.kill();
+              if (proc.exitCode === null) {
+                proc.kill();
+              }
             } finally {
               resolve('timeout');
             }
