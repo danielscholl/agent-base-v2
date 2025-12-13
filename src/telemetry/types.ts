@@ -21,6 +21,12 @@ export type TelemetryErrorCode =
   | 'INVALID_CONFIG'
   | 'ALREADY_INITIALIZED'
   | 'NOT_INITIALIZED'
+  // Aspire Dashboard error codes
+  | 'DOCKER_NOT_INSTALLED'
+  | 'DOCKER_NOT_RUNNING'
+  | 'CONTAINER_START_FAILED'
+  | 'CONTAINER_STOP_FAILED'
+  | 'TIMEOUT'
   | 'UNKNOWN';
 
 /**

@@ -94,3 +94,23 @@ export {
 } from './spans.js';
 
 export type { TracingCallbacksOptions, TracingCallbacksInput, TracingState } from './spans.js';
+
+// ─── Aspire Dashboard Management ─────────────────────────────────────────────
+export {
+  // Constants
+  ASPIRE_CONTAINER_NAME,
+  ASPIRE_DASHBOARD_URL,
+  ASPIRE_OTLP_GRPC_ENDPOINT,
+  ASPIRE_OTLP_HTTP_ENDPOINT,
+  ASPIRE_IMAGE,
+  // Core functions
+  startAspireDashboard,
+  stopAspireDashboard,
+  getAspireStatus,
+  getAspireUrl,
+  // Config-integrated functions
+  startAspireDashboardWithConfig,
+  stopAspireDashboardWithConfig,
+} from './aspire.js';
+
+export type { AspireStatus, AspireOptions, AspireConfigOptions } from './aspire.js';
