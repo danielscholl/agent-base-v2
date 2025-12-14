@@ -147,6 +147,8 @@ import type { ToolResponse } from '../tools/types.js';
  * Information about an active tool execution.
  */
 export interface ActiveTask {
+  /** Unique identifier for the task */
+  id: string;
   /** Tool name */
   name: string;
   /** Tool arguments (for display) */
@@ -544,9 +546,9 @@ describe('AnswerBox', () => {
 ```typescript
 // Add to CallbackState interface:
 /** Add active tool to tracking */
-addActiveTask?: (name: string, args?: Record<string, unknown>) => void;
+addActiveTask?: (id: string, name: string, args?: Record<string, unknown>) => void;
 /** Mark tool as completed */
-completeTask?: (name: string, success: boolean, duration: number, error?: string) => void;
+completeTask?: (id: string, name: string, success: boolean, duration: number, error?: string) => void;
 ```
 
 ### Task 7: Update createCallbacks Factory
@@ -590,19 +592,19 @@ completedTasks: [],
 
 ```typescript
 // In callback creation:
-addActiveTask: (name, args) => {
+addActiveTask: (id, name, args) => {
   setState(s => ({
     ...s,
-    activeTasks: [...s.activeTasks, { name, args, startTime: Date.now() }],
+    activeTasks: [...s.activeTasks, { id, name, args, startTime: Date.now() }],
   }));
 },
-completeTask: (name, success, _duration, error) => {
+completeTask: (id, name, success, _duration, error) => {
   setState(s => {
-    const task = s.activeTasks.find(t => t.name === name);
+    const task = s.activeTasks.find(t => t.id === id);
     const duration = task ? Date.now() - task.startTime : 0;
     return {
       ...s,
-      activeTasks: s.activeTasks.filter(t => t.name !== name),
+      activeTasks: s.activeTasks.filter(t => t.id !== id),
       completedTasks: [...s.completedTasks, { name, success, duration, error }],
     };
   });

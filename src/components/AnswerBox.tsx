@@ -42,10 +42,8 @@ export function AnswerBox({
 
       {/* Content with optional typing indicator */}
       <Box>
-        <Text color="green">
-          {content}
-          {isStreaming && content !== '' && <Text color="cyan">{TYPING_INDICATOR}</Text>}
-        </Text>
+        <Text color="green">{content}</Text>
+        {isStreaming && content !== '' && <Text color="cyan">{TYPING_INDICATOR}</Text>}
       </Box>
 
       {/* Show "thinking..." when streaming starts but no content yet */}

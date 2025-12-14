@@ -245,11 +245,24 @@ export function InteractiveShell({
           setState((s) => {
             // Match by unique id to handle concurrent calls of same tool
             const task = s.activeTasks.find((t) => t.id === id);
-            const duration = task !== undefined ? Date.now() - task.startTime : 0;
+            if (task === undefined) {
+              // Task not found - use -1 to indicate unknown duration
+              // Log debug message if verbose mode enabled
+              if (process.env.AGENT_DEBUG !== undefined) {
+                process.stderr.write(
+                  `[DEBUG] completeTask called for unknown task: ${name} (id: ${id})\n`
+                );
+              }
+              return {
+                ...s,
+                completedTasks: [...s.completedTasks, { id, name, success, duration: -1, error }],
+              };
+            }
+            const duration = Date.now() - task.startTime;
             return {
               ...s,
               activeTasks: s.activeTasks.filter((t) => t.id !== id),
-              completedTasks: [...s.completedTasks, { name, success, duration, error }],
+              completedTasks: [...s.completedTasks, { id, name, success, duration, error }],
             };
           });
         },

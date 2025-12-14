@@ -25,11 +25,13 @@ export interface ActiveTask {
  * Information about a completed tool execution.
  */
 export interface CompletedTask {
+  /** Unique identifier for this task (used as React key) */
+  id: string;
   /** Tool name */
   name: string;
   /** Whether execution succeeded */
   success: boolean;
-  /** Duration in milliseconds */
+  /** Duration in milliseconds (-1 if unknown) */
   duration: number;
   /** Error message if failed */
   error?: string;
@@ -85,11 +87,13 @@ export function TaskProgress({
   return (
     <Box flexDirection="column" marginBottom={1}>
       {/* Completed tasks (most recent) */}
-      {visibleCompleted.map((task, index) => (
-        <Box key={`completed-${String(index)}`}>
+      {visibleCompleted.map((task) => (
+        <Box key={task.id}>
           <Text color={task.success ? 'green' : 'red'}>{task.success ? '✓' : '✗'}</Text>
           <Text> {task.name}</Text>
-          <Text dimColor> ({task.duration}ms)</Text>
+          <Text dimColor>
+            {task.duration >= 0 ? ` (${String(task.duration)}ms)` : ' (duration unknown)'}
+          </Text>
           {task.error !== undefined && <Text color="red"> - {task.error}</Text>}
         </Box>
       ))}

@@ -23,7 +23,11 @@ export interface CallbackState {
   onComplete?: (answer: string) => void;
   /** Add active tool to tracking (id from SpanContext.spanId) */
   addActiveTask?: (id: string, name: string, args?: Record<string, unknown>) => void;
-  /** Mark tool as completed by id */
+  /**
+   * Mark tool as completed by id.
+   * Note: The duration parameter is ignored by the implementation - actual duration is calculated
+   * internally from the startTime stored when addActiveTask was called.
+   */
   completeTask?: (
     id: string,
     name: string,

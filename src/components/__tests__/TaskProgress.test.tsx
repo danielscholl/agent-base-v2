@@ -58,7 +58,9 @@ describe('TaskProgress', () => {
   });
 
   it('renders completed task with success indicator', () => {
-    const completedTasks: CompletedTask[] = [{ name: 'read_file', success: true, duration: 150 }];
+    const completedTasks: CompletedTask[] = [
+      { id: 'c1', name: 'read_file', success: true, duration: 150 },
+    ];
 
     const { lastFrame } = render(<TaskProgress completedTasks={completedTasks} />);
 
@@ -69,7 +71,7 @@ describe('TaskProgress', () => {
 
   it('renders completed task with failure indicator', () => {
     const completedTasks: CompletedTask[] = [
-      { name: 'read_file', success: false, duration: 50, error: 'File not found' },
+      { id: 'c2', name: 'read_file', success: false, duration: 50, error: 'File not found' },
     ];
 
     const { lastFrame } = render(<TaskProgress completedTasks={completedTasks} />);
@@ -81,11 +83,11 @@ describe('TaskProgress', () => {
 
   it('limits completed tasks shown', () => {
     const completedTasks: CompletedTask[] = [
-      { name: 'task1', success: true, duration: 100 },
-      { name: 'task2', success: true, duration: 100 },
-      { name: 'task3', success: true, duration: 100 },
-      { name: 'task4', success: true, duration: 100 },
-      { name: 'task5', success: true, duration: 100 },
+      { id: 'c3', name: 'task1', success: true, duration: 100 },
+      { id: 'c4', name: 'task2', success: true, duration: 100 },
+      { id: 'c5', name: 'task3', success: true, duration: 100 },
+      { id: 'c6', name: 'task4', success: true, duration: 100 },
+      { id: 'c7', name: 'task5', success: true, duration: 100 },
     ];
 
     const { lastFrame } = render(<TaskProgress completedTasks={completedTasks} maxCompleted={3} />);
@@ -102,7 +104,9 @@ describe('TaskProgress', () => {
     const activeTasks: ActiveTask[] = [
       { id: 'span-4', name: 'active_tool', startTime: Date.now() },
     ];
-    const completedTasks: CompletedTask[] = [{ name: 'done_tool', success: true, duration: 100 }];
+    const completedTasks: CompletedTask[] = [
+      { id: 'c8', name: 'done_tool', success: true, duration: 100 },
+    ];
 
     const { lastFrame } = render(
       <TaskProgress activeTasks={activeTasks} completedTasks={completedTasks} />
@@ -114,7 +118,9 @@ describe('TaskProgress', () => {
   });
 
   it('hides completed tasks when showCompleted is false', () => {
-    const completedTasks: CompletedTask[] = [{ name: 'done_tool', success: true, duration: 100 }];
+    const completedTasks: CompletedTask[] = [
+      { id: 'c9', name: 'done_tool', success: true, duration: 100 },
+    ];
 
     const { lastFrame } = render(
       <TaskProgress completedTasks={completedTasks} showCompleted={false} />
