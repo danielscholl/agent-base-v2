@@ -40,11 +40,25 @@ jest.unstable_mockModule('../../components/InteractiveShell.js', () => ({
 // Import CLI after mocking
 const { CLI } = await import('../../cli.js');
 
-// Helper to wait for React to flush - needs longer timeout for CI environments
-const waitForRender = (): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, 100);
-  });
+// Helper to poll for expected content - CI environments need time for React to flush
+async function waitForContent(
+  lastFrame: () => string | undefined,
+  expected: string,
+  maxWait = 1000
+): Promise<void> {
+  const interval = 20;
+  let elapsed = 0;
+  while (elapsed < maxWait) {
+    await new Promise((resolve) => {
+      setTimeout(resolve, interval);
+    });
+    elapsed += interval;
+    const frame = lastFrame();
+    if (frame !== undefined && frame.includes(expected)) {
+      return;
+    }
+  }
+}
 
 describe('CLI', () => {
   const defaultFlags: CLIFlags = {
@@ -66,41 +80,41 @@ describe('CLI', () => {
     it('renders HealthCheck when --check flag is set', async () => {
       const flags: CLIFlags = { ...defaultFlags, check: true };
       const { lastFrame } = render(<CLI flags={flags} />);
-      await waitForRender();
+      await waitForContent(lastFrame, 'HEALTHCHECK_MOCK');
       expect(lastFrame()).toContain('HEALTHCHECK_MOCK');
     });
 
     it('renders ToolsInfo when --tools flag is set', async () => {
       const flags: CLIFlags = { ...defaultFlags, tools: true };
       const { lastFrame } = render(<CLI flags={flags} />);
-      await waitForRender();
+      await waitForContent(lastFrame, 'TOOLSINFO_MOCK');
       expect(lastFrame()).toContain('TOOLSINFO_MOCK');
     });
 
     it('renders SinglePrompt when -p flag has a value', async () => {
       const flags: CLIFlags = { ...defaultFlags, prompt: 'Hello world' };
       const { lastFrame } = render(<CLI flags={flags} />);
-      await waitForRender();
+      await waitForContent(lastFrame, 'SINGLEPROMPT_MOCK');
       expect(lastFrame()).toContain('SINGLEPROMPT_MOCK: Hello world');
     });
 
     it('passes verbose flag to SinglePrompt', async () => {
       const flags: CLIFlags = { ...defaultFlags, prompt: 'Hello world', verbose: true };
       const { lastFrame } = render(<CLI flags={flags} />);
-      await waitForRender();
+      await waitForContent(lastFrame, '(verbose)');
       expect(lastFrame()).toContain('(verbose)');
     });
 
     it('renders InteractiveShell by default', async () => {
       const { lastFrame } = render(<CLI flags={defaultFlags} />);
-      await waitForRender();
+      await waitForContent(lastFrame, 'INTERACTIVESHELL_MOCK');
       expect(lastFrame()).toContain('INTERACTIVESHELL_MOCK');
     });
 
     it('passes continue flag to InteractiveShell as resumeSession', async () => {
       const flags: CLIFlags = { ...defaultFlags, continue: true };
       const { lastFrame } = render(<CLI flags={flags} />);
-      await waitForRender();
+      await waitForContent(lastFrame, '(resume)');
       expect(lastFrame()).toContain('(resume)');
     });
   });
@@ -114,7 +128,7 @@ describe('CLI', () => {
         prompt: 'test',
       };
       const { lastFrame } = render(<CLI flags={flags} />);
-      await waitForRender();
+      await waitForContent(lastFrame, 'HEALTHCHECK_MOCK');
       expect(lastFrame()).toContain('HEALTHCHECK_MOCK');
     });
 
@@ -125,7 +139,7 @@ describe('CLI', () => {
         prompt: 'test',
       };
       const { lastFrame } = render(<CLI flags={flags} />);
-      await waitForRender();
+      await waitForContent(lastFrame, 'TOOLSINFO_MOCK');
       expect(lastFrame()).toContain('TOOLSINFO_MOCK');
     });
 
@@ -136,7 +150,7 @@ describe('CLI', () => {
         continue: true,
       };
       const { lastFrame } = render(<CLI flags={flags} />);
-      await waitForRender();
+      await waitForContent(lastFrame, 'SINGLEPROMPT_MOCK');
       expect(lastFrame()).toContain('SINGLEPROMPT_MOCK');
     });
   });
@@ -145,14 +159,14 @@ describe('CLI', () => {
     it('treats empty string prompt as no prompt (interactive mode)', async () => {
       const flags: CLIFlags = { ...defaultFlags, prompt: '' };
       const { lastFrame } = render(<CLI flags={flags} />);
-      await waitForRender();
+      await waitForContent(lastFrame, 'INTERACTIVESHELL_MOCK');
       expect(lastFrame()).toContain('INTERACTIVESHELL_MOCK');
     });
 
     it('handles undefined flags gracefully', async () => {
       const flags: CLIFlags = {};
       const { lastFrame } = render(<CLI flags={flags} />);
-      await waitForRender();
+      await waitForContent(lastFrame, 'INTERACTIVESHELL_MOCK');
       expect(lastFrame()).toContain('INTERACTIVESHELL_MOCK');
     });
   });
