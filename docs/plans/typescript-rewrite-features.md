@@ -110,6 +110,8 @@ Implement Ink equivalents of Rich UI pieces as `components/Spinner.tsx`, `TaskPr
 ### Feature 17: Port FileSystem tools
 Reimplement `../agent-base/src/agent/tools/filesystem.py` in TypeScript. Ensure parity on behaviors like path validation, error formatting, and large file handling. These fundamental tools enable real-world agent testing and demos.
 
+**Note:** Tools are implemented here but CLI integration (wiring tools into Agent constructor) happens in Feature 42 (UX polish). This involves addressing the streaming vs tool-calling trade-off: `Agent.runStream()` does not support tool calling (tools are explicitly ignored for streaming). When wiring tools into CLI, InteractiveShell must switch to `run()` for tool support, or offer streaming only in chat-only mode.
+
 ---
 
 ## Phase 3: Memory + Session
@@ -208,6 +210,12 @@ Document installation, configuration, usage, and migration from Python. Include 
 
 ### Feature 42: Error handling and UX polish
 Review all error paths for clear, actionable messages. Ensure graceful degradation when providers are unavailable. Verify keyboard interrupt handling works cleanly.
+
+**CLI Tool Integration:** Wire tools (from Feature 17) and skills (from Features 25-30) into CLI components. Address the streaming vs tool-calling trade-off:
+- `Agent.runStream()` does not support tool calling (tools are explicitly ignored in streaming mode)
+- **Recommended approach:** Use `run()` when tools are enabled for full tool support; optionally offer streaming-only in a "chat-only" mode (flag/env) until true streaming-with-tools is implemented
+- Update `InteractiveShell` and `SinglePrompt` to pass tools to Agent constructor
+- Ensure tools are available in both interactive and single-prompt modes
 
 ---
 
