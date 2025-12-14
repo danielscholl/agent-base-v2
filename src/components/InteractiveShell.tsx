@@ -38,6 +38,7 @@ interface ShellState {
  * Provides a chat interface for conversing with the agent.
  */
 export function InteractiveShell({
+  // TODO(Feature 20): _resumeSession is intentionally unused; placeholder for session resume functionality
   resumeSession: _resumeSession,
 }: InteractiveShellProps): React.ReactElement {
   const { exit } = useApp();

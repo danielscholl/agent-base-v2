@@ -319,7 +319,7 @@ The CLI will support:
   import React, { useEffect } from 'react';
   import { Text, useApp } from 'ink';
   // Import version from package.json
-  import pkg from '../../package.json' assert { type: 'json' };
+  import pkg from '../../package.json' with { type: 'json' };
 
   export function Version(): React.ReactElement {
     const { exit } = useApp();
