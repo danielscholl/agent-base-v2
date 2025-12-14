@@ -10,10 +10,14 @@ import { Agent } from '../agent/agent.js';
 import { loadConfig } from '../config/manager.js';
 import { createCallbacks } from '../cli/callbacks.js';
 import { VERSION } from '../cli/version.js';
+import { executeCommand, isCommand } from '../cli/commands/index.js';
+import { unescapeSlash } from '../cli/constants.js';
+import { InputHistory } from '../cli/input/index.js';
 import { Header } from './Header.js';
 import { Spinner } from './Spinner.js';
 import { ErrorDisplay } from './ErrorDisplay.js';
 import type { InteractiveShellProps, ShellMessage } from '../cli/types.js';
+import type { CommandContext } from '../cli/commands/types.js';
 import type { AgentErrorResponse } from '../errors/index.js';
 import type { AppConfig } from '../config/schema.js';
 import type { Message } from '../agent/types.js';
@@ -43,6 +47,7 @@ export function InteractiveShell({
 }: InteractiveShellProps): React.ReactElement {
   const { exit } = useApp();
   const agentRef = useRef<Agent | null>(null);
+  const historyRef = useRef<InputHistory>(new InputHistory());
 
   const [state, setState] = useState<ShellState>({
     input: '',
@@ -78,45 +83,99 @@ export function InteractiveShell({
     void loadConfiguration();
   }, []);
 
+  /**
+   * Add a system message to the conversation.
+   */
+  const addSystemMessage = useCallback((content: string) => {
+    setState((s) => ({
+      ...s,
+      messages: [...s.messages, { role: 'system' as const, content, timestamp: new Date() }],
+    }));
+  }, []);
+
+  /**
+   * Create command context for executing commands.
+   */
+  const createCommandContext = useCallback((): CommandContext => {
+    const outputLines: string[] = [];
+
+    return {
+      config: state.config,
+      onOutput: (content: string, _type?: 'info' | 'success' | 'warning' | 'error') => {
+        // Collect all output lines
+        outputLines.push(content);
+        // Update the message with all output
+        setState((s) => {
+          // Find and update the last system message, or add if none
+          const lastMsgIndex = s.messages.length - 1;
+          const lastMsg = s.messages[lastMsgIndex];
+
+          if (lastMsg && lastMsg.role === 'system') {
+            const updatedMessages = [...s.messages];
+            updatedMessages[lastMsgIndex] = {
+              ...lastMsg,
+              content: outputLines.join('\n'),
+            };
+            return { ...s, messages: updatedMessages };
+          }
+
+          return {
+            ...s,
+            messages: [
+              ...s.messages,
+              { role: 'system' as const, content: outputLines.join('\n'), timestamp: new Date() },
+            ],
+          };
+        });
+      },
+      exit,
+    };
+  }, [state.config, exit]);
+
   // Handle input submission
   const handleSubmit = useCallback(async () => {
-    const query = state.input.trim();
+    let query = state.input.trim();
 
     if (query === '') return;
 
-    // Check for exit command
-    if (query === '/exit' || query === '/quit') {
-      exit();
-      return;
+    // Handle escaped slash (// => /) - allows sending messages like "/etc/hosts"
+    const unescaped = unescapeSlash(query);
+    if (unescaped !== undefined) {
+      query = unescaped;
     }
 
-    // Check for help command
-    if (query === '/help') {
-      setState((s) => ({
-        ...s,
-        input: '',
-        messages: [
-          ...s.messages,
-          {
-            role: 'system' as const,
-            content:
-              'Commands:\n  /exit, /quit - Exit the shell\n  /help - Show this help\n  /clear - Clear message history',
-            timestamp: new Date(),
-          },
-        ],
-      }));
-      return;
-    }
+    // Add to history (original input, not unescaped)
+    historyRef.current.add(state.input.trim());
+    historyRef.current.reset();
 
-    // Check for clear command
-    if (query === '/clear') {
-      setState((s) => ({
-        ...s,
-        input: '',
-        messages: [],
-        streamingOutput: '',
-        error: null,
-      }));
+    // Check if this is a command (after unescape, so // is not a command)
+    if (isCommand(query)) {
+      // Clear input first
+      setState((s) => ({ ...s, input: '' }));
+
+      // Add placeholder system message for command output
+      addSystemMessage('');
+
+      const context = createCommandContext();
+      const result = await executeCommand(query, context);
+
+      if (result !== undefined) {
+        // Handle command result flags
+        if (result.shouldExit === true) {
+          exit();
+          return;
+        }
+
+        if (result.shouldClear === true) {
+          setState((s) => ({
+            ...s,
+            messages: [],
+            streamingOutput: '',
+            error: null,
+          }));
+          return;
+        }
+      }
       return;
     }
 
@@ -206,12 +265,18 @@ export function InteractiveShell({
         isProcessing: false,
       }));
     }
-  }, [state.input, state.config, state.messages, exit]);
+  }, [state.input, state.config, state.messages, exit, addSystemMessage, createCommandContext]);
 
   // Handle key input - gated until config loads
   useInput((input, key) => {
     // Always allow Ctrl+C to exit, even during loading or processing
     if (key.ctrl && input === 'c') {
+      exit();
+      return;
+    }
+
+    // Ctrl+D to exit
+    if (key.ctrl && input === 'd') {
       exit();
       return;
     }
@@ -222,11 +287,40 @@ export function InteractiveShell({
     // Don't process other input while agent is working
     if (state.isProcessing) return;
 
+    // ESC to clear input
+    if (key.escape) {
+      setState((s) => ({ ...s, input: '' }));
+      historyRef.current.reset();
+      return;
+    }
+
+    // Up arrow - navigate history backward
+    if (key.upArrow) {
+      const previousEntry = historyRef.current.previous(state.input);
+      if (previousEntry !== undefined) {
+        setState((s) => ({ ...s, input: previousEntry }));
+      }
+      return;
+    }
+
+    // Down arrow - navigate history forward
+    if (key.downArrow) {
+      const nextEntry = historyRef.current.next();
+      if (nextEntry !== undefined) {
+        setState((s) => ({ ...s, input: nextEntry }));
+      }
+      return;
+    }
+
     if (key.return) {
       void handleSubmit();
     } else if (key.backspace || key.delete) {
+      // Reset history navigation on edit
+      historyRef.current.reset();
       setState((s) => ({ ...s, input: s.input.slice(0, -1) }));
     } else if (!key.ctrl && !key.meta && input.length === 1) {
+      // Reset history navigation on edit
+      historyRef.current.reset();
       setState((s) => ({ ...s, input: s.input + input }));
     }
   });

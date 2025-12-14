@@ -14,6 +14,33 @@ jest.unstable_mockModule('../../config/manager.js', () => ({
   loadConfig: mockLoadConfig,
 }));
 
+// Mock CLI commands module
+jest.unstable_mockModule('../../cli/commands/index.js', () => ({
+  executeCommand: jest.fn(),
+  isCommand: jest.fn(() => false),
+}));
+
+// Mock CLI input module
+jest.unstable_mockModule('../../cli/input/index.js', () => ({
+  InputHistory: class MockInputHistory {
+    add(): void {}
+    previous(): string | undefined {
+      return undefined;
+    }
+    next(): string | undefined {
+      return undefined;
+    }
+    reset(): void {}
+    getAll(): string[] {
+      return [];
+    }
+    clear(): void {}
+    getPosition(): number {
+      return -1;
+    }
+  },
+}));
+
 // Mock Agent that invokes callbacks properly
 // InteractiveShell uses runStream(), which invokes onLLMStream and onAgentEnd
 jest.unstable_mockModule('../../agent/agent.js', () => ({
