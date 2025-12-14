@@ -8,6 +8,8 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { render } from 'ink-testing-library';
 import type { AgentCallbacks } from '../../agent/callbacks.js';
 
+let stderrWriteSpy: { mockRestore: () => void } | null = null;
+
 // Mock modules before importing
 const mockLoadConfig = jest.fn<() => Promise<unknown>>();
 
@@ -67,12 +69,19 @@ const mockConfig = {
 describe('SinglePrompt', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // SinglePrompt writes errors to stderr for scripting; silence during tests to avoid CI annotations/noise.
+    stderrWriteSpy = jest.spyOn(process.stderr, 'write').mockImplementation((() => true) as never);
     // Default: config loads successfully
     mockLoadConfig.mockResolvedValue({
       success: true,
       result: mockConfig,
       message: 'Config loaded',
     });
+  });
+
+  afterEach(() => {
+    stderrWriteSpy?.mockRestore();
+    stderrWriteSpy = null;
   });
 
   it('shows spinner while loading config in verbose mode', () => {
