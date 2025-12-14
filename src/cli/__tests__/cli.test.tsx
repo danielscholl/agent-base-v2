@@ -40,10 +40,10 @@ jest.unstable_mockModule('../../components/InteractiveShell.js', () => ({
 // Import CLI after mocking
 const { CLI } = await import('../../cli.js');
 
-// Helper to wait for React to flush
+// Helper to wait for React to flush - needs longer timeout for CI environments
 const waitForRender = (): Promise<void> =>
   new Promise((resolve) => {
-    setTimeout(resolve, 10);
+    setTimeout(resolve, 100);
   });
 
 describe('CLI', () => {
