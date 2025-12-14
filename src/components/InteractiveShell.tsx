@@ -16,6 +16,9 @@ import { InputHistory } from '../cli/input/index.js';
 import { Header } from './Header.js';
 import { Spinner } from './Spinner.js';
 import { ErrorDisplay } from './ErrorDisplay.js';
+import { TaskProgress } from './TaskProgress.js';
+import { AnswerBox } from './AnswerBox.js';
+import type { ActiveTask, CompletedTask } from './TaskProgress.js';
 import type { InteractiveShellProps, ShellMessage } from '../cli/types.js';
 import type { CommandContext } from '../cli/commands/types.js';
 import type { AgentErrorResponse } from '../errors/index.js';
@@ -35,6 +38,8 @@ interface ShellState {
   config: AppConfig | null;
   configLoaded: boolean;
   configError: string | null;
+  activeTasks: ActiveTask[];
+  completedTasks: CompletedTask[];
 }
 
 /**
@@ -59,6 +64,8 @@ export function InteractiveShell({
     config: null,
     configLoaded: false,
     configError: null,
+    activeTasks: [],
+    completedTasks: [],
   });
 
   // Load config on mount
@@ -181,7 +188,7 @@ export function InteractiveShell({
       return;
     }
 
-    // Add user message
+    // Add user message and clear tasks from previous query
     setState((s) => ({
       ...s,
       input: '',
@@ -190,6 +197,8 @@ export function InteractiveShell({
       spinnerMessage: 'Thinking...',
       streamingOutput: '',
       error: null,
+      activeTasks: [],
+      completedTasks: [],
     }));
 
     // Initialize agent lazily with callbacks wired to state
@@ -209,15 +218,40 @@ export function InteractiveShell({
         },
         onComplete: (answer) => {
           // Add assistant message to history and clear streaming output
+          // Skip if error already set (emitError calls both onError and onAgentEnd)
+          setState((s) => {
+            if (s.error !== null || answer.startsWith('Error:')) {
+              // Error already displayed via ErrorDisplay, don't duplicate
+              return { ...s, streamingOutput: '', isProcessing: false };
+            }
+            return {
+              ...s,
+              messages: [
+                ...s.messages,
+                { role: 'assistant' as const, content: answer, timestamp: new Date() },
+              ],
+              streamingOutput: '',
+              isProcessing: false,
+            };
+          });
+        },
+        addActiveTask: (id, name, args) => {
           setState((s) => ({
             ...s,
-            messages: [
-              ...s.messages,
-              { role: 'assistant' as const, content: answer, timestamp: new Date() },
-            ],
-            streamingOutput: '',
-            isProcessing: false,
+            activeTasks: [...s.activeTasks, { id, name, args, startTime: Date.now() }],
           }));
+        },
+        completeTask: (id, name, success, _duration, error) => {
+          setState((s) => {
+            // Match by unique id to handle concurrent calls of same tool
+            const task = s.activeTasks.find((t) => t.id === id);
+            const duration = task !== undefined ? Date.now() - task.startTime : 0;
+            return {
+              ...s,
+              activeTasks: s.activeTasks.filter((t) => t.id !== id),
+              completedTasks: [...s.completedTasks, { name, success, duration, error }],
+            };
+          });
         },
       });
 
@@ -373,14 +407,18 @@ export function InteractiveShell({
         </Box>
       ))}
 
-      {/* Streaming output */}
-      {state.streamingOutput !== '' && (
-        <Box marginBottom={1}>
-          <Text color="green">{state.streamingOutput}</Text>
-        </Box>
+      {/* Task progress - show active and completed tool executions */}
+      {(state.activeTasks.length > 0 || state.completedTasks.length > 0) && (
+        <TaskProgress activeTasks={state.activeTasks} completedTasks={state.completedTasks} />
       )}
 
-      {/* Spinner during processing (only when not streaming) */}
+      {/* Streaming output with AnswerBox */}
+      {/* Show when: has output OR (processing AND no spinner showing) */}
+      {(state.streamingOutput !== '' || (state.isProcessing && state.spinnerMessage === '')) && (
+        <AnswerBox content={state.streamingOutput} isStreaming={state.isProcessing} />
+      )}
+
+      {/* Spinner during processing (only when not streaming and spinner message is set) */}
       {state.isProcessing && state.spinnerMessage !== '' && state.streamingOutput === '' && (
         <Box marginBottom={1}>
           <Spinner message={state.spinnerMessage} />

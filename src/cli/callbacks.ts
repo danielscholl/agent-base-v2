@@ -21,6 +21,16 @@ export interface CallbackState {
   setError: (error: AgentErrorResponse | null) => void;
   /** Called when agent finishes with final answer */
   onComplete?: (answer: string) => void;
+  /** Add active tool to tracking (id from SpanContext.spanId) */
+  addActiveTask?: (id: string, name: string, args?: Record<string, unknown>) => void;
+  /** Mark tool as completed by id */
+  completeTask?: (
+    id: string,
+    name: string,
+    success: boolean,
+    duration: number,
+    error?: string
+  ) => void;
 }
 
 /**
@@ -47,13 +57,15 @@ export function createCallbacks(
 
   return {
     onSpinnerStart: (message) => {
+      // Only control spinner message, not processing state
+      // Processing state is managed by component (set on submit, cleared on end/error)
       state.setSpinnerMessage(message);
-      state.setIsProcessing(true);
     },
 
     onSpinnerStop: () => {
+      // Only clear spinner message, not processing state
+      // This allows streaming to continue after spinner stops
       state.setSpinnerMessage(null);
-      state.setIsProcessing(false);
     },
 
     onLLMStream: (_ctx, chunk) => {
@@ -68,6 +80,18 @@ export function createCallbacks(
     onError: (_ctx, error) => {
       state.setError(error);
       state.setIsProcessing(false);
+    },
+
+    onToolStart: (ctx, toolName, args) => {
+      // Use spanId as unique identifier for concurrent tool calls
+      state.addActiveTask?.(ctx.spanId, toolName, args);
+    },
+
+    onToolEnd: (ctx, toolName, result) => {
+      const success = result.success;
+      const error = !success && 'message' in result ? result.message : undefined;
+      // Duration is calculated in the component from startTime
+      state.completeTask?.(ctx.spanId, toolName, success, 0, error);
     },
 
     onDebug: (message, data) => {
