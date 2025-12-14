@@ -6,7 +6,7 @@
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { BaseMessage, AIMessageChunk } from '@langchain/core/messages';
 import { HumanMessage } from '@langchain/core/messages';
-import type { AppConfig } from '../config/schema.js';
+import type { AppConfig, RetryConfig } from '../config/schema.js';
 import type { ProviderName } from '../config/constants.js';
 import type {
   ModelResponse,
@@ -18,6 +18,7 @@ import type {
 } from './types.js';
 import { successResponse, errorResponse, mapErrorToCode, extractTokenUsage } from './base.js';
 import { getProviderFactory, getSupportedProviders, isProviderSupported } from './registry.js';
+import { withRetry, extractRetryAfter } from './retry.js';
 
 /**
  * Options for creating an LLMClient.
@@ -27,6 +28,8 @@ export interface LLMClientOptions {
   config: AppConfig;
   /** Optional callbacks for streaming events */
   callbacks?: LLMCallbacks;
+  /** Optional retry configuration (overrides config.retry) */
+  retryConfig?: RetryConfig;
 }
 
 /**
@@ -58,12 +61,15 @@ export interface LLMClientOptions {
 export class LLMClient {
   private readonly config: AppConfig;
   private readonly callbacks?: LLMCallbacks;
+  private readonly retryConfig: RetryConfig;
   private client: BaseChatModel | null = null;
   private currentProvider: ProviderName | null = null;
 
   constructor(options: LLMClientOptions) {
     this.config = options.config;
     this.callbacks = options.callbacks;
+    // Use provided retry config, or fall back to config.retry
+    this.retryConfig = options.retryConfig ?? options.config.retry;
   }
 
   /**
@@ -135,6 +141,35 @@ export class LLMClient {
     input: string | BaseMessage[],
     _options?: LLMCallOptions
   ): Promise<ModelResponse<InvokeResult>> {
+    // Skip retry wrapper if retry is disabled
+    if (!this.retryConfig.enabled) {
+      const result = await this.invokeOnce(input);
+      if (!result.success) {
+        this.callbacks?.onError?.(result.error, result.message);
+      }
+      return result;
+    }
+
+    const result = await withRetry(() => this.invokeOnce(input), {
+      maxRetries: this.retryConfig.maxRetries,
+      baseDelayMs: this.retryConfig.baseDelayMs,
+      maxDelayMs: this.retryConfig.maxDelayMs,
+      enableJitter: this.retryConfig.enableJitter,
+      onRetry: this.callbacks?.onRetry,
+    });
+
+    // Only fire onError on final failure (after all retries exhausted)
+    if (!result.success) {
+      this.callbacks?.onError?.(result.error, result.message);
+    }
+    return result;
+  }
+
+  /**
+   * Internal invoke without retry wrapper.
+   * Does NOT fire onError - caller is responsible for that after retries exhausted.
+   */
+  private async invokeOnce(input: string | BaseMessage[]): Promise<ModelResponse<InvokeResult>> {
     const clientResult = this.getClient();
     if (!clientResult.success) {
       return clientResult;
@@ -160,13 +195,17 @@ export class LLMClient {
     } catch (error) {
       const errorCode = mapErrorToCode(error);
       const message = error instanceof Error ? error.message : 'Unknown error during invocation';
-      this.callbacks?.onError?.(errorCode, message);
-      return errorResponse(errorCode, message);
+      const retryAfterMs = extractRetryAfter(error);
+      // Note: onError is NOT called here - it's called by invoke() after retries exhausted
+      return errorResponse(errorCode, message, retryAfterMs);
     }
   }
 
   /**
    * Stream the LLM response chunk by chunk.
+   *
+   * Note: Retry only applies to the initial stream() call, not iteration errors.
+   * If an error occurs during iteration, the stream will fail without retry.
    *
    * @param input - Prompt string or array of messages
    * @param options - Optional call options
@@ -176,6 +215,38 @@ export class LLMClient {
     input: string | BaseMessage[],
     _options?: LLMCallOptions
   ): Promise<ModelResponse<StreamResult>> {
+    // Fire onStreamStart once before any retry attempts
+    this.callbacks?.onStreamStart?.();
+
+    // Skip retry wrapper if retry is disabled
+    if (!this.retryConfig.enabled) {
+      const result = await this.streamOnce(input);
+      if (!result.success) {
+        this.callbacks?.onError?.(result.error, result.message);
+      }
+      return result;
+    }
+
+    const result = await withRetry(() => this.streamOnce(input), {
+      maxRetries: this.retryConfig.maxRetries,
+      baseDelayMs: this.retryConfig.baseDelayMs,
+      maxDelayMs: this.retryConfig.maxDelayMs,
+      enableJitter: this.retryConfig.enableJitter,
+      onRetry: this.callbacks?.onRetry,
+    });
+
+    // Only fire onError on final failure (after all retries exhausted)
+    if (!result.success) {
+      this.callbacks?.onError?.(result.error, result.message);
+    }
+    return result;
+  }
+
+  /**
+   * Internal stream without retry wrapper.
+   * Does NOT fire onStreamStart or onError - caller is responsible for those.
+   */
+  private async streamOnce(input: string | BaseMessage[]): Promise<ModelResponse<StreamResult>> {
     const clientResult = this.getClient();
     if (!clientResult.success) {
       return clientResult;
@@ -188,8 +259,6 @@ export class LLMClient {
       // Note: In LangChain 1.x, temperature and maxTokens must be set at model construction.
       // Runtime options are not supported via bind() anymore. If runtime options are needed,
       // consider caching multiple model instances or setting values at provider configuration.
-      this.callbacks?.onStreamStart?.();
-
       const stream = await client.stream(messages);
 
       // Wrap the stream to emit callbacks
@@ -199,8 +268,9 @@ export class LLMClient {
     } catch (error) {
       const errorCode = mapErrorToCode(error);
       const message = error instanceof Error ? error.message : 'Unknown error starting stream';
-      this.callbacks?.onError?.(errorCode, message);
-      return errorResponse(errorCode, message);
+      const retryAfterMs = extractRetryAfter(error);
+      // Note: onError is NOT called here - it's called by stream() after retries exhausted
+      return errorResponse(errorCode, message, retryAfterMs);
     }
   }
 

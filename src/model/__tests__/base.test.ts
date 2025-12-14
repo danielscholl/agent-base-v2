@@ -43,6 +43,28 @@ describe('Model Response Helpers', () => {
       });
     });
 
+    it('includes retryAfterMs when provided', () => {
+      const response = errorResponse('RATE_LIMITED', 'Rate limited', 5000);
+
+      expect(response).toEqual({
+        success: false,
+        error: 'RATE_LIMITED',
+        message: 'Rate limited',
+        retryAfterMs: 5000,
+      });
+    });
+
+    it('does not include retryAfterMs when undefined', () => {
+      const response = errorResponse('RATE_LIMITED', 'Rate limited', undefined);
+
+      expect(response).toEqual({
+        success: false,
+        error: 'RATE_LIMITED',
+        message: 'Rate limited',
+      });
+      expect('retryAfterMs' in response).toBe(false);
+    });
+
     it.each<ModelErrorCode>([
       'PROVIDER_NOT_CONFIGURED',
       'PROVIDER_NOT_SUPPORTED',
@@ -118,6 +140,27 @@ describe('mapErrorToCode', () => {
     expect(mapErrorToCode(new Error('Network error'))).toBe('NETWORK_ERROR');
     expect(mapErrorToCode(new Error('ECONNREFUSED'))).toBe('NETWORK_ERROR');
     expect(mapErrorToCode(new Error('Fetch failed'))).toBe('NETWORK_ERROR');
+    // Additional transient network errors
+    expect(mapErrorToCode(new Error('ECONNRESET'))).toBe('NETWORK_ERROR');
+    expect(mapErrorToCode(new Error('ENOTFOUND'))).toBe('NETWORK_ERROR');
+    expect(mapErrorToCode(new Error('ETIMEDOUT'))).toBe('NETWORK_ERROR');
+    expect(mapErrorToCode(new Error('EPIPE'))).toBe('NETWORK_ERROR');
+    expect(mapErrorToCode(new Error('socket hang up'))).toBe('NETWORK_ERROR');
+    expect(mapErrorToCode(new Error('connection refused'))).toBe('NETWORK_ERROR');
+    expect(mapErrorToCode(new Error('DNS lookup failed'))).toBe('NETWORK_ERROR');
+  });
+
+  it('maps 5xx server errors to NETWORK_ERROR', () => {
+    expect(mapErrorToCode(new Error('500 Internal Server Error'))).toBe('NETWORK_ERROR');
+    expect(mapErrorToCode(new Error('502 Bad Gateway'))).toBe('NETWORK_ERROR');
+    expect(mapErrorToCode(new Error('503 Service Unavailable'))).toBe('NETWORK_ERROR');
+    // Note: 504 contains "timeout" so it matches TIMEOUT first (also retryable)
+    expect(mapErrorToCode(new Error('504 Gateway Timeout'))).toBe('TIMEOUT');
+    expect(mapErrorToCode(new Error('internal server error'))).toBe('NETWORK_ERROR');
+    expect(mapErrorToCode(new Error('bad gateway'))).toBe('NETWORK_ERROR');
+    expect(mapErrorToCode(new Error('service unavailable'))).toBe('NETWORK_ERROR');
+    // "gateway timeout" matches TIMEOUT first (also retryable)
+    expect(mapErrorToCode(new Error('gateway timeout'))).toBe('TIMEOUT');
   });
 
   it('returns UNKNOWN for unrecognized errors', () => {

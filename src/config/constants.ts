@@ -67,6 +67,14 @@ export type MemoryType = (typeof MEMORY_TYPES)[number];
 // Skills defaults
 export const DEFAULT_SKILL_SCRIPT_TIMEOUT = 30000; // 30 seconds in ms
 
+// Retry defaults (from architecture.md)
+export const DEFAULT_RETRY_ENABLED = true;
+export const DEFAULT_MAX_RETRIES = 3;
+export const DEFAULT_BASE_DELAY_MS = 1000; // 1 second
+export const DEFAULT_MAX_DELAY_MS = 10000; // 10 seconds
+export const DEFAULT_ENABLE_JITTER = true;
+export const DEFAULT_JITTER_FACTOR = 0.2; // 20% variance
+
 // File permissions (POSIX)
 export const CONFIG_FILE_PERMISSIONS = 0o600;
 

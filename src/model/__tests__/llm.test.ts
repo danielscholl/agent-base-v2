@@ -363,4 +363,314 @@ describe('LLMClient', () => {
       expect(client.getModelName()).toBe('unknown');
     });
   });
+
+  describe('retry integration', () => {
+    it('retries invoke() on retryable errors and invokes onRetry callback', async () => {
+      let callCount = 0;
+      mockModel.invoke.mockImplementation(() => {
+        callCount++;
+        if (callCount < 3) {
+          // First 2 calls fail with rate limit
+          return Promise.reject(
+            Object.assign(new Error('Rate limit exceeded'), {
+              status: 429,
+              response: { status: 429 },
+            })
+          );
+        }
+        // Third call succeeds
+        return Promise.resolve(mockInvokeResponse);
+      });
+
+      const onRetry = jest.fn();
+      const callbacks: LLMCallbacks = { onRetry };
+
+      // Enable retry with 3 max retries
+      config.retry = {
+        enabled: true,
+        maxRetries: 3,
+        baseDelayMs: 100,
+        maxDelayMs: 1000,
+        enableJitter: false,
+      };
+
+      const client = new LLMClient({ config, callbacks });
+      const result = await client.invoke('Hello');
+
+      expect(result.success).toBe(true);
+      expect(callCount).toBe(3); // Initial + 2 retries
+      expect(onRetry).toHaveBeenCalledTimes(2);
+
+      // Verify callback context
+      expect(onRetry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attempt: 1,
+          maxRetries: 3,
+          error: 'RATE_LIMITED',
+        })
+      );
+      expect(onRetry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attempt: 2,
+          maxRetries: 3,
+          error: 'RATE_LIMITED',
+        })
+      );
+    });
+
+    it('retries stream() on retryable errors', async () => {
+      let callCount = 0;
+      mockModel.stream.mockImplementation(() => {
+        callCount++;
+        if (callCount < 2) {
+          // First call fails with network error
+          return Promise.reject(new Error('Network error'));
+        }
+        // Second call succeeds
+        return Promise.resolve(createMockStream(['Hello', ' world']));
+      });
+
+      const onRetry = jest.fn();
+      const callbacks: LLMCallbacks = { onRetry };
+
+      config.retry = {
+        enabled: true,
+        maxRetries: 3,
+        baseDelayMs: 100,
+        maxDelayMs: 1000,
+        enableJitter: false,
+      };
+
+      const client = new LLMClient({ config, callbacks });
+      const result = await client.stream('Hello');
+
+      expect(result.success).toBe(true);
+      expect(callCount).toBe(2); // Initial + 1 retry
+      expect(onRetry).toHaveBeenCalledTimes(1);
+      expect(onRetry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attempt: 1,
+          error: 'NETWORK_ERROR',
+        })
+      );
+    });
+
+    it('does not retry when config.retry.enabled is false', async () => {
+      mockModel.invoke.mockRejectedValue(
+        Object.assign(new Error('Rate limit exceeded'), {
+          status: 429,
+          response: { status: 429 },
+        })
+      );
+
+      const onRetry = jest.fn();
+      const callbacks: LLMCallbacks = { onRetry, onError: jest.fn() };
+
+      // Disable retry
+      config.retry = {
+        enabled: false,
+        maxRetries: 3,
+        baseDelayMs: 100,
+        maxDelayMs: 1000,
+        enableJitter: false,
+      };
+
+      const client = new LLMClient({ config, callbacks });
+      const result = await client.invoke('Hello');
+
+      expect(result.success).toBe(false);
+      expect(mockModel.invoke).toHaveBeenCalledTimes(1); // No retries
+      expect(onRetry).not.toHaveBeenCalled();
+      expect(callbacks.onError).toHaveBeenCalledWith('RATE_LIMITED', 'Rate limit exceeded');
+    });
+
+    it('respects custom retry config passed to constructor', async () => {
+      let callCount = 0;
+      mockModel.invoke.mockImplementation(() => {
+        callCount++;
+        if (callCount <= 2) {
+          return Promise.reject(new Error('Timeout'));
+        }
+        return Promise.resolve(mockInvokeResponse);
+      });
+
+      const onRetry = jest.fn();
+
+      // Set default config retry to 1, but override with 5
+      config.retry = {
+        enabled: true,
+        maxRetries: 1,
+        baseDelayMs: 100,
+        maxDelayMs: 1000,
+        enableJitter: false,
+      };
+
+      const customRetryConfig = {
+        enabled: true,
+        maxRetries: 5,
+        baseDelayMs: 50,
+        maxDelayMs: 500,
+        enableJitter: false,
+      };
+
+      const client = new LLMClient({
+        config,
+        callbacks: { onRetry },
+        retryConfig: customRetryConfig,
+      });
+
+      const result = await client.invoke('Hello');
+
+      expect(result.success).toBe(true);
+      expect(callCount).toBe(3);
+      expect(onRetry).toHaveBeenCalledTimes(2);
+
+      // Verify it used custom maxRetries (5) not config maxRetries (1)
+      expect(onRetry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          maxRetries: 5,
+        })
+      );
+    });
+
+    it('does not retry on non-retryable errors', async () => {
+      mockModel.invoke.mockRejectedValue(
+        Object.assign(new Error('API key invalid'), {
+          status: 401,
+          response: { status: 401 },
+        })
+      );
+
+      const onRetry = jest.fn();
+      const callbacks: LLMCallbacks = { onRetry, onError: jest.fn() };
+
+      config.retry = {
+        enabled: true,
+        maxRetries: 3,
+        baseDelayMs: 100,
+        maxDelayMs: 1000,
+        enableJitter: false,
+      };
+
+      const client = new LLMClient({ config, callbacks });
+      const result = await client.invoke('Hello');
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toBe('AUTHENTICATION_ERROR');
+      }
+      expect(mockModel.invoke).toHaveBeenCalledTimes(1); // No retries
+      expect(onRetry).not.toHaveBeenCalled();
+      expect(callbacks.onError).toHaveBeenCalledWith('AUTHENTICATION_ERROR', 'API key invalid');
+    });
+
+    it('stops retrying after maxRetries is exhausted', async () => {
+      mockModel.invoke.mockRejectedValue(
+        Object.assign(new Error('Rate limit exceeded'), {
+          status: 429,
+          response: { status: 429 },
+        })
+      );
+
+      const onRetry = jest.fn();
+      const callbacks: LLMCallbacks = { onRetry, onError: jest.fn() };
+
+      config.retry = {
+        enabled: true,
+        maxRetries: 2,
+        baseDelayMs: 100,
+        maxDelayMs: 1000,
+        enableJitter: false,
+      };
+
+      const client = new LLMClient({ config, callbacks });
+      const result = await client.invoke('Hello');
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toBe('RATE_LIMITED');
+      }
+      expect(mockModel.invoke).toHaveBeenCalledTimes(3); // Initial + 2 retries
+      expect(onRetry).toHaveBeenCalledTimes(2);
+      expect(callbacks.onError).toHaveBeenCalledWith('RATE_LIMITED', 'Rate limit exceeded');
+    });
+
+    it('stream() with retry disabled fires onError on failure', async () => {
+      mockModel.stream.mockRejectedValue(new Error('Network error'));
+
+      const onRetry = jest.fn();
+      const onError = jest.fn();
+      const callbacks: LLMCallbacks = { onRetry, onError };
+
+      // Disable retry
+      config.retry = {
+        enabled: false,
+        maxRetries: 3,
+        baseDelayMs: 100,
+        maxDelayMs: 1000,
+        enableJitter: false,
+      };
+
+      const client = new LLMClient({ config, callbacks });
+      const result = await client.stream('Hello');
+
+      expect(result.success).toBe(false);
+      expect(mockModel.stream).toHaveBeenCalledTimes(1); // No retries
+      expect(onRetry).not.toHaveBeenCalled();
+      expect(onError).toHaveBeenCalledWith('NETWORK_ERROR', 'Network error');
+    });
+
+    it('stream iteration error triggers onStreamEnd callback', async () => {
+      // Create a stream that throws an error during iteration
+      const errorStream = {
+        [Symbol.asyncIterator](): AsyncIterator<MockChunk> {
+          let count = 0;
+          return {
+            next(): Promise<IteratorResult<MockChunk>> {
+              count++;
+              if (count === 1) {
+                return Promise.resolve({
+                  done: false,
+                  value: { content: 'First chunk', response_metadata: {} },
+                });
+              }
+              // Second call throws an error
+              return Promise.reject(new Error('Stream interrupted'));
+            },
+          };
+        },
+      };
+
+      mockModel.stream.mockResolvedValue(errorStream);
+
+      const onStreamChunk = jest.fn();
+      const onStreamEnd = jest.fn();
+      const callbacks: LLMCallbacks = { onStreamChunk, onStreamEnd };
+
+      config.retry = {
+        enabled: false,
+        maxRetries: 0,
+        baseDelayMs: 100,
+        maxDelayMs: 1000,
+        enableJitter: false,
+      };
+
+      const client = new LLMClient({ config, callbacks });
+      const result = await client.stream('Hello');
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Consume the stream to trigger the error
+        await expect(async () => {
+          for await (const _chunk of result.result) {
+            // consume chunks
+          }
+        }).rejects.toThrow('Stream interrupted');
+      }
+
+      // onStreamEnd should be called even on error (in the catch block)
+      expect(onStreamChunk).toHaveBeenCalledWith('First chunk');
+      expect(onStreamEnd).toHaveBeenCalled();
+    });
+  });
 });
