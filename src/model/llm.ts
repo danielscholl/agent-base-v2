@@ -215,6 +215,9 @@ export class LLMClient {
     input: string | BaseMessage[],
     _options?: LLMCallOptions
   ): Promise<ModelResponse<StreamResult>> {
+    // Fire onStreamStart once before any retry attempts
+    this.callbacks?.onStreamStart?.();
+
     // Skip retry wrapper if retry is disabled
     if (!this.retryConfig.enabled) {
       const result = await this.streamOnce(input);
@@ -241,7 +244,7 @@ export class LLMClient {
 
   /**
    * Internal stream without retry wrapper.
-   * Does NOT fire onError - caller is responsible for that after retries exhausted.
+   * Does NOT fire onStreamStart or onError - caller is responsible for those.
    */
   private async streamOnce(input: string | BaseMessage[]): Promise<ModelResponse<StreamResult>> {
     const clientResult = this.getClient();
@@ -256,8 +259,6 @@ export class LLMClient {
       // Note: In LangChain 1.x, temperature and maxTokens must be set at model construction.
       // Runtime options are not supported via bind() anymore. If runtime options are needed,
       // consider caching multiple model instances or setting values at provider configuration.
-      this.callbacks?.onStreamStart?.();
-
       const stream = await client.stream(messages);
 
       // Wrap the stream to emit callbacks

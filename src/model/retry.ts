@@ -168,8 +168,9 @@ export async function withRetry<T>(
       return result;
     }
 
-    // Calculate delay for next attempt
-    const delayMs = calculateDelay(attempt, baseDelayMs, maxDelayMs, enableJitter);
+    // Use provider's Retry-After if available, otherwise calculate exponential backoff
+    const delayMs =
+      result.retryAfterMs ?? calculateDelay(attempt, baseDelayMs, maxDelayMs, enableJitter);
 
     // Invoke callback before retrying
     const context: RetryContext = {

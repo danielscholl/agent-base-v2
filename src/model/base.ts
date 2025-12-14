@@ -23,9 +23,18 @@ export function successResponse<T>(result: T, message: string): ModelSuccessResp
  * Create an error response.
  * @param error - The error code
  * @param message - Human-readable error message
+ * @param retryAfterMs - Optional delay in ms before retry (from provider Retry-After)
  */
-export function errorResponse(error: ModelErrorCode, message: string): ModelErrorResponse {
-  return { success: false, error, message };
+export function errorResponse(
+  error: ModelErrorCode,
+  message: string,
+  retryAfterMs?: number
+): ModelErrorResponse {
+  const response: ModelErrorResponse = { success: false, error, message };
+  if (retryAfterMs !== undefined) {
+    response.retryAfterMs = retryAfterMs;
+  }
+  return response;
 }
 
 /**

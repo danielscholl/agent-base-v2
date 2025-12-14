@@ -38,6 +38,8 @@ export interface ModelErrorResponse {
   success: false;
   error: ModelErrorCode;
   message: string;
+  /** Delay in milliseconds before retry (from provider Retry-After header) */
+  retryAfterMs?: number;
 }
 
 /**

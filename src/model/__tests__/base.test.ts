@@ -43,6 +43,28 @@ describe('Model Response Helpers', () => {
       });
     });
 
+    it('includes retryAfterMs when provided', () => {
+      const response = errorResponse('RATE_LIMITED', 'Rate limited', 5000);
+
+      expect(response).toEqual({
+        success: false,
+        error: 'RATE_LIMITED',
+        message: 'Rate limited',
+        retryAfterMs: 5000,
+      });
+    });
+
+    it('does not include retryAfterMs when undefined', () => {
+      const response = errorResponse('RATE_LIMITED', 'Rate limited', undefined);
+
+      expect(response).toEqual({
+        success: false,
+        error: 'RATE_LIMITED',
+        message: 'Rate limited',
+      });
+      expect('retryAfterMs' in response).toBe(false);
+    });
+
     it.each<ModelErrorCode>([
       'PROVIDER_NOT_CONFIGURED',
       'PROVIDER_NOT_SUPPORTED',

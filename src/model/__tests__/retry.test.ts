@@ -438,4 +438,74 @@ describe('withRetry', () => {
       })
     );
   });
+
+  it('uses retryAfterMs from error response when available', async () => {
+    let callCount = 0;
+    const operation = jest.fn<() => Promise<ModelResponse<string>>>().mockImplementation(() => {
+      callCount++;
+      if (callCount < 2) {
+        // Return error with retryAfterMs set (e.g., from provider Retry-After header)
+        return Promise.resolve({
+          success: false as const,
+          error: 'RATE_LIMITED' as const,
+          message: 'Rate limited',
+          retryAfterMs: 5000, // Provider says wait 5 seconds
+        });
+      }
+      return Promise.resolve(successResponse('result', 'OK'));
+    });
+
+    const onRetry = jest.fn<(ctx: RetryContext) => void>();
+
+    const resultPromise = withRetry(operation, {
+      maxRetries: 3,
+      baseDelayMs: 100, // Would normally use 100ms, but should use 5000ms from retryAfterMs
+      enableJitter: false,
+      onRetry,
+    });
+
+    await jest.runAllTimersAsync();
+    const result = await resultPromise;
+
+    expect(result.success).toBe(true);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    // Should use the retryAfterMs (5000) instead of calculated delay (100)
+    expect(onRetry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        delayMs: 5000,
+      })
+    );
+  });
+
+  it('falls back to calculated delay when retryAfterMs is not set', async () => {
+    let callCount = 0;
+    const operation = jest.fn<() => Promise<ModelResponse<string>>>().mockImplementation(() => {
+      callCount++;
+      if (callCount < 2) {
+        // Return error without retryAfterMs
+        return Promise.resolve(errorResponse('RATE_LIMITED', 'Rate limited'));
+      }
+      return Promise.resolve(successResponse('result', 'OK'));
+    });
+
+    const onRetry = jest.fn<(ctx: RetryContext) => void>();
+
+    const resultPromise = withRetry(operation, {
+      maxRetries: 3,
+      baseDelayMs: 100,
+      enableJitter: false,
+      onRetry,
+    });
+
+    await jest.runAllTimersAsync();
+    await resultPromise;
+
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    // Should use calculated delay (100ms for attempt 0)
+    expect(onRetry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        delayMs: 100,
+      })
+    );
+  });
 });
