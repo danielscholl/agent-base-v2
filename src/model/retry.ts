@@ -98,9 +98,17 @@ export function extractRetryAfter(error: unknown): number | undefined {
 
   if (typeof retryAfter === 'string') {
     // Could be seconds (number string) or HTTP date
+    // Only treat as numeric if the entire string is a valid number
     const seconds = parseInt(retryAfter, 10);
-    if (!isNaN(seconds) && seconds > 0) {
+    if (!isNaN(seconds) && seconds > 0 && retryAfter.trim() === seconds.toString()) {
       return seconds * 1000; // Convert to milliseconds
+    }
+
+    // Try parsing as HTTP-date format (e.g., "Wed, 21 Oct 2015 07:28:00 GMT")
+    const dateMs = Date.parse(retryAfter);
+    if (!isNaN(dateMs)) {
+      const delayMs = dateMs - Date.now();
+      return delayMs > 0 ? delayMs : undefined;
     }
   }
 

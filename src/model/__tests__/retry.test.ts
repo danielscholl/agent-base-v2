@@ -145,6 +145,40 @@ describe('extractRetryAfter', () => {
   it('returns undefined for invalid string', () => {
     expect(extractRetryAfter({ retryAfter: 'invalid' })).toBeUndefined();
   });
+
+  it('extracts retryAfter as HTTP-date format', () => {
+    // Create a future date 10 seconds from now
+    const futureDate = new Date(Date.now() + 10000);
+    const httpDate = futureDate.toUTCString();
+
+    const result = extractRetryAfter({ retryAfter: httpDate });
+    expect(result).toBeGreaterThanOrEqual(9000); // Allow some time variance
+    expect(result).toBeLessThanOrEqual(10000);
+  });
+
+  it('returns undefined for HTTP-date in the past', () => {
+    // Date in the past
+    const pastDate = new Date(Date.now() - 1000);
+    const httpDate = pastDate.toUTCString();
+
+    expect(extractRetryAfter({ retryAfter: httpDate })).toBeUndefined();
+  });
+
+  it('handles various HTTP-date formats', () => {
+    // Test IMF-fixdate format (preferred HTTP-date format per RFC 7231)
+    const futureDate1 = new Date(Date.now() + 5000);
+    const imfDate = futureDate1.toUTCString(); // "Wed, 14 Dec 2025 00:53:25 GMT"
+    const result1 = extractRetryAfter({ retryAfter: imfDate });
+    expect(result1).toBeGreaterThan(0);
+    expect(result1).toBeLessThanOrEqual(5100); // Allow 100ms tolerance
+
+    // Test ISO 8601 format (also parseable by Date.parse)
+    const futureDate2 = new Date(Date.now() + 5000);
+    const isoDate = futureDate2.toISOString(); // "2025-12-14T00:53:25.643Z"
+    const result2 = extractRetryAfter({ retryAfter: isoDate });
+    expect(result2).toBeGreaterThan(0);
+    expect(result2).toBeLessThanOrEqual(5100); // Allow 100ms tolerance
+  });
 });
 
 describe('withRetry', () => {

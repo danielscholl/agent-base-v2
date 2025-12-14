@@ -285,6 +285,8 @@ export const RetryConfigSchema = z
       .default(DEFAULT_ENABLE_JITTER)
       .describe('Add jitter to prevent thundering herd'),
   })
+  // Note: baseDelayMs > 0 is already enforced by the .positive() constraint above (line 263).
+  // This refinement only needs to validate the relationship between maxDelayMs and baseDelayMs.
   .refine((data) => data.maxDelayMs >= data.baseDelayMs, {
     message: 'maxDelayMs must be greater than or equal to baseDelayMs',
     path: ['maxDelayMs'],

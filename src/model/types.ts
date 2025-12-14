@@ -121,17 +121,30 @@ export interface RetryOptions {
 /**
  * Callbacks for LLM operations.
  * Follows the callbacks pattern from architecture.md.
+ *
+ * Stream Lifecycle and Retry Semantics:
+ * - `onStreamStart` fires ONCE before any retry attempts begin, signaling that a stream
+ *   operation is starting (not that each individual attempt is starting)
+ * - `onRetry` fires for each retry attempt, providing detailed context about the retry
+ *   (attempt number, delay, error). Use this to track individual retry attempts.
+ * - `onStreamChunk` fires for chunks from the successful attempt only
+ * - `onStreamEnd` fires once when the successful stream completes
+ * - `onError` fires once on final failure (after all retries are exhausted)
+ *
+ * This design ensures clean stream lifecycle semantics where consumers can distinguish
+ * between "a stream operation started" (onStreamStart) and "we're retrying an attempt"
+ * (onRetry), avoiding confusion about which attempt's chunks are being received.
  */
 export interface LLMCallbacks {
-  /** Called when streaming starts */
+  /** Called once when streaming operation starts, before any retry attempts */
   onStreamStart?: () => void;
-  /** Called for each streamed chunk */
+  /** Called for each streamed chunk from the successful attempt */
   onStreamChunk?: (chunk: string) => void;
-  /** Called when streaming ends */
+  /** Called once when streaming ends successfully */
   onStreamEnd?: (usage?: TokenUsage) => void;
-  /** Called on errors */
+  /** Called once on final failure after all retries exhausted */
   onError?: (error: ModelErrorCode, message: string) => void;
-  /** Called when an operation is being retried */
+  /** Called for each retry attempt with context (attempt number, delay, error) */
   onRetry?: (context: RetryContext) => void;
 }
 
