@@ -8,6 +8,21 @@ import { spawnProcess } from '../../runtime/subprocess.js';
 /** Timeout for shell commands (30 seconds) */
 const SHELL_TIMEOUT_MS = 30000;
 
+/**
+ * Execute arbitrary shell commands via `sh -c`.
+ *
+ * SECURITY IMPLICATIONS:
+ * - No input validation or sanitization is performed
+ * - Commands execute with the current user's full privileges
+ * - No command allowlist or denylist is enforced
+ * - Suitable ONLY for interactive CLI where the user controls input
+ * - DO NOT adapt this code for web services, APIs, or untrusted input sources
+ *
+ * This design is acceptable for the current use case because:
+ * - The CLI is an interactive tool running locally
+ * - Users already have full shell access via their terminal
+ * - Commands are explicitly invoked by the user (not automated)
+ */
 export const shellHandler: CommandHandler = async (command, context): Promise<CommandResult> => {
   if (!command.trim()) {
     context.onOutput('No command specified. Type !<command> to execute shell commands.', 'warning');
@@ -32,9 +47,9 @@ export const shellHandler: CommandHandler = async (command, context): Promise<Co
     }
 
     if (result.exitCode === 0) {
-      context.onOutput(`Exit code: ${String(result.exitCode)}`, 'success');
+      context.onOutput(`Exit code: ${result.exitCode.toString()}`, 'success');
     } else {
-      context.onOutput(`Exit code: ${String(result.exitCode)}`, 'warning');
+      context.onOutput(`Exit code: ${result.exitCode.toString()}`, 'warning');
     }
 
     return { success: result.exitCode === 0 };

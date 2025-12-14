@@ -93,45 +93,6 @@ export function InteractiveShell({
     }));
   }, []);
 
-  /**
-   * Create command context for executing commands.
-   */
-  const createCommandContext = useCallback((): CommandContext => {
-    const outputLines: string[] = [];
-
-    return {
-      config: state.config,
-      onOutput: (content: string, _type?: 'info' | 'success' | 'warning' | 'error') => {
-        // Collect all output lines
-        outputLines.push(content);
-        // Update the message with all output
-        setState((s) => {
-          // Find and update the last system message, or add if none
-          const lastMsgIndex = s.messages.length - 1;
-          const lastMsg = s.messages[lastMsgIndex];
-
-          if (lastMsg && lastMsg.role === 'system') {
-            const updatedMessages = [...s.messages];
-            updatedMessages[lastMsgIndex] = {
-              ...lastMsg,
-              content: outputLines.join('\n'),
-            };
-            return { ...s, messages: updatedMessages };
-          }
-
-          return {
-            ...s,
-            messages: [
-              ...s.messages,
-              { role: 'system' as const, content: outputLines.join('\n'), timestamp: new Date() },
-            ],
-          };
-        });
-      },
-      exit,
-    };
-  }, [state.config, exit]);
-
   // Handle input submission
   const handleSubmit = useCallback(async () => {
     let query = state.input.trim();
@@ -156,7 +117,40 @@ export function InteractiveShell({
       // Add placeholder system message for command output
       addSystemMessage('');
 
-      const context = createCommandContext();
+      // Create command context with fresh output array
+      const outputLines: string[] = [];
+      const context: CommandContext = {
+        config: state.config,
+        onOutput: (content: string, _type?: 'info' | 'success' | 'warning' | 'error') => {
+          // Collect all output lines
+          outputLines.push(content);
+          // Update the message with all output
+          setState((s) => {
+            // Find and update the last system message, or add if none
+            const lastMsgIndex = s.messages.length - 1;
+            const lastMsg = s.messages[lastMsgIndex];
+
+            if (lastMsg && lastMsg.role === 'system') {
+              const updatedMessages = [...s.messages];
+              updatedMessages[lastMsgIndex] = {
+                ...lastMsg,
+                content: outputLines.join('\n'),
+              };
+              return { ...s, messages: updatedMessages };
+            }
+
+            return {
+              ...s,
+              messages: [
+                ...s.messages,
+                { role: 'system' as const, content: outputLines.join('\n'), timestamp: new Date() },
+              ],
+            };
+          });
+        },
+        exit,
+      };
+
       const result = await executeCommand(query, context);
 
       if (result !== undefined) {
@@ -173,7 +167,15 @@ export function InteractiveShell({
             streamingOutput: '',
             error: null,
           }));
+          // Also clear input history if shouldClearHistory is set
+          if (result.shouldClearHistory === true) {
+            historyRef.current.clear();
+          }
           return;
+        }
+        // If shouldClearHistory is set but shouldClear is not, still clear input history
+        if (result.shouldClearHistory === true) {
+          historyRef.current.clear();
         }
       }
       return;
@@ -265,7 +267,7 @@ export function InteractiveShell({
         isProcessing: false,
       }));
     }
-  }, [state.input, state.config, state.messages, exit, addSystemMessage, createCommandContext]);
+  }, [state.input, state.config, state.messages, exit, addSystemMessage]);
 
   // Handle key input - gated until config loads
   useInput((input, key) => {
