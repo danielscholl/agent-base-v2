@@ -93,7 +93,8 @@ export type NonRetryableErrorCode =
   | 'CONTEXT_LENGTH_EXCEEDED'
   | 'PROVIDER_NOT_CONFIGURED'
   | 'PROVIDER_NOT_SUPPORTED'
-  | 'INVALID_RESPONSE';
+  | 'INVALID_RESPONSE'
+  | 'UNKNOWN';
 
 /**
  * Context passed to retry callbacks.

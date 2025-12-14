@@ -258,32 +258,37 @@ export type SkillsConfig = z.infer<typeof SkillsConfigSchema>;
 /**
  * Retry configuration for LLM operations.
  */
-export const RetryConfigSchema = z.object({
-  enabled: z.boolean().default(DEFAULT_RETRY_ENABLED).describe('Enable retry logic'),
-  maxRetries: z
-    .number()
-    .int()
-    .min(0)
-    .max(10)
-    .default(DEFAULT_MAX_RETRIES)
-    .describe('Maximum retry attempts'),
-  baseDelayMs: z
-    .number()
-    .int()
-    .positive()
-    .default(DEFAULT_BASE_DELAY_MS)
-    .describe('Base delay in milliseconds'),
-  maxDelayMs: z
-    .number()
-    .int()
-    .positive()
-    .default(DEFAULT_MAX_DELAY_MS)
-    .describe('Maximum delay in milliseconds'),
-  enableJitter: z
-    .boolean()
-    .default(DEFAULT_ENABLE_JITTER)
-    .describe('Add jitter to prevent thundering herd'),
-});
+export const RetryConfigSchema = z
+  .object({
+    enabled: z.boolean().default(DEFAULT_RETRY_ENABLED).describe('Enable retry logic'),
+    maxRetries: z
+      .number()
+      .int()
+      .min(0)
+      .max(10)
+      .default(DEFAULT_MAX_RETRIES)
+      .describe('Maximum retry attempts'),
+    baseDelayMs: z
+      .number()
+      .int()
+      .positive()
+      .default(DEFAULT_BASE_DELAY_MS)
+      .describe('Base delay in milliseconds'),
+    maxDelayMs: z
+      .number()
+      .int()
+      .positive()
+      .default(DEFAULT_MAX_DELAY_MS)
+      .describe('Maximum delay in milliseconds'),
+    enableJitter: z
+      .boolean()
+      .default(DEFAULT_ENABLE_JITTER)
+      .describe('Add jitter to prevent thundering herd'),
+  })
+  .refine((data) => data.maxDelayMs >= data.baseDelayMs, {
+    message: 'maxDelayMs must be greater than or equal to baseDelayMs',
+    path: ['maxDelayMs'],
+  });
 
 export type RetryConfig = z.infer<typeof RetryConfigSchema>;
 
