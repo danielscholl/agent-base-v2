@@ -25,6 +25,11 @@ import {
   DEFAULT_MEMORY_TYPE,
   DEFAULT_MEMORY_HISTORY_LIMIT,
   DEFAULT_SKILL_SCRIPT_TIMEOUT,
+  DEFAULT_RETRY_ENABLED,
+  DEFAULT_MAX_RETRIES,
+  DEFAULT_BASE_DELAY_MS,
+  DEFAULT_MAX_DELAY_MS,
+  DEFAULT_ENABLE_JITTER,
   LOG_LEVELS,
   MEMORY_TYPES,
   PROVIDER_NAMES,
@@ -247,6 +252,42 @@ export const SkillsConfigSchema = z.object({
 export type SkillsConfig = z.infer<typeof SkillsConfigSchema>;
 
 // -----------------------------------------------------------------------------
+// Retry Schema
+// -----------------------------------------------------------------------------
+
+/**
+ * Retry configuration for LLM operations.
+ */
+export const RetryConfigSchema = z.object({
+  enabled: z.boolean().default(DEFAULT_RETRY_ENABLED).describe('Enable retry logic'),
+  maxRetries: z
+    .number()
+    .int()
+    .min(0)
+    .max(10)
+    .default(DEFAULT_MAX_RETRIES)
+    .describe('Maximum retry attempts'),
+  baseDelayMs: z
+    .number()
+    .int()
+    .positive()
+    .default(DEFAULT_BASE_DELAY_MS)
+    .describe('Base delay in milliseconds'),
+  maxDelayMs: z
+    .number()
+    .int()
+    .positive()
+    .default(DEFAULT_MAX_DELAY_MS)
+    .describe('Maximum delay in milliseconds'),
+  enableJitter: z
+    .boolean()
+    .default(DEFAULT_ENABLE_JITTER)
+    .describe('Add jitter to prevent thundering herd'),
+});
+
+export type RetryConfig = z.infer<typeof RetryConfigSchema>;
+
+// -----------------------------------------------------------------------------
 // Root Application Config Schema
 // -----------------------------------------------------------------------------
 
@@ -270,6 +311,9 @@ export const AppConfigSchema = z.object({
   ),
   skills: SkillsConfigSchema.default(() => SkillsConfigSchema.parse({})).describe(
     'Skills configuration'
+  ),
+  retry: RetryConfigSchema.default(() => RetryConfigSchema.parse({})).describe(
+    'Retry configuration for LLM operations'
   ),
 });
 

@@ -41,6 +41,10 @@ export type {
   LLMCallOptions,
   ProviderFactory,
   StreamResult,
+  RetryableErrorCode,
+  NonRetryableErrorCode,
+  RetryContext,
+  RetryOptions,
 } from './types.js';
 
 // Type guards
@@ -66,6 +70,11 @@ export {
 // -----------------------------------------------------------------------------
 export { LLMClient } from './llm.js';
 export type { LLMClientOptions } from './llm.js';
+
+// -----------------------------------------------------------------------------
+// Retry Functions
+// -----------------------------------------------------------------------------
+export { withRetry, isRetryableError, calculateDelay, extractRetryAfter } from './retry.js';
 
 // -----------------------------------------------------------------------------
 // Provider Factories

@@ -78,6 +78,44 @@ export interface InvokeResult {
 }
 
 /**
+ * Error codes that are safe to retry (transient failures).
+ */
+export type RetryableErrorCode = 'RATE_LIMITED' | 'NETWORK_ERROR' | 'TIMEOUT';
+
+/**
+ * Error codes that should fail immediately (non-transient).
+ */
+export type NonRetryableErrorCode =
+  | 'AUTHENTICATION_ERROR'
+  | 'MODEL_NOT_FOUND'
+  | 'CONTEXT_LENGTH_EXCEEDED'
+  | 'PROVIDER_NOT_CONFIGURED'
+  | 'PROVIDER_NOT_SUPPORTED'
+  | 'INVALID_RESPONSE';
+
+/**
+ * Context passed to retry callbacks.
+ */
+export interface RetryContext {
+  attempt: number;
+  maxRetries: number;
+  delayMs: number;
+  error: ModelErrorCode;
+  message: string;
+}
+
+/**
+ * Configuration options for retry operations.
+ */
+export interface RetryOptions {
+  maxRetries?: number;
+  baseDelayMs?: number;
+  maxDelayMs?: number;
+  enableJitter?: boolean;
+  onRetry?: (context: RetryContext) => void;
+}
+
+/**
  * Callbacks for LLM operations.
  * Follows the callbacks pattern from architecture.md.
  */
@@ -90,6 +128,8 @@ export interface LLMCallbacks {
   onStreamEnd?: (usage?: TokenUsage) => void;
   /** Called on errors */
   onError?: (error: ModelErrorCode, message: string) => void;
+  /** Called when an operation is being retried */
+  onRetry?: (context: RetryContext) => void;
 }
 
 /**

@@ -65,7 +65,25 @@ export function mapErrorToCode(error: unknown): ModelErrorCode {
     if (
       message.includes('network') ||
       message.includes('econnrefused') ||
-      message.includes('fetch failed')
+      message.includes('econnreset') ||
+      message.includes('enotfound') ||
+      message.includes('etimedout') ||
+      message.includes('epipe') ||
+      message.includes('socket hang up') ||
+      message.includes('fetch failed') ||
+      message.includes('connection refused') ||
+      message.includes('dns')
+    ) {
+      return 'NETWORK_ERROR';
+    }
+    // 5xx server errors are transient (504/gateway timeout handled above by TIMEOUT)
+    if (
+      message.includes('500') ||
+      message.includes('502') ||
+      message.includes('503') ||
+      message.includes('internal server error') ||
+      message.includes('bad gateway') ||
+      message.includes('service unavailable')
     ) {
       return 'NETWORK_ERROR';
     }
