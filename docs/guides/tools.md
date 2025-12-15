@@ -292,12 +292,14 @@ export const searchTool = createTool({
 
 ## Context Storage
 
-Tools producing large outputs should use context storage:
+Tools producing large outputs should use context storage. Note that context
+storage is typically handled by the Agent Layer via callbacks, not by tools
+directly. However, if a tool needs explicit context management:
 
 ```typescript
 import { z } from 'zod';
 import { createTool, successResponse } from '../tools/index.js';
-import type { ContextManager } from '../utils/context.js';
+import { ContextManager } from '../utils/index.js';
 
 const SearchCodeInputSchema = z.object({
   query: z.string().describe('Regex pattern to search'),
@@ -309,30 +311,34 @@ export const searchCodeTool = createTool({
   schema: SearchCodeInputSchema,
   execute: async (input, config) => {
     const results = await performSearch(input.query);
-    const contextManager = config?.configurable?.contextManager as ContextManager;
 
-    // Small results: return directly
+    // Small results: return directly (Agent Layer handles context storage)
     if (JSON.stringify(results).length < 32 * 1024) {
       return successResponse(results, `Found ${results.length} matches`);
     }
 
-    // Large results: persist to context
-    const contextId = await contextManager.save({
-      tool: 'search_code',
-      args: input,
-      result: results,
-    });
-
+    // Large results: return summary with preview
+    // The Agent Layer will persist the full result via onToolEnd callback
     return successResponse(
       {
-        contextId,
         summary: `Found ${results.length} matches`,
         preview: results.slice(0, 5),
+        fullResultsAvailable: true,
       },
-      `Results saved to context ${contextId}`
+      `Found ${results.length} matches (full results stored in context)`
     );
   },
 });
+
+// Agent Layer integration example (not in tools):
+// const queryId = ContextManager.hashQuery(userQuery);
+// const filepath = await contextManager.saveContext(
+//   'search_code',
+//   { query: 'pattern' },
+//   results,
+//   undefined,  // taskId
+//   queryId     // queryId for grouping
+// );
 ```
 
 ---

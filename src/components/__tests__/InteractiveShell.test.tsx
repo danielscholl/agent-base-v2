@@ -12,6 +12,11 @@ const mockLoadConfig = jest.fn<() => Promise<unknown>>();
 
 jest.unstable_mockModule('../../config/manager.js', () => ({
   loadConfig: mockLoadConfig,
+  // eslint-disable-next-line @typescript-eslint/no-extraneous-class
+  ConfigManager: class MockConfigManager {},
+  // eslint-disable-next-line @typescript-eslint/no-extraneous-class
+  NodeFileSystem: class MockNodeFileSystem {},
+  deepMerge: jest.fn(),
 }));
 
 // Mock CLI commands module
