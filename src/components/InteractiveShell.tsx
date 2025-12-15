@@ -24,18 +24,30 @@ import { executeCommand, isCommand } from '../cli/commands/index.js';
 import { unescapeSlash } from '../cli/constants.js';
 import { InputHistory } from '../cli/input/index.js';
 import { MessageHistory, SessionManager } from '../utils/index.js';
-import type { StoredMessage } from '../utils/index.js';
+import type { StoredMessage, SessionTokenUsage } from '../utils/index.js';
 import { Header } from './Header.js';
 import { Spinner } from './Spinner.js';
 import { ErrorDisplay } from './ErrorDisplay.js';
 import { TaskProgress } from './TaskProgress.js';
 import { AnswerBox } from './AnswerBox.js';
+import { TokenUsageDisplay } from './TokenUsageDisplay.js';
 import type { ActiveTask, CompletedTask } from './TaskProgress.js';
 import type { InteractiveShellProps, ShellMessage } from '../cli/types.js';
 import type { CommandContext } from '../cli/commands/types.js';
 import type { AgentErrorResponse } from '../errors/index.js';
 import type { AppConfig } from '../config/schema.js';
 import type { Message } from '../agent/types.js';
+
+/**
+ * Initial token usage state.
+ * Used for both initial state and reset operations.
+ */
+const INITIAL_TOKEN_USAGE: SessionTokenUsage = {
+  promptTokens: 0,
+  completionTokens: 0,
+  tokens: 0,
+  queryCount: 0,
+};
 
 /**
  * Shell state interface.
@@ -54,6 +66,8 @@ interface ShellState {
   completedTasks: CompletedTask[];
   /** Session ID if resuming a session */
   resumedSessionId: string | null;
+  /** Session-level token usage statistics */
+  tokenUsage: SessionTokenUsage;
 }
 
 /**
@@ -83,6 +97,7 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
     activeTasks: [],
     completedTasks: [],
     resumedSessionId: null,
+    tokenUsage: INITIAL_TOKEN_USAGE,
   });
 
   // Load config on mount and handle session resume
@@ -350,6 +365,7 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
             messages: [],
             streamingOutput: '',
             error: null,
+            tokenUsage: INITIAL_TOKEN_USAGE,
           }));
           // Also clear input history and message history if shouldClearHistory is set
           if (result.shouldClearHistory === true) {
@@ -642,6 +658,18 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
             };
           });
         },
+        updateTokenUsage: (usage) => {
+          // Accumulate per-request token usage across multiple LLM calls
+          setState((s) => ({
+            ...s,
+            tokenUsage: {
+              promptTokens: s.tokenUsage.promptTokens + usage.promptTokens,
+              completionTokens: s.tokenUsage.completionTokens + usage.completionTokens,
+              tokens: s.tokenUsage.tokens + usage.tokens,
+              queryCount: s.tokenUsage.queryCount + usage.queryCount,
+            },
+          }));
+        },
       });
 
       // Create filesystem tools array
@@ -836,6 +864,11 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
         <Box marginBottom={1}>
           <ErrorDisplay error={state.error} />
         </Box>
+      )}
+
+      {/* Token usage display - visible while user is idle (not processing) */}
+      {!state.isProcessing && state.tokenUsage.queryCount > 0 && (
+        <TokenUsageDisplay usage={state.tokenUsage} />
       )}
 
       {/* Input prompt */}

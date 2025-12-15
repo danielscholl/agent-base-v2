@@ -24,3 +24,11 @@ export {
   type SessionManagerOptions,
   type SaveSessionOptions,
 } from './session.js';
+
+export {
+  TokenUsageTracker,
+  TokenEstimator,
+  type SessionTokenUsage,
+  type TokenUsageTrackerOptions,
+  type TokenEstimatorOptions,
+} from './tokens.js';
