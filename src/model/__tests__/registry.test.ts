@@ -36,6 +36,10 @@ describe('Provider Registry', () => {
       expect(PROVIDER_REGISTRY.foundry).toBeDefined();
     });
 
+    it('has github provider registered', () => {
+      expect(PROVIDER_REGISTRY.github).toBeDefined();
+    });
+
     it('all registered factories are functions', () => {
       expect(typeof PROVIDER_REGISTRY.openai).toBe('function');
       expect(typeof PROVIDER_REGISTRY.anthropic).toBe('function');
@@ -43,6 +47,7 @@ describe('Provider Registry', () => {
       expect(typeof PROVIDER_REGISTRY.azure).toBe('function');
       expect(typeof PROVIDER_REGISTRY.local).toBe('function');
       expect(typeof PROVIDER_REGISTRY.foundry).toBe('function');
+      expect(typeof PROVIDER_REGISTRY.github).toBe('function');
     });
   });
 
@@ -83,9 +88,10 @@ describe('Provider Registry', () => {
       expect(typeof factory).toBe('function');
     });
 
-    it('returns undefined for unsupported provider', () => {
+    it('returns factory for github provider', () => {
       const factory = getProviderFactory('github');
-      expect(factory).toBeUndefined();
+      expect(factory).toBeDefined();
+      expect(typeof factory).toBe('function');
     });
   });
 
@@ -114,8 +120,8 @@ describe('Provider Registry', () => {
       expect(isProviderSupported('foundry')).toBe(true);
     });
 
-    it('returns false for github (not yet implemented)', () => {
-      expect(isProviderSupported('github')).toBe(false);
+    it('returns true for github', () => {
+      expect(isProviderSupported('github')).toBe(true);
     });
   });
 
@@ -129,16 +135,12 @@ describe('Provider Registry', () => {
       expect(providers).toContain('azure');
       expect(providers).toContain('local');
       expect(providers).toContain('foundry');
+      expect(providers).toContain('github');
     });
 
-    it('does not include unregistered providers', () => {
+    it('returns seven providers', () => {
       const providers = getSupportedProviders();
-      expect(providers).not.toContain('github');
-    });
-
-    it('returns six providers', () => {
-      const providers = getSupportedProviders();
-      expect(providers.length).toBe(6);
+      expect(providers.length).toBe(7);
     });
   });
 });

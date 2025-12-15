@@ -172,6 +172,7 @@ const ENV_MAPPINGS: EnvMapping[] = [
     type: 'string',
     validate: isValidUrl,
   },
+  { envVar: 'GITHUB_MODELS_ORG', path: ['providers', 'github', 'org'], type: 'string' },
 
   // Agent
   { envVar: 'AGENT_DATA_DIR', path: ['agent', 'dataDir'], type: 'string' },

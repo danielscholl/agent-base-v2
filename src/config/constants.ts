@@ -48,7 +48,7 @@ export const DEFAULT_GEMINI_LOCATION = 'us-central1';
 export const DEFAULT_GEMINI_USE_VERTEXAI = false;
 
 export const DEFAULT_GITHUB_MODEL = 'gpt-4o';
-export const DEFAULT_GITHUB_ENDPOINT = 'https://models.inference.ai.azure.com';
+export const DEFAULT_GITHUB_ENDPOINT = 'https://models.github.ai/inference';
 
 // Agent defaults
 export const DEFAULT_DATA_DIR = '~/.agent';
