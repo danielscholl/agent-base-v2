@@ -17,11 +17,11 @@ import { DEFAULT_GEMINI_MODEL } from '../../config/constants.js';
  * Create a ChatGoogleGenerativeAI instance from provider config.
  *
  * @param config - Gemini provider configuration
- * @returns ModelResponse with ChatGoogleGenerativeAI or error
+ * @returns Promise<ModelResponse> with ChatGoogleGenerativeAI or error
  */
 export function createGeminiClient(
   config: GeminiProviderConfig | Record<string, unknown>
-): ModelResponse<BaseChatModel> {
+): Promise<ModelResponse<BaseChatModel>> {
   try {
     // Extract config with defaults
     const apiKey = config.apiKey as string | undefined;
@@ -31,11 +31,13 @@ export function createGeminiClient(
     // Vertex AI mode requires @langchain/google-vertexai package
     // which is not included in this implementation
     if (useVertexai) {
-      return errorResponse(
-        'PROVIDER_NOT_CONFIGURED',
-        'Vertex AI mode requires @langchain/google-vertexai package. ' +
-          'Use the Gemini Developer API by setting useVertexai: false, ' +
-          'or install @langchain/google-vertexai for Vertex AI support.'
+      return Promise.resolve(
+        errorResponse(
+          'PROVIDER_NOT_CONFIGURED',
+          'Vertex AI mode requires @langchain/google-vertexai package. ' +
+            'Use the Gemini Developer API by setting useVertexai: false, ' +
+            'or install @langchain/google-vertexai for Vertex AI support.'
+        )
       );
     }
 
@@ -46,13 +48,15 @@ export function createGeminiClient(
       apiKey,
     });
 
-    return successResponse(
-      client as BaseChatModel,
-      `Gemini client created with model: ${model} via Gemini API`
+    return Promise.resolve(
+      successResponse(
+        client as BaseChatModel,
+        `Gemini client created with model: ${model} via Gemini API`
+      )
     );
   } catch (error) {
     const errorCode = mapErrorToCode(error);
     const message = error instanceof Error ? error.message : 'Failed to create Gemini client';
-    return errorResponse(errorCode, message);
+    return Promise.resolve(errorResponse(errorCode, message));
   }
 }

@@ -14,11 +14,11 @@ import { DEFAULT_OPENAI_MODEL } from '../../config/constants.js';
  * Create a ChatOpenAI instance from provider config.
  *
  * @param config - OpenAI provider configuration
- * @returns ModelResponse with ChatOpenAI or error
+ * @returns Promise<ModelResponse> with ChatOpenAI or error
  */
 export function createOpenAIClient(
   config: OpenAIProviderConfig | Record<string, unknown>
-): ModelResponse<BaseChatModel> {
+): Promise<ModelResponse<BaseChatModel>> {
   try {
     // API key can come from config or OPENAI_API_KEY env var
     const apiKey = config.apiKey as string | undefined;
@@ -34,10 +34,12 @@ export function createOpenAIClient(
       configuration: baseUrl !== undefined && baseUrl !== '' ? { baseURL: baseUrl } : undefined,
     });
 
-    return successResponse(client as BaseChatModel, `OpenAI client created with model: ${model}`);
+    return Promise.resolve(
+      successResponse(client as BaseChatModel, `OpenAI client created with model: ${model}`)
+    );
   } catch (error) {
     const errorCode = mapErrorToCode(error);
     const message = error instanceof Error ? error.message : 'Failed to create OpenAI client';
-    return errorResponse(errorCode, message);
+    return Promise.resolve(errorResponse(errorCode, message));
   }
 }

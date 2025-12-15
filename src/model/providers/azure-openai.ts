@@ -14,11 +14,11 @@ import { DEFAULT_AZURE_API_VERSION } from '../../config/constants.js';
  * Create an AzureChatOpenAI instance from provider config.
  *
  * @param config - Azure OpenAI provider configuration
- * @returns ModelResponse with AzureChatOpenAI or error
+ * @returns Promise<ModelResponse> with AzureChatOpenAI or error
  */
 export function createAzureOpenAIClient(
   config: AzureOpenAIProviderConfig | Record<string, unknown>
-): ModelResponse<BaseChatModel> {
+): Promise<ModelResponse<BaseChatModel>> {
   try {
     // Extract config fields
     const endpoint = config.endpoint as string | undefined;
@@ -28,16 +28,17 @@ export function createAzureOpenAIClient(
 
     // Validate required fields for Azure
     if (endpoint === undefined || endpoint === '') {
-      return errorResponse(
-        'PROVIDER_NOT_CONFIGURED',
-        'Azure OpenAI requires endpoint to be configured'
+      return Promise.resolve(
+        errorResponse('PROVIDER_NOT_CONFIGURED', 'Azure OpenAI requires endpoint to be configured')
       );
     }
 
     if (deployment === undefined || deployment === '') {
-      return errorResponse(
-        'PROVIDER_NOT_CONFIGURED',
-        'Azure OpenAI requires deployment name to be configured'
+      return Promise.resolve(
+        errorResponse(
+          'PROVIDER_NOT_CONFIGURED',
+          'Azure OpenAI requires deployment name to be configured'
+        )
       );
     }
 
@@ -50,13 +51,15 @@ export function createAzureOpenAIClient(
       azureOpenAIApiKey: apiKey,
     });
 
-    return successResponse(
-      client as BaseChatModel,
-      `Azure OpenAI client created with deployment: ${deployment}`
+    return Promise.resolve(
+      successResponse(
+        client as BaseChatModel,
+        `Azure OpenAI client created with deployment: ${deployment}`
+      )
     );
   } catch (error) {
     const errorCode = mapErrorToCode(error);
     const message = error instanceof Error ? error.message : 'Failed to create Azure OpenAI client';
-    return errorResponse(errorCode, message);
+    return Promise.resolve(errorResponse(errorCode, message));
   }
 }

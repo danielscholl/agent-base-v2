@@ -11,6 +11,9 @@ import {
   DEFAULT_OPENAI_MODEL,
   DEFAULT_ANTHROPIC_MODEL,
   DEFAULT_AZURE_API_VERSION,
+  DEFAULT_FOUNDRY_MODE,
+  DEFAULT_FOUNDRY_LOCAL_MODEL,
+  FOUNDRY_MODES,
   DEFAULT_GEMINI_MODEL,
   DEFAULT_GEMINI_LOCATION,
   DEFAULT_GEMINI_USE_VERTEXAI,
@@ -86,10 +89,38 @@ export type AzureOpenAIProviderConfig = z.infer<typeof AzureOpenAIProviderConfig
 
 /**
  * Azure AI Foundry provider configuration.
+ * Supports both local (on-device) and cloud modes.
+ *
+ * Local mode: Uses foundry-local-sdk to run models on-device via Docker.
+ * Cloud mode: Uses Azure AI Foundry managed endpoints.
  */
 export const FoundryProviderConfigSchema = z.object({
-  projectEndpoint: z.url().optional().describe('Azure AI Foundry project endpoint'),
-  modelDeployment: z.string().optional().describe('Model deployment name'),
+  mode: z
+    .enum(FOUNDRY_MODES)
+    .default(DEFAULT_FOUNDRY_MODE)
+    .describe('Foundry mode: "local" for on-device models, "cloud" for Azure-managed'),
+  // Cloud mode configuration
+  projectEndpoint: z
+    .url()
+    .optional()
+    .describe(
+      '[Cloud] Azure AI Foundry project endpoint (e.g., https://my-resource.services.ai.azure.com/)'
+    ),
+  modelDeployment: z
+    .string()
+    .optional()
+    .describe('[Cloud] Model deployment name (e.g., claude-sonnet-4-5)'),
+  apiKey: z
+    .string()
+    .optional()
+    .describe('[Cloud] Azure API key (falls back to AZURE_FOUNDRY_API_KEY env var)'),
+  // Local mode configuration
+  modelAlias: z
+    .string()
+    .default(DEFAULT_FOUNDRY_LOCAL_MODEL)
+    .describe('[Local] Model alias for foundry-local-sdk (e.g., phi-3-mini-4k)'),
+  // Shared configuration
+  temperature: z.number().min(0).max(2).optional().describe('Temperature for generation'),
 });
 
 export type FoundryProviderConfig = z.infer<typeof FoundryProviderConfigSchema>;

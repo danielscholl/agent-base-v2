@@ -168,12 +168,12 @@ export class Agent {
    * Get model bound with tools for function calling.
    * Returns the LangChain model with tools bound if tools are available.
    */
-  private getModelWithTools(): Runnable<BaseMessage[], AIMessage> | null {
+  private async getModelWithTools(): Promise<Runnable<BaseMessage[], AIMessage> | null> {
     if (this.tools.length === 0) {
       return null;
     }
 
-    const modelResponse = this.llmClient.getModel();
+    const modelResponse = await this.llmClient.getModel();
     if (!modelResponse.success) {
       this.callbacks?.onDebug?.('Failed to get model for tool binding', {
         error: modelResponse.message,
@@ -286,7 +286,7 @@ export class Agent {
       let iteration = 0;
 
       // Get model with tools if available
-      const modelWithTools = this.getModelWithTools();
+      const modelWithTools = await this.getModelWithTools();
       const hasTools = modelWithTools !== null;
 
       // Main loop: invoke LLM, process tool calls, repeat until done

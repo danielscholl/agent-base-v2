@@ -14,11 +14,11 @@ import { DEFAULT_ANTHROPIC_MODEL } from '../../config/constants.js';
  * Create a ChatAnthropic instance from provider config.
  *
  * @param config - Anthropic provider configuration
- * @returns ModelResponse with ChatAnthropic or error
+ * @returns Promise<ModelResponse> with ChatAnthropic or error
  */
 export function createAnthropicClient(
   config: AnthropicProviderConfig | Record<string, unknown>
-): ModelResponse<BaseChatModel> {
+): Promise<ModelResponse<BaseChatModel>> {
   try {
     // API key can come from config or ANTHROPIC_API_KEY env var
     const apiKey = config.apiKey as string | undefined;
@@ -31,13 +31,12 @@ export function createAnthropicClient(
       anthropicApiKey: apiKey,
     });
 
-    return successResponse(
-      client as BaseChatModel,
-      `Anthropic client created with model: ${model}`
+    return Promise.resolve(
+      successResponse(client as BaseChatModel, `Anthropic client created with model: ${model}`)
     );
   } catch (error) {
     const errorCode = mapErrorToCode(error);
     const message = error instanceof Error ? error.message : 'Failed to create Anthropic client';
-    return errorResponse(errorCode, message);
+    return Promise.resolve(errorResponse(errorCode, message));
   }
 }

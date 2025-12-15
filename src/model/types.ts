@@ -161,8 +161,11 @@ export interface LLMCallOptions {
 /**
  * Provider factory function type.
  * Creates a LangChain BaseChatModel from provider config.
+ * Always returns Promise for consistent typing across all providers.
  */
-export type ProviderFactory = (config: Record<string, unknown>) => ModelResponse<BaseChatModel>;
+export type ProviderFactory = (
+  config: Record<string, unknown>
+) => Promise<ModelResponse<BaseChatModel>>;
 
 /**
  * Stream result type - async iterable of chunks.

@@ -30,8 +30,8 @@ describe('createGeminiClient', () => {
   });
 
   describe('Gemini API mode', () => {
-    it('creates ChatGoogleGenerativeAI with model from config', () => {
-      const result = createGeminiClient({
+    it('creates ChatGoogleGenerativeAI with model from config', async () => {
+      const result = await createGeminiClient({
         model: 'gemini-2.0-flash-exp',
         apiKey: 'test-key',
       });
@@ -44,20 +44,20 @@ describe('createGeminiClient', () => {
       }
     });
 
-    it('creates client without apiKey (uses env var)', () => {
-      const result = createGeminiClient({
+    it('creates client without apiKey (uses env var)', async () => {
+      const result = await createGeminiClient({
         model: 'gemini-2.0-flash-exp',
       });
 
       expect(result.success).toBe(true);
     });
 
-    it('uses default model when not specified', () => {
+    it('uses default model when not specified', async () => {
       const config: Record<string, unknown> = {
         apiKey: 'test-key',
       };
 
-      const result = createGeminiClient(config);
+      const result = await createGeminiClient(config);
 
       expect(result.success).toBe(true);
       if (result.success) {
@@ -65,8 +65,8 @@ describe('createGeminiClient', () => {
       }
     });
 
-    it('passes apiKey for Gemini API mode', () => {
-      createGeminiClient({
+    it('passes apiKey for Gemini API mode', async () => {
+      await createGeminiClient({
         model: 'gemini-2.0-flash-exp',
         apiKey: 'test-key',
         useVertexai: false,
@@ -80,8 +80,8 @@ describe('createGeminiClient', () => {
   });
 
   describe('Vertex AI mode', () => {
-    it('returns error when Vertex AI mode is requested', () => {
-      const result = createGeminiClient({
+    it('returns error when Vertex AI mode is requested', async () => {
+      const result = await createGeminiClient({
         model: 'gemini-2.0-flash-exp',
         useVertexai: true,
       });
@@ -93,8 +93,8 @@ describe('createGeminiClient', () => {
       }
     });
 
-    it('returns error with guidance for Vertex AI users', () => {
-      const result = createGeminiClient({
+    it('returns error with guidance for Vertex AI users', async () => {
+      const result = await createGeminiClient({
         model: 'gemini-2.0-flash-exp',
         useVertexai: true,
         projectId: 'my-project',
@@ -110,12 +110,12 @@ describe('createGeminiClient', () => {
   });
 
   describe('error handling', () => {
-    it('returns error when constructor throws', () => {
+    it('returns error when constructor throws', async () => {
       mockChatGoogleGenerativeAI.mockImplementationOnce(() => {
         throw new Error('Invalid API key');
       });
 
-      const result = createGeminiClient({
+      const result = await createGeminiClient({
         model: 'gemini-2.0-flash-exp',
         apiKey: 'invalid-key',
       });
@@ -126,13 +126,13 @@ describe('createGeminiClient', () => {
       }
     });
 
-    it('handles non-Error thrown objects', () => {
+    it('handles non-Error thrown objects', async () => {
       mockChatGoogleGenerativeAI.mockImplementationOnce(() => {
         // eslint-disable-next-line @typescript-eslint/only-throw-error
         throw 'string error';
       });
 
-      const result = createGeminiClient({
+      const result = await createGeminiClient({
         model: 'gemini-2.0-flash-exp',
         apiKey: 'test-key',
       });
@@ -145,13 +145,13 @@ describe('createGeminiClient', () => {
   });
 
   describe('config type handling', () => {
-    it('handles Record<string, unknown> config type', () => {
+    it('handles Record<string, unknown> config type', async () => {
       const config: Record<string, unknown> = {
         model: 'gemini-1.5-pro',
         apiKey: 'test-key',
       };
 
-      const result = createGeminiClient(config);
+      const result = await createGeminiClient(config);
 
       expect(result.success).toBe(true);
       if (result.success) {

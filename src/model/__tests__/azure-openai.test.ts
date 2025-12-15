@@ -31,8 +31,8 @@ describe('createAzureOpenAIClient', () => {
     jest.clearAllMocks();
   });
 
-  it('creates AzureChatOpenAI with full config', () => {
-    const result = createAzureOpenAIClient({
+  it('creates AzureChatOpenAI with full config', async () => {
+    const result = await createAzureOpenAIClient({
       endpoint: 'https://my-resource.openai.azure.com/',
       deployment: 'gpt-4o',
       apiVersion: '2024-06-01',
@@ -46,8 +46,8 @@ describe('createAzureOpenAIClient', () => {
     }
   });
 
-  it('creates AzureChatOpenAI without apiKey (uses env var)', () => {
-    const result = createAzureOpenAIClient({
+  it('creates AzureChatOpenAI without apiKey (uses env var)', async () => {
+    const result = await createAzureOpenAIClient({
       endpoint: 'https://my-resource.openai.azure.com/',
       deployment: 'gpt-4o',
       apiVersion: '2024-06-01',
@@ -56,14 +56,14 @@ describe('createAzureOpenAIClient', () => {
     expect(result.success).toBe(true);
   });
 
-  it('uses default apiVersion when not specified', () => {
+  it('uses default apiVersion when not specified', async () => {
     const config: Record<string, unknown> = {
       endpoint: 'https://my-resource.openai.azure.com/',
       deployment: 'gpt-4o',
       apiKey: 'test-key',
     };
 
-    const result = createAzureOpenAIClient(config);
+    const result = await createAzureOpenAIClient(config);
 
     expect(result.success).toBe(true);
     expect(mockAzureChatOpenAI).toHaveBeenCalledWith({
@@ -74,8 +74,8 @@ describe('createAzureOpenAIClient', () => {
     });
   });
 
-  it('returns error when endpoint is missing', () => {
-    const result = createAzureOpenAIClient({
+  it('returns error when endpoint is missing', async () => {
+    const result = await createAzureOpenAIClient({
       deployment: 'gpt-4o',
       apiKey: 'test-key',
     });
@@ -87,8 +87,8 @@ describe('createAzureOpenAIClient', () => {
     }
   });
 
-  it('returns error when deployment is missing', () => {
-    const result = createAzureOpenAIClient({
+  it('returns error when deployment is missing', async () => {
+    const result = await createAzureOpenAIClient({
       endpoint: 'https://my-resource.openai.azure.com/',
       apiKey: 'test-key',
     });
@@ -100,7 +100,7 @@ describe('createAzureOpenAIClient', () => {
     }
   });
 
-  it('handles Record<string, unknown> config type', () => {
+  it('handles Record<string, unknown> config type', async () => {
     const config: Record<string, unknown> = {
       endpoint: 'https://my-resource.openai.azure.com/',
       deployment: 'my-gpt4',
@@ -108,7 +108,7 @@ describe('createAzureOpenAIClient', () => {
       apiKey: 'test-key',
     };
 
-    const result = createAzureOpenAIClient(config);
+    const result = await createAzureOpenAIClient(config);
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -116,8 +116,8 @@ describe('createAzureOpenAIClient', () => {
     }
   });
 
-  it('passes correct parameters to AzureChatOpenAI', () => {
-    createAzureOpenAIClient({
+  it('passes correct parameters to AzureChatOpenAI', async () => {
+    await createAzureOpenAIClient({
       endpoint: 'https://my-resource.openai.azure.com/',
       deployment: 'gpt-4o',
       apiVersion: '2024-06-01',
@@ -132,12 +132,12 @@ describe('createAzureOpenAIClient', () => {
     });
   });
 
-  it('returns error when AzureChatOpenAI constructor throws', () => {
+  it('returns error when AzureChatOpenAI constructor throws', async () => {
     mockAzureChatOpenAI.mockImplementationOnce(() => {
       throw new Error('Invalid API key provided');
     });
 
-    const result = createAzureOpenAIClient({
+    const result = await createAzureOpenAIClient({
       endpoint: 'https://my-resource.openai.azure.com/',
       deployment: 'gpt-4o',
       apiKey: 'invalid-key',
@@ -150,13 +150,13 @@ describe('createAzureOpenAIClient', () => {
     }
   });
 
-  it('handles non-Error thrown objects', () => {
+  it('handles non-Error thrown objects', async () => {
     mockAzureChatOpenAI.mockImplementationOnce(() => {
       // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw 'string error';
     });
 
-    const result = createAzureOpenAIClient({
+    const result = await createAzureOpenAIClient({
       endpoint: 'https://my-resource.openai.azure.com/',
       deployment: 'gpt-4o',
       apiKey: 'test-key',

@@ -30,8 +30,8 @@ describe('createLocalClient', () => {
     jest.clearAllMocks();
   });
 
-  it('creates ChatOpenAI with default baseUrl and model', () => {
-    const result = createLocalClient({});
+  it('creates ChatOpenAI with default baseUrl and model', async () => {
+    const result = await createLocalClient({});
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -45,8 +45,8 @@ describe('createLocalClient', () => {
     });
   });
 
-  it('creates ChatOpenAI with custom baseUrl', () => {
-    const result = createLocalClient({
+  it('creates ChatOpenAI with custom baseUrl', async () => {
+    const result = await createLocalClient({
       baseUrl: 'http://localhost:11434/v1',
       model: 'llama3.2',
     });
@@ -59,8 +59,8 @@ describe('createLocalClient', () => {
     });
   });
 
-  it('creates ChatOpenAI with custom model', () => {
-    const result = createLocalClient({
+  it('creates ChatOpenAI with custom model', async () => {
+    const result = await createLocalClient({
       model: 'ai/llama3.2',
     });
 
@@ -70,13 +70,13 @@ describe('createLocalClient', () => {
     }
   });
 
-  it('handles Record<string, unknown> config type', () => {
+  it('handles Record<string, unknown> config type', async () => {
     const config: Record<string, unknown> = {
       model: 'ai/mistral',
       baseUrl: 'http://custom.local:8080/v1',
     };
 
-    const result = createLocalClient(config);
+    const result = await createLocalClient(config);
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -84,10 +84,10 @@ describe('createLocalClient', () => {
     }
   });
 
-  it('uses defaults when fields are undefined', () => {
+  it('uses defaults when fields are undefined', async () => {
     const config: Record<string, unknown> = {};
 
-    const result = createLocalClient(config);
+    const result = await createLocalClient(config);
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -100,8 +100,8 @@ describe('createLocalClient', () => {
     });
   });
 
-  it('passes correct parameters to ChatOpenAI including openAIApiKey', () => {
-    createLocalClient({
+  it('passes correct parameters to ChatOpenAI including openAIApiKey', async () => {
+    await createLocalClient({
       model: 'ai/phi4',
       baseUrl: 'http://model-runner.docker.internal/',
     });
@@ -113,12 +113,12 @@ describe('createLocalClient', () => {
     });
   });
 
-  it('returns error when ChatOpenAI constructor throws', () => {
+  it('returns error when ChatOpenAI constructor throws', async () => {
     mockChatOpenAI.mockImplementationOnce(() => {
       throw new Error('Connection refused');
     });
 
-    const result = createLocalClient({
+    const result = await createLocalClient({
       model: 'ai/phi4',
     });
 
@@ -129,13 +129,13 @@ describe('createLocalClient', () => {
     }
   });
 
-  it('handles non-Error thrown objects', () => {
+  it('handles non-Error thrown objects', async () => {
     mockChatOpenAI.mockImplementationOnce(() => {
       // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw 'string error';
     });
 
-    const result = createLocalClient({
+    const result = await createLocalClient({
       model: 'ai/phi4',
     });
 
@@ -145,8 +145,8 @@ describe('createLocalClient', () => {
     }
   });
 
-  it('works with Ollama-style baseUrl', () => {
-    const result = createLocalClient({
+  it('works with Ollama-style baseUrl', async () => {
+    const result = await createLocalClient({
       baseUrl: 'http://localhost:11434/v1',
       model: 'llama3.2',
     });
@@ -159,8 +159,8 @@ describe('createLocalClient', () => {
     });
   });
 
-  it('works with LM Studio-style baseUrl', () => {
-    const result = createLocalClient({
+  it('works with LM Studio-style baseUrl', async () => {
+    const result = await createLocalClient({
       baseUrl: 'http://localhost:1234/v1',
       model: 'local-model',
     });
@@ -173,8 +173,8 @@ describe('createLocalClient', () => {
     });
   });
 
-  it('uses default baseUrl when empty string provided', () => {
-    const result = createLocalClient({
+  it('uses default baseUrl when empty string provided', async () => {
+    const result = await createLocalClient({
       baseUrl: '',
       model: 'ai/phi4',
     });
@@ -187,8 +187,8 @@ describe('createLocalClient', () => {
     });
   });
 
-  it('uses default model when empty string provided', () => {
-    const result = createLocalClient({
+  it('uses default model when empty string provided', async () => {
+    const result = await createLocalClient({
       baseUrl: 'http://localhost:11434/v1',
       model: '',
     });
@@ -204,8 +204,8 @@ describe('createLocalClient', () => {
     });
   });
 
-  it('uses all defaults when both baseUrl and model are empty strings', () => {
-    const result = createLocalClient({
+  it('uses all defaults when both baseUrl and model are empty strings', async () => {
+    const result = await createLocalClient({
       baseUrl: '',
       model: '',
     });

@@ -36,6 +36,12 @@ export const DEFAULT_AZURE_API_VERSION = '2024-06-01';
 export const DEFAULT_AZURE_MODEL = 'gpt-4o';
 
 export const DEFAULT_FOUNDRY_MODEL = 'gpt-4o';
+export const DEFAULT_FOUNDRY_MODE = 'cloud' as const;
+export const DEFAULT_FOUNDRY_LOCAL_MODEL = 'phi-3-mini-4k';
+
+// Foundry modes
+export const FOUNDRY_MODES = ['local', 'cloud'] as const;
+export type FoundryMode = (typeof FOUNDRY_MODES)[number];
 
 export const DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash-exp';
 export const DEFAULT_GEMINI_LOCATION = 'us-central1';
@@ -103,8 +109,12 @@ export const DEFAULT_PROVIDERS_CONFIG = {
     apiKey: undefined,
   },
   foundry: {
+    mode: DEFAULT_FOUNDRY_MODE,
     projectEndpoint: undefined,
     modelDeployment: undefined,
+    apiKey: undefined,
+    modelAlias: DEFAULT_FOUNDRY_LOCAL_MODEL,
+    temperature: undefined,
   },
   gemini: {
     apiKey: undefined,

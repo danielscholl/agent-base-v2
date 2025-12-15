@@ -157,6 +157,15 @@ Implement `utils/tokens.ts` using tiktoken for accurate token counting. Expose v
 ### Feature 23: Implement GitHub Models provider
 Add GitHub Models provider using OpenAI-compatible endpoints (`https://models.github.ai/inference`). Support both personal and org-scoped tokens. Implement in `model/providers/github.ts`.
 
+### Feature 23a: Support Azure AI Foundry (Local or Cloud)
+Add Azure AI Foundry support that can be configured to target either:
+- **Foundry Local** (on-device models) via the `foundry-local-sdk`, using its OpenAI-compatible endpoint + API key (LangChain `ChatOpenAI` with `baseURL` and `apiKey` from `FoundryLocalManager`).
+- **Azure AI Foundry (cloud)** via the existing Foundry endpoint configuration.
+
+Expose a single provider surface (e.g., `providers.azureFoundry.mode = "local" | "cloud"`) so projects can switch between local and cloud models without changing agent code. Ensure streaming behavior is consistent across both modes.
+
+Reference: https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-local/how-to/how-to-use-langchain-with-foundry-local?view=foundry-classic&pivots=programming-language-javascript
+
 ### Feature 24: Implement Local (Docker Model Runner) provider
 Add local inference via OpenAI-compatible API in `model/providers/local.ts`. Target Docker Desktop's Model Runner which exposes models at `http://model-runner.docker.internal/`. Support configurable base URL and ensure streaming works correctly.
 
@@ -261,10 +270,10 @@ Prepare package.json for npm publication, set up CI/CD for releases.
 | 1a | 1-8 | 8 | Foundation core: config, tools, OpenAI, agent loop, callbacks, errors, hello tool |
 | 1b | 9-11 | 3 | Foundation observability: OpenTelemetry, GenAI conventions, Aspire Dashboard |
 | 2 | 12-17 | 6 | Multi-provider (Anthropic, Gemini, Azure), retry, CLI shell, input, display, **FileSystem tools** |
-| 3 | 18-24 | 7 | Memory, context, sessions, streaming, tokens, GitHub, Local (Docker Model Runner) |
+| 3 | 18-24 (+23a) | 8 | Memory, context, sessions, streaming, tokens, GitHub, Azure Foundry (Local/Cloud), Local (Docker Model Runner) |
 | 4 | 25-30 | 6 | Skills: SKILL.md manifest, loader, registry, progressive disclosure, Foundry, bundled skill (**toolsets only**) |
 | 5 | 31-35 | 5 | Config commands, wizards, skill commands, session commands, help |
 | 6 | 36-42 | 7 | Tests, migration tool, prompts, CLAUDE.md, docs, polish |
 | Post | 43-46 | 4 | **Script execution**, git skills, Mem0, npm publish |
 
-**MVP Total: 42 features** (script execution deferred to post-MVP)
+**MVP Total: 43 features** (script execution deferred to post-MVP)

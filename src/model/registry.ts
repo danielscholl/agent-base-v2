@@ -10,6 +10,7 @@ import { createAnthropicClient } from './providers/anthropic.js';
 import { createGeminiClient } from './providers/gemini.js';
 import { createAzureOpenAIClient } from './providers/azure-openai.js';
 import { createLocalClient } from './providers/local.js';
+import { createFoundryClient } from './providers/foundry.js';
 
 /**
  * Registry mapping provider names to their factory functions.
@@ -27,9 +28,9 @@ export const PROVIDER_REGISTRY: Partial<Record<ProviderName, ProviderFactory>> =
   gemini: createGeminiClient,
   azure: createAzureOpenAIClient,
   local: createLocalClient,
+  foundry: createFoundryClient,
   // Future providers:
   // github: createGitHubClient,
-  // foundry: createFoundryClient,
 };
 
 /**

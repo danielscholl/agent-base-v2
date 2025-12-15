@@ -29,8 +29,8 @@ describe('createAnthropicClient', () => {
     jest.clearAllMocks();
   });
 
-  it('creates ChatAnthropic with model from config', () => {
-    const result = createAnthropicClient({
+  it('creates ChatAnthropic with model from config', async () => {
+    const result = await createAnthropicClient({
       model: 'claude-sonnet-4-20250514',
       apiKey: 'test-key',
     });
@@ -42,20 +42,20 @@ describe('createAnthropicClient', () => {
     }
   });
 
-  it('creates ChatAnthropic without apiKey (uses env var)', () => {
-    const result = createAnthropicClient({
+  it('creates ChatAnthropic without apiKey (uses env var)', async () => {
+    const result = await createAnthropicClient({
       model: 'claude-sonnet-4-20250514',
     });
 
     expect(result.success).toBe(true);
   });
 
-  it('uses default model when not specified', () => {
+  it('uses default model when not specified', async () => {
     const config: Record<string, unknown> = {
       apiKey: 'test-key',
     };
 
-    const result = createAnthropicClient(config);
+    const result = await createAnthropicClient(config);
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -63,13 +63,13 @@ describe('createAnthropicClient', () => {
     }
   });
 
-  it('handles Record<string, unknown> config type', () => {
+  it('handles Record<string, unknown> config type', async () => {
     const config: Record<string, unknown> = {
       model: 'claude-opus-4-20250514',
       apiKey: 'test-key',
     };
 
-    const result = createAnthropicClient(config);
+    const result = await createAnthropicClient(config);
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -77,8 +77,8 @@ describe('createAnthropicClient', () => {
     }
   });
 
-  it('passes correct parameters to ChatAnthropic', () => {
-    createAnthropicClient({
+  it('passes correct parameters to ChatAnthropic', async () => {
+    await createAnthropicClient({
       model: 'claude-sonnet-4-20250514',
       apiKey: 'test-key',
     });
@@ -89,12 +89,12 @@ describe('createAnthropicClient', () => {
     });
   });
 
-  it('returns error when ChatAnthropic constructor throws', () => {
+  it('returns error when ChatAnthropic constructor throws', async () => {
     mockChatAnthropic.mockImplementationOnce(() => {
       throw new Error('Invalid API key provided');
     });
 
-    const result = createAnthropicClient({
+    const result = await createAnthropicClient({
       model: 'claude-sonnet-4-20250514',
       apiKey: 'invalid-key',
     });
@@ -106,13 +106,13 @@ describe('createAnthropicClient', () => {
     }
   });
 
-  it('handles non-Error thrown objects', () => {
+  it('handles non-Error thrown objects', async () => {
     mockChatAnthropic.mockImplementationOnce(() => {
       // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw 'string error';
     });
 
-    const result = createAnthropicClient({
+    const result = await createAnthropicClient({
       model: 'claude-sonnet-4-20250514',
       apiKey: 'test-key',
     });

@@ -30,8 +30,8 @@ describe('createOpenAIClient', () => {
     jest.clearAllMocks();
   });
 
-  it('creates ChatOpenAI with model from config', () => {
-    const result = createOpenAIClient({
+  it('creates ChatOpenAI with model from config', async () => {
+    const result = await createOpenAIClient({
       model: 'gpt-4o',
       apiKey: 'test-key',
     });
@@ -43,8 +43,8 @@ describe('createOpenAIClient', () => {
     }
   });
 
-  it('creates ChatOpenAI with custom baseUrl', () => {
-    const result = createOpenAIClient({
+  it('creates ChatOpenAI with custom baseUrl', async () => {
+    const result = await createOpenAIClient({
       model: 'gpt-4o',
       apiKey: 'test-key',
       baseUrl: 'https://custom.openai.com/v1',
@@ -53,16 +53,16 @@ describe('createOpenAIClient', () => {
     expect(result.success).toBe(true);
   });
 
-  it('creates ChatOpenAI without apiKey (uses env var)', () => {
-    const result = createOpenAIClient({
+  it('creates ChatOpenAI without apiKey (uses env var)', async () => {
+    const result = await createOpenAIClient({
       model: 'gpt-4o',
     });
 
     expect(result.success).toBe(true);
   });
 
-  it('uses provided model', () => {
-    const result = createOpenAIClient({
+  it('uses provided model', async () => {
+    const result = await createOpenAIClient({
       model: 'gpt-4o-mini',
     });
 
@@ -72,13 +72,13 @@ describe('createOpenAIClient', () => {
     }
   });
 
-  it('handles Record<string, unknown> config type', () => {
+  it('handles Record<string, unknown> config type', async () => {
     const config: Record<string, unknown> = {
       model: 'gpt-4o-mini',
       apiKey: 'test-key',
     };
 
-    const result = createOpenAIClient(config);
+    const result = await createOpenAIClient(config);
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -86,12 +86,12 @@ describe('createOpenAIClient', () => {
     }
   });
 
-  it('uses default model when model field is undefined', () => {
+  it('uses default model when model field is undefined', async () => {
     const config: Record<string, unknown> = {
       apiKey: 'test-key',
     };
 
-    const result = createOpenAIClient(config);
+    const result = await createOpenAIClient(config);
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -104,8 +104,8 @@ describe('createOpenAIClient', () => {
     });
   });
 
-  it('passes correct parameters to ChatOpenAI', () => {
-    createOpenAIClient({
+  it('passes correct parameters to ChatOpenAI', async () => {
+    await createOpenAIClient({
       model: 'gpt-4o',
       apiKey: 'test-key',
       baseUrl: 'https://custom.openai.com/v1',
@@ -118,8 +118,8 @@ describe('createOpenAIClient', () => {
     });
   });
 
-  it('passes undefined configuration when no baseUrl', () => {
-    createOpenAIClient({
+  it('passes undefined configuration when no baseUrl', async () => {
+    await createOpenAIClient({
       model: 'gpt-4o',
       apiKey: 'test-key',
     });
@@ -131,12 +131,12 @@ describe('createOpenAIClient', () => {
     });
   });
 
-  it('returns error when ChatOpenAI constructor throws', () => {
+  it('returns error when ChatOpenAI constructor throws', async () => {
     mockChatOpenAI.mockImplementationOnce(() => {
       throw new Error('Invalid API key provided');
     });
 
-    const result = createOpenAIClient({
+    const result = await createOpenAIClient({
       model: 'gpt-4o',
       apiKey: 'invalid-key',
     });
@@ -148,13 +148,13 @@ describe('createOpenAIClient', () => {
     }
   });
 
-  it('handles non-Error thrown objects', () => {
+  it('handles non-Error thrown objects', async () => {
     mockChatOpenAI.mockImplementationOnce(() => {
       // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw 'string error';
     });
 
-    const result = createOpenAIClient({
+    const result = await createOpenAIClient({
       model: 'gpt-4o',
       apiKey: 'test-key',
     });
@@ -165,8 +165,8 @@ describe('createOpenAIClient', () => {
     }
   });
 
-  it('passes empty baseUrl as undefined configuration', () => {
-    createOpenAIClient({
+  it('passes empty baseUrl as undefined configuration', async () => {
+    await createOpenAIClient({
       model: 'gpt-4o',
       apiKey: 'test-key',
       baseUrl: '',

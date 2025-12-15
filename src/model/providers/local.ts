@@ -15,11 +15,11 @@ import { DEFAULT_LOCAL_BASE_URL, DEFAULT_LOCAL_MODEL } from '../../config/consta
  * Uses Docker Model Runner or compatible OpenAI-compatible servers.
  *
  * @param config - Local provider configuration
- * @returns ModelResponse with ChatOpenAI or error
+ * @returns Promise<ModelResponse> with ChatOpenAI or error
  */
 export function createLocalClient(
   config: LocalProviderConfig | Record<string, unknown>
-): ModelResponse<BaseChatModel> {
+): Promise<ModelResponse<BaseChatModel>> {
   try {
     // Fallback to defaults if fields are undefined or empty string
     const configBaseUrl = config.baseUrl as string | undefined;
@@ -36,10 +36,12 @@ export function createLocalClient(
       configuration: { baseURL: baseUrl },
     });
 
-    return successResponse(client as BaseChatModel, `Local client created with model: ${model}`);
+    return Promise.resolve(
+      successResponse(client as BaseChatModel, `Local client created with model: ${model}`)
+    );
   } catch (error) {
     const errorCode = mapErrorToCode(error);
     const message = error instanceof Error ? error.message : 'Failed to create Local client';
-    return errorResponse(errorCode, message);
+    return Promise.resolve(errorResponse(errorCode, message));
   }
 }

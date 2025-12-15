@@ -75,8 +75,9 @@ export class LLMClient {
   /**
    * Get or create the LangChain chat model client.
    * Lazily initializes the client on first use.
+   * Now async to support providers that need initialization (e.g., Foundry local mode).
    */
-  private getClient(): ModelResponse<BaseChatModel> {
+  private async getClient(): Promise<ModelResponse<BaseChatModel>> {
     const providerName = this.config.providers.default;
 
     // Return cached client if provider hasn't changed
@@ -111,7 +112,8 @@ export class LLMClient {
       );
     }
 
-    const result = factory(providerConfig);
+    // Factory may return a Promise for async providers (e.g., Foundry local mode)
+    const result = await factory(providerConfig);
     if (result.success) {
       this.client = result.result;
       this.currentProvider = providerName;
@@ -170,7 +172,7 @@ export class LLMClient {
    * Does NOT fire onError - caller is responsible for that after retries exhausted.
    */
   private async invokeOnce(input: string | BaseMessage[]): Promise<ModelResponse<InvokeResult>> {
-    const clientResult = this.getClient();
+    const clientResult = await this.getClient();
     if (!clientResult.success) {
       return clientResult;
     }
@@ -247,7 +249,7 @@ export class LLMClient {
    * Does NOT fire onStreamStart or onError - caller is responsible for those.
    */
   private async streamOnce(input: string | BaseMessage[]): Promise<ModelResponse<StreamResult>> {
-    const clientResult = this.getClient();
+    const clientResult = await this.getClient();
     if (!clientResult.success) {
       return clientResult;
     }
@@ -327,9 +329,9 @@ export class LLMClient {
    * Get the underlying LangChain model for advanced operations.
    * Use this when you need to bind tools or use structured output.
    *
-   * @returns ModelResponse with BaseChatModel or error
+   * @returns Promise<ModelResponse> with BaseChatModel or error
    */
-  getModel(): ModelResponse<BaseChatModel> {
+  async getModel(): Promise<ModelResponse<BaseChatModel>> {
     return this.getClient();
   }
 
