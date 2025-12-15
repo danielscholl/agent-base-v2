@@ -191,7 +191,8 @@ describe('SessionManager', () => {
       const meta = await manager.saveSession(messages);
 
       // Format: YYYY-MM-DD-HH-MM-SS-mmm-rrrr (milliseconds + 4-char random suffix)
-      expect(meta.id).toMatch(/^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-\d{3}-[a-z0-9]{4}$/);
+      // Random suffix uses base64url encoding (alphanumeric, hyphen, underscore)
+      expect(meta.id).toMatch(/^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-\d{3}-[A-Za-z0-9_-]{4}$/);
     });
 
     it('should accept custom session name', async () => {

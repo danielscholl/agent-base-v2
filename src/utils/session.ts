@@ -3,6 +3,7 @@
  * Stores conversation sessions to disk as JSON files with metadata.
  */
 
+import { randomBytes } from 'node:crypto';
 import type { IFileSystem } from '../config/types.js';
 import { NodeFileSystem } from '../config/manager.js';
 import {
@@ -626,7 +627,8 @@ export class SessionManager {
     const seconds = String(now.getSeconds()).padStart(2, '0');
     const millis = String(now.getMilliseconds()).padStart(3, '0');
     // Add random suffix to handle rapid saves within the same millisecond
-    const random = Math.random().toString(36).slice(2, 6);
+    // Using cryptographically secure random bytes for security
+    const random = randomBytes(3).toString('base64url').slice(0, 4);
 
     return `${year}-${month}-${day}-${hours}-${minutes}-${seconds}-${millis}-${random}`;
   }
@@ -753,7 +755,9 @@ export class SessionManager {
    */
   private async atomicWriteFile(filePath: string, content: string): Promise<void> {
     // Use unique temp name to avoid conflicts with concurrent writes
-    const uniqueSuffix = `${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`;
+    // Using cryptographically secure random bytes for security
+    const randomSuffix = randomBytes(4).toString('base64url').slice(0, 6);
+    const uniqueSuffix = `${String(Date.now())}-${randomSuffix}`;
     const tempPath = `${filePath}.tmp.${uniqueSuffix}`;
     try {
       // Write to temp file first
