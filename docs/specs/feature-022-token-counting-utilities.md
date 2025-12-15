@@ -36,9 +36,11 @@ LLM Response → extractTokenUsage() → onLLMEnd callback → InteractiveShell 
 | Source | Accuracy | Use Case |
 |--------|----------|----------|
 | Provider-returned (`TokenUsage`) | Exact | Display after LLM calls |
-| `TokenEstimator` | ~95% for OpenAI, varies for others | Pre-flight estimation, context window checks |
+| `TokenEstimator` | ~95% for OpenAI*, varies for others | Pre-flight estimation, context window checks |
 
 **Important**: Provider-returned usage is authoritative. Estimation is only for pre-flight checks and should not be displayed as actual usage.
+
+*The ~95% figure is an informal approximation based on tiktoken usage patterns, not a formal benchmark.
 
 ### Message Overhead (TokenEstimator)
 

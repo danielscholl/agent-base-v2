@@ -39,6 +39,17 @@ import type { AppConfig } from '../config/schema.js';
 import type { Message } from '../agent/types.js';
 
 /**
+ * Initial token usage state.
+ * Used for both initial state and reset operations.
+ */
+const INITIAL_TOKEN_USAGE: SessionTokenUsage = {
+  promptTokens: 0,
+  completionTokens: 0,
+  tokens: 0,
+  queryCount: 0,
+};
+
+/**
  * Shell state interface.
  */
 interface ShellState {
@@ -86,12 +97,7 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
     activeTasks: [],
     completedTasks: [],
     resumedSessionId: null,
-    tokenUsage: {
-      totalPromptTokens: 0,
-      totalCompletionTokens: 0,
-      totalTokens: 0,
-      queryCount: 0,
-    },
+    tokenUsage: INITIAL_TOKEN_USAGE,
   });
 
   // Load config on mount and handle session resume
@@ -359,6 +365,7 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
             messages: [],
             streamingOutput: '',
             error: null,
+            tokenUsage: INITIAL_TOKEN_USAGE,
           }));
           // Also clear input history and message history if shouldClearHistory is set
           if (result.shouldClearHistory === true) {
@@ -652,14 +659,13 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
           });
         },
         updateTokenUsage: (usage) => {
-          // Accumulate token usage across multiple LLM calls
+          // Accumulate per-request token usage across multiple LLM calls
           setState((s) => ({
             ...s,
             tokenUsage: {
-              totalPromptTokens: s.tokenUsage.totalPromptTokens + usage.totalPromptTokens,
-              totalCompletionTokens:
-                s.tokenUsage.totalCompletionTokens + usage.totalCompletionTokens,
-              totalTokens: s.tokenUsage.totalTokens + usage.totalTokens,
+              promptTokens: s.tokenUsage.promptTokens + usage.promptTokens,
+              completionTokens: s.tokenUsage.completionTokens + usage.completionTokens,
+              tokens: s.tokenUsage.tokens + usage.tokens,
               queryCount: s.tokenUsage.queryCount + usage.queryCount,
             },
           }));
@@ -860,7 +866,7 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
         </Box>
       )}
 
-      {/* Token usage display - show after response, before next input */}
+      {/* Token usage display - visible while user is idle (not processing) */}
       {!state.isProcessing && state.tokenUsage.queryCount > 0 && (
         <TokenUsageDisplay usage={state.tokenUsage} />
       )}

@@ -13,16 +13,16 @@ import type { Message } from '../agent/types.js';
 
 /**
  * Session-level token usage statistics.
- * Aggregates token usage across multiple LLM calls.
+ * Represents per-request token data that will be accumulated by the consumer.
  */
 export interface SessionTokenUsage {
-  /** Total prompt tokens across all calls */
-  totalPromptTokens: number;
-  /** Total completion tokens across all calls */
-  totalCompletionTokens: number;
-  /** Total tokens (prompt + completion) across all calls */
-  totalTokens: number;
-  /** Number of LLM queries in this session */
+  /** Prompt tokens from a single request */
+  promptTokens: number;
+  /** Completion tokens from a single request */
+  completionTokens: number;
+  /** Total tokens (prompt + completion) from a single request */
+  tokens: number;
+  /** Number of LLM queries (typically 1 for per-request updates) */
   queryCount: number;
 }
 
@@ -50,7 +50,11 @@ export interface TokenEstimatorOptions {
 // Constants
 // -----------------------------------------------------------------------------
 
-/** Default model for token estimation */
+/**
+ * Default model for token estimation.
+ * NOTE: Must be present in MODEL_ENCODING_MAP or be a valid TiktokenModel
+ * to ensure correct encoding selection.
+ */
 const DEFAULT_MODEL = 'gpt-4o';
 
 /** Message overhead tokens (role, separators) */
@@ -81,7 +85,7 @@ const MODEL_ENCODING_MAP: Record<string, string> = {
  *
  * @example
  * const tracker = new TokenUsageTracker({
- *   onUpdate: (usage) => console.log(`Total: ${usage.totalTokens}`),
+ *   onUpdate: (usage) => console.log(`Total: ${usage.tokens}`),
  * });
  * tracker.addUsage({ promptTokens: 100, completionTokens: 50, totalTokens: 150 });
  */
@@ -108,9 +112,9 @@ export class TokenUsageTracker {
    */
   addUsage(usage: TokenUsage): void {
     this.usage = {
-      totalPromptTokens: this.usage.totalPromptTokens + usage.promptTokens,
-      totalCompletionTokens: this.usage.totalCompletionTokens + usage.completionTokens,
-      totalTokens: this.usage.totalTokens + usage.totalTokens,
+      promptTokens: this.usage.promptTokens + usage.promptTokens,
+      completionTokens: this.usage.completionTokens + usage.completionTokens,
+      tokens: this.usage.tokens + usage.totalTokens,
       queryCount: this.usage.queryCount + 1,
     };
 
@@ -144,9 +148,9 @@ export class TokenUsageTracker {
    */
   private createEmptyUsage(): SessionTokenUsage {
     return {
-      totalPromptTokens: 0,
-      totalCompletionTokens: 0,
-      totalTokens: 0,
+      promptTokens: 0,
+      completionTokens: 0,
+      tokens: 0,
       queryCount: 0,
     };
   }
@@ -243,6 +247,17 @@ export class TokenEstimator {
   }
 
   /**
+   * Releases resources held by this TokenEstimator.
+   * Call this method when the estimator is no longer needed to free memory.
+   */
+  dispose(): void {
+    // js-tiktoken encoders do not currently provide a cleanup method,
+    // but nulling the reference allows for garbage collection.
+    this.encoder = null;
+    this.debug('TokenEstimator disposed');
+  }
+
+  /**
    * Get or create the tiktoken encoder.
    * Lazily initializes the encoder on first use.
    */
@@ -252,6 +267,9 @@ export class TokenEstimator {
     }
 
     // Try model-specific encoding first
+    // Type assertion is required because TiktokenModel is a closed union type
+    // that doesn't include all valid model names. The catch block handles
+    // unrecognized models gracefully by falling back to prefix matching.
     try {
       this.encoder = encodingForModel(this.model as TiktokenModel);
       this.debug('Using model-specific encoding', { model: this.model });

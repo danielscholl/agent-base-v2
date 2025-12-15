@@ -12,14 +12,14 @@ import type { SessionTokenUsage } from '../../utils/index.js';
  * Create test usage data.
  */
 function createUsage(
-  totalPromptTokens: number,
-  totalCompletionTokens: number,
+  promptTokens: number,
+  completionTokens: number,
   queryCount: number
 ): SessionTokenUsage {
   return {
-    totalPromptTokens,
-    totalCompletionTokens,
-    totalTokens: totalPromptTokens + totalCompletionTokens,
+    promptTokens,
+    completionTokens,
+    tokens: promptTokens + completionTokens,
     queryCount,
   };
 }
@@ -41,7 +41,7 @@ describe('TokenUsageDisplay', () => {
 
       expect(lastFrame()).toContain('Tokens:');
       expect(lastFrame()).toContain('150');
-      expect(lastFrame()).toContain('1 queries');
+      expect(lastFrame()).toContain('1 query');
     });
 
     it('formats large numbers with separators', () => {
@@ -59,7 +59,7 @@ describe('TokenUsageDisplay', () => {
       const { lastFrame: single } = render(<TokenUsageDisplay usage={singleQuery} />);
       const { lastFrame: multi } = render(<TokenUsageDisplay usage={multiQuery} />);
 
-      expect(single()).toContain('1 queries');
+      expect(single()).toContain('1 query');
       expect(multi()).toContain('3 queries');
     });
   });
@@ -124,7 +124,7 @@ describe('TokenUsageDisplay', () => {
       const { lastFrame } = render(<TokenUsageDisplay usage={usage} />);
 
       expect(lastFrame()).toContain('100');
-      expect(lastFrame()).toContain('1 queries');
+      expect(lastFrame()).toContain('1 query');
     });
 
     it('handles usage with zero prompt tokens', () => {

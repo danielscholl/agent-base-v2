@@ -38,9 +38,9 @@ describe('TokenUsageTracker', () => {
       const tracker = new TokenUsageTracker();
       const usage = tracker.getUsage();
 
-      expect(usage.totalPromptTokens).toBe(0);
-      expect(usage.totalCompletionTokens).toBe(0);
-      expect(usage.totalTokens).toBe(0);
+      expect(usage.promptTokens).toBe(0);
+      expect(usage.completionTokens).toBe(0);
+      expect(usage.tokens).toBe(0);
       expect(usage.queryCount).toBe(0);
     });
 
@@ -53,7 +53,7 @@ describe('TokenUsageTracker', () => {
       tracker.addUsage(createTokenUsage(100, 50));
 
       expect(updates.length).toBe(1);
-      expect(updates[0].totalTokens).toBe(150);
+      expect(updates[0].tokens).toBe(150);
     });
 
     it('should accept onDebug callback', () => {
@@ -80,9 +80,9 @@ describe('TokenUsageTracker', () => {
       tracker.addUsage(createTokenUsage(150, 75));
 
       const usage = tracker.getUsage();
-      expect(usage.totalPromptTokens).toBe(450);
-      expect(usage.totalCompletionTokens).toBe(225);
-      expect(usage.totalTokens).toBe(675);
+      expect(usage.promptTokens).toBe(450);
+      expect(usage.completionTokens).toBe(225);
+      expect(usage.tokens).toBe(675);
       expect(usage.queryCount).toBe(3);
     });
 
@@ -109,9 +109,9 @@ describe('TokenUsageTracker', () => {
       tracker.addUsage(createTokenUsage(100, 50));
 
       expect(updates.length).toBe(2);
-      expect(updates[0].totalTokens).toBe(150);
+      expect(updates[0].tokens).toBe(150);
       expect(updates[0].queryCount).toBe(1);
-      expect(updates[1].totalTokens).toBe(300);
+      expect(updates[1].tokens).toBe(300);
       expect(updates[1].queryCount).toBe(2);
     });
 
@@ -121,9 +121,9 @@ describe('TokenUsageTracker', () => {
       tracker.addUsage(createTokenUsage(0, 0));
 
       const usage = tracker.getUsage();
-      expect(usage.totalPromptTokens).toBe(0);
-      expect(usage.totalCompletionTokens).toBe(0);
-      expect(usage.totalTokens).toBe(0);
+      expect(usage.promptTokens).toBe(0);
+      expect(usage.completionTokens).toBe(0);
+      expect(usage.tokens).toBe(0);
       expect(usage.queryCount).toBe(1);
     });
 
@@ -135,9 +135,9 @@ describe('TokenUsageTracker', () => {
       tracker.addUsage(createTokenUsage(largeNumber, largeNumber));
 
       const usage = tracker.getUsage();
-      expect(usage.totalPromptTokens).toBe(2 * largeNumber);
-      expect(usage.totalCompletionTokens).toBe(2 * largeNumber);
-      expect(usage.totalTokens).toBe(4 * largeNumber);
+      expect(usage.promptTokens).toBe(2 * largeNumber);
+      expect(usage.completionTokens).toBe(2 * largeNumber);
+      expect(usage.tokens).toBe(4 * largeNumber);
     });
 
     it('should call debug callback on each addition', () => {
@@ -159,22 +159,22 @@ describe('TokenUsageTracker', () => {
       tracker.addUsage(createTokenUsage(100, 50));
 
       const usage1 = tracker.getUsage();
-      usage1.totalTokens = 9999;
+      usage1.tokens = 9999;
 
       const usage2 = tracker.getUsage();
-      expect(usage2.totalTokens).toBe(150);
+      expect(usage2.tokens).toBe(150);
     });
 
     it('should return current accumulated values', () => {
       const tracker = new TokenUsageTracker();
 
       const usageBefore = tracker.getUsage();
-      expect(usageBefore.totalTokens).toBe(0);
+      expect(usageBefore.tokens).toBe(0);
 
       tracker.addUsage(createTokenUsage(100, 50));
 
       const usageAfter = tracker.getUsage();
-      expect(usageAfter.totalTokens).toBe(150);
+      expect(usageAfter.tokens).toBe(150);
     });
   });
 
@@ -187,9 +187,9 @@ describe('TokenUsageTracker', () => {
       tracker.reset();
 
       const usage = tracker.getUsage();
-      expect(usage.totalPromptTokens).toBe(0);
-      expect(usage.totalCompletionTokens).toBe(0);
-      expect(usage.totalTokens).toBe(0);
+      expect(usage.promptTokens).toBe(0);
+      expect(usage.completionTokens).toBe(0);
+      expect(usage.tokens).toBe(0);
       expect(usage.queryCount).toBe(0);
     });
 
@@ -203,7 +203,7 @@ describe('TokenUsageTracker', () => {
       tracker.reset();
 
       expect(updates.length).toBe(2);
-      expect(updates[1].totalTokens).toBe(0);
+      expect(updates[1].tokens).toBe(0);
       expect(updates[1].queryCount).toBe(0);
     });
 
@@ -215,8 +215,8 @@ describe('TokenUsageTracker', () => {
       tracker.addUsage(createTokenUsage(200, 100));
 
       const usage = tracker.getUsage();
-      expect(usage.totalPromptTokens).toBe(200);
-      expect(usage.totalCompletionTokens).toBe(100);
+      expect(usage.promptTokens).toBe(200);
+      expect(usage.completionTokens).toBe(100);
       expect(usage.queryCount).toBe(1);
     });
 
@@ -262,8 +262,8 @@ describe('TokenUsageTracker', () => {
       }
 
       const usage = tracker.getUsage();
-      expect(usage.totalPromptTokens).toBe(1000);
-      expect(usage.totalCompletionTokens).toBe(500);
+      expect(usage.promptTokens).toBe(1000);
+      expect(usage.completionTokens).toBe(500);
       expect(usage.queryCount).toBe(100);
     });
   });

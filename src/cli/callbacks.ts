@@ -82,12 +82,12 @@ export function createCallbacks(
     onLLMEnd: (_ctx, _response, usage) => {
       // Forward token usage to component state if callback is provided
       if (usage !== undefined && state.updateTokenUsage !== undefined) {
-        // Convert per-request TokenUsage to SessionTokenUsage format
+        // Pass per-request TokenUsage with correct field names
         // The component accumulates these values
         state.updateTokenUsage({
-          totalPromptTokens: usage.promptTokens,
-          totalCompletionTokens: usage.completionTokens,
-          totalTokens: usage.totalTokens,
+          promptTokens: usage.promptTokens,
+          completionTokens: usage.completionTokens,
+          tokens: usage.totalTokens,
           queryCount: 1,
         });
       }

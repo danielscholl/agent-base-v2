@@ -43,25 +43,23 @@ export function TokenUsageDisplay({
       <Box flexDirection="column" marginTop={1}>
         <Box>
           <Text dimColor>Tokens: </Text>
-          <Text color="cyan">{formatNumber(usage.totalTokens)}</Text>
+          <Text color="cyan">{formatNumber(usage.tokens)}</Text>
           <Text dimColor> total</Text>
         </Box>
         <Box paddingLeft={2}>
           <Text dimColor>Prompt: </Text>
-          <Text>{formatNumber(usage.totalPromptTokens)}</Text>
+          <Text>{formatNumber(usage.promptTokens)}</Text>
           <Text dimColor> | Completion: </Text>
-          <Text>{formatNumber(usage.totalCompletionTokens)}</Text>
+          <Text>{formatNumber(usage.completionTokens)}</Text>
         </Box>
         <Box paddingLeft={2}>
           <Text dimColor>Queries: </Text>
           <Text>{formatNumber(usage.queryCount)}</Text>
-          {usage.queryCount > 0 && (
-            <>
-              <Text dimColor> (avg </Text>
-              <Text>{formatNumber(Math.round(usage.totalTokens / usage.queryCount))}</Text>
-              <Text dimColor>/query)</Text>
-            </>
-          )}
+          <>
+            <Text dimColor> (avg </Text>
+            <Text>{formatNumber(Math.round(usage.tokens / usage.queryCount))}</Text>
+            <Text dimColor>/query)</Text>
+          </>
         </Box>
       </Box>
     );
@@ -71,8 +69,11 @@ export function TokenUsageDisplay({
   return (
     <Box marginTop={1}>
       <Text dimColor>Tokens: </Text>
-      <Text color="cyan">{formatNumber(usage.totalTokens)}</Text>
-      <Text dimColor> ({formatNumber(usage.queryCount)} queries)</Text>
+      <Text color="cyan">{formatNumber(usage.tokens)}</Text>
+      <Text dimColor>
+        {' '}
+        ({formatNumber(usage.queryCount)} {usage.queryCount === 1 ? 'query' : 'queries'})
+      </Text>
     </Box>
   );
 }
