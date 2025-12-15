@@ -24,12 +24,13 @@ import { executeCommand, isCommand } from '../cli/commands/index.js';
 import { unescapeSlash } from '../cli/constants.js';
 import { InputHistory } from '../cli/input/index.js';
 import { MessageHistory, SessionManager } from '../utils/index.js';
-import type { StoredMessage } from '../utils/index.js';
+import type { StoredMessage, SessionTokenUsage } from '../utils/index.js';
 import { Header } from './Header.js';
 import { Spinner } from './Spinner.js';
 import { ErrorDisplay } from './ErrorDisplay.js';
 import { TaskProgress } from './TaskProgress.js';
 import { AnswerBox } from './AnswerBox.js';
+import { TokenUsageDisplay } from './TokenUsageDisplay.js';
 import type { ActiveTask, CompletedTask } from './TaskProgress.js';
 import type { InteractiveShellProps, ShellMessage } from '../cli/types.js';
 import type { CommandContext } from '../cli/commands/types.js';
@@ -54,6 +55,8 @@ interface ShellState {
   completedTasks: CompletedTask[];
   /** Session ID if resuming a session */
   resumedSessionId: string | null;
+  /** Session-level token usage statistics */
+  tokenUsage: SessionTokenUsage;
 }
 
 /**
@@ -83,6 +86,12 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
     activeTasks: [],
     completedTasks: [],
     resumedSessionId: null,
+    tokenUsage: {
+      totalPromptTokens: 0,
+      totalCompletionTokens: 0,
+      totalTokens: 0,
+      queryCount: 0,
+    },
   });
 
   // Load config on mount and handle session resume
@@ -642,6 +651,19 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
             };
           });
         },
+        updateTokenUsage: (usage) => {
+          // Accumulate token usage across multiple LLM calls
+          setState((s) => ({
+            ...s,
+            tokenUsage: {
+              totalPromptTokens: s.tokenUsage.totalPromptTokens + usage.totalPromptTokens,
+              totalCompletionTokens:
+                s.tokenUsage.totalCompletionTokens + usage.totalCompletionTokens,
+              totalTokens: s.tokenUsage.totalTokens + usage.totalTokens,
+              queryCount: s.tokenUsage.queryCount + usage.queryCount,
+            },
+          }));
+        },
       });
 
       // Create filesystem tools array
@@ -836,6 +858,11 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
         <Box marginBottom={1}>
           <ErrorDisplay error={state.error} />
         </Box>
+      )}
+
+      {/* Token usage display - show after response, before next input */}
+      {!state.isProcessing && state.tokenUsage.queryCount > 0 && (
+        <TokenUsageDisplay usage={state.tokenUsage} />
       )}
 
       {/* Input prompt */}

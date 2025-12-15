@@ -5,6 +5,7 @@
 
 import type { AgentCallbacks } from '../agent/callbacks.js';
 import type { AgentErrorResponse } from '../errors/index.js';
+import type { SessionTokenUsage } from '../utils/index.js';
 
 /**
  * State setters for callback wiring.
@@ -35,6 +36,8 @@ export interface CallbackState {
     duration: number,
     error?: string
   ) => void;
+  /** Update session token usage with per-request data */
+  updateTokenUsage?: (usage: SessionTokenUsage) => void;
 }
 
 /**
@@ -74,6 +77,20 @@ export function createCallbacks(
 
     onLLMStream: (_ctx, chunk) => {
       state.appendToOutput(chunk);
+    },
+
+    onLLMEnd: (_ctx, _response, usage) => {
+      // Forward token usage to component state if callback is provided
+      if (usage !== undefined && state.updateTokenUsage !== undefined) {
+        // Convert per-request TokenUsage to SessionTokenUsage format
+        // The component accumulates these values
+        state.updateTokenUsage({
+          totalPromptTokens: usage.promptTokens,
+          totalCompletionTokens: usage.completionTokens,
+          totalTokens: usage.totalTokens,
+          queryCount: 1,
+        });
+      }
     },
 
     onAgentEnd: (_ctx, answer) => {
