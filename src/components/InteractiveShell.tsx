@@ -23,6 +23,7 @@ import { VERSION } from '../cli/version.js';
 import { executeCommand, isCommand } from '../cli/commands/index.js';
 import { unescapeSlash } from '../cli/constants.js';
 import { InputHistory } from '../cli/input/index.js';
+import { MessageHistory } from '../utils/index.js';
 import { Header } from './Header.js';
 import { Spinner } from './Spinner.js';
 import { ErrorDisplay } from './ErrorDisplay.js';
@@ -63,6 +64,8 @@ export function InteractiveShell({
   const { exit } = useApp();
   const agentRef = useRef<Agent | null>(null);
   const historyRef = useRef<InputHistory>(new InputHistory());
+  const messageHistoryRef = useRef<MessageHistory | null>(null);
+  const currentQueryRef = useRef<string>('');
 
   const [state, setState] = useState<ShellState>({
     input: '',
@@ -83,9 +86,23 @@ export function InteractiveShell({
     async function loadConfiguration(): Promise<void> {
       const result = await loadConfig();
       if (result.success) {
+        const config = result.result ?? null;
+        // Initialize MessageHistory only if memory is enabled in config
+        // LIMITATION: MessageHistory is initialized once at component mount based on initial config.
+        // Runtime config changes to memory.enabled (e.g., via a future /config command) are NOT
+        // supported. If the user changes the memory.enabled setting during runtime, MessageHistory
+        // will not be created or destroyed accordingly. This could lead to inconsistent behavior
+        // where memory appears enabled in config but MessageHistory remains null, or vice versa.
+        // WORKAROUND: Users must restart the interactive session to apply memory config changes.
+        // TODO: This is a known limitation that may be addressed in a future enhancement.
+        if (config !== null && config.memory.enabled && messageHistoryRef.current === null) {
+          messageHistoryRef.current = new MessageHistory({
+            historyLimit: config.memory.historyLimit,
+          });
+        }
         setState((s) => ({
           ...s,
-          config: result.result ?? null,
+          config,
           configLoaded: true,
         }));
       } else {
@@ -199,19 +216,78 @@ export function InteractiveShell({
             streamingOutput: '',
             error: null,
           }));
-          // Also clear input history if shouldClearHistory is set
+          // Also clear input history and message history if shouldClearHistory is set
           if (result.shouldClearHistory === true) {
             historyRef.current.clear();
+            messageHistoryRef.current?.clear();
           }
           return;
         }
-        // If shouldClearHistory is set but shouldClear is not, still clear input history
+        // If shouldClearHistory is set but shouldClear is not, still clear histories
         if (result.shouldClearHistory === true) {
           historyRef.current.clear();
+          messageHistoryRef.current?.clear();
+        }
+        // Handle /history command - show conversation history
+        if (result.shouldShowHistory === true) {
+          const msgHistory = messageHistoryRef.current;
+          if (msgHistory !== null && !msgHistory.isEmpty) {
+            const stored = msgHistory.getAllStored();
+            const historyOutput = stored
+              .map((m, i) => {
+                let rolePrefix = '';
+                if (m.role === 'user') {
+                  rolePrefix = '> ';
+                } else if (m.role === 'system') {
+                  rolePrefix = '! ';
+                } else if (m.role === 'assistant') {
+                  rolePrefix = '< ';
+                  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+                } else if (m.role === 'tool') {
+                  rolePrefix = '# ';
+                }
+                const prefix = `[${String(i + 1)}] ${rolePrefix}`;
+                return `${prefix}${m.content.slice(0, 200)}${m.content.length > 200 ? '...' : ''}`;
+              })
+              .join('\n');
+            // Update the last system message with history output
+            setState((s) => {
+              const lastMsgIndex = s.messages.length - 1;
+              const lastMsg = s.messages[lastMsgIndex];
+              if (lastMsg && lastMsg.role === 'system') {
+                const updatedMessages = [...s.messages];
+                updatedMessages[lastMsgIndex] = {
+                  ...lastMsg,
+                  content: `Conversation history (${String(stored.length)} messages):\n${historyOutput}`,
+                };
+                return { ...s, messages: updatedMessages };
+              }
+              return s;
+            });
+          } else {
+            // No history to show
+            setState((s) => {
+              const lastMsgIndex = s.messages.length - 1;
+              const lastMsg = s.messages[lastMsgIndex];
+              if (lastMsg && lastMsg.role === 'system') {
+                const updatedMessages = [...s.messages];
+                updatedMessages[lastMsgIndex] = {
+                  ...lastMsg,
+                  content: 'No conversation history yet.',
+                };
+                return { ...s, messages: updatedMessages };
+              }
+              return s;
+            });
+          }
+          return;
         }
       }
       return;
     }
+
+    // Store current query for message history tracking
+    currentQueryRef.current = query;
 
     // Add user message and clear tasks from previous query
     setState((s) => ({
@@ -252,6 +328,16 @@ export function InteractiveShell({
             if (s.error !== null || answer.startsWith('Error:')) {
               // Error already displayed via ErrorDisplay, don't duplicate
               return { ...s, streamingOutput: '', isProcessing: false };
+            }
+            // State management design:
+            // - state.messages: UI display for current session (always populated)
+            // - messageHistoryRef.current (MessageHistory): LLM context (only when memory.enabled)
+            // When memory is disabled, state.messages still tracks all exchanges for UI display,
+            // but messageHistoryRef.current is null so no context is passed to the LLM.
+            // This separation is intentional: UI needs to show conversation, but LLM context is optional.
+            const query = currentQueryRef.current;
+            if (query !== '' && messageHistoryRef.current !== null) {
+              messageHistoryRef.current.addExchange(query, answer);
             }
             return {
               ...s,
@@ -331,12 +417,11 @@ export function InteractiveShell({
 
     // Run the agent with tools - run() supports tool calling
     // (runStream() does not support tool calling - documented limitation)
-    // Convert ShellMessage[] to Message[] for agent history
-    // state.messages is from closure (before current user message was added)
-    const history: Message[] = state.messages.map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-    }));
+    // Use MessageHistory for multi-turn context when memory is enabled
+    // When memory is disabled (messageHistoryRef.current is null), pass empty history
+    // to avoid unbounded growth and polluting prompts with system/command output
+    const history: Message[] =
+      messageHistoryRef.current !== null ? messageHistoryRef.current.getRecent() : [];
 
     try {
       // Use run() instead of runStream() to support tool calling
@@ -356,14 +441,10 @@ export function InteractiveShell({
         isProcessing: false,
       }));
     }
-  }, [
-    state.input,
-    state.config,
-    state.messages,
-    exit,
-    addSystemMessage,
-    syncFilesystemWritesEnvVar,
-  ]);
+    // Note: state.config?.memory?.enabled is intentionally NOT in the dependency array.
+    // Runtime config changes to memory.enabled are not supported and require a session restart.
+    // messageHistoryRef is initialized once on mount (lines 91-95) and doesn't change during runtime.
+  }, [state.input, state.config, exit, addSystemMessage, syncFilesystemWritesEnvVar]);
 
   // Handle key input - gated until config loads
   useInput((input, key) => {

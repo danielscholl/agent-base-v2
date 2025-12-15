@@ -3,6 +3,8 @@
  * Defines interfaces for CLI flags and component props.
  */
 
+import type { Message } from '../agent/types.js';
+
 /**
  * CLI flags parsed from command line arguments.
  * These map to meow options in src/index.tsx.
@@ -42,6 +44,8 @@ export interface SinglePromptProps {
   prompt: string;
   /** Enable verbose output */
   verbose?: boolean;
+  /** Optional initial history for context continuation */
+  initialHistory?: Message[];
 }
 
 /**

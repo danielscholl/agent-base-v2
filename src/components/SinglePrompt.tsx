@@ -34,7 +34,11 @@ import type { AppConfig } from '../config/schema.js';
  *
  * Errors are written to stderr with non-zero exit code for scripting compatibility.
  */
-export function SinglePrompt({ prompt, verbose }: SinglePromptProps): React.ReactElement {
+export function SinglePrompt({
+  prompt,
+  verbose,
+  initialHistory,
+}: SinglePromptProps): React.ReactElement {
   const { exit } = useApp();
 
   const [state, setState] = useState<{
@@ -150,7 +154,8 @@ export function SinglePrompt({ prompt, verbose }: SinglePromptProps): React.Reac
         // Both modes use run() to support tool calling
         // Verbose mode gets streaming output via onLLMStream callback
         // Non-verbose mode gets clean final answer
-        const result = await agent.run(prompt);
+        // Pass initialHistory if provided for context continuation
+        const result = await agent.run(prompt, initialHistory);
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- mountedRef may be false after await
         if (mountedRef.current) {
           setState((s) => {
@@ -186,7 +191,7 @@ export function SinglePrompt({ prompt, verbose }: SinglePromptProps): React.Reac
     return () => {
       mountedRef.current = false;
     };
-  }, [prompt, verbose]);
+  }, [prompt, verbose, initialHistory]);
 
   // Exit after completion or error
   useEffect(() => {

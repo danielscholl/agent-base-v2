@@ -16,6 +16,8 @@ export interface CommandResult {
   shouldClear?: boolean;
   /** Whether to clear the conversation history */
   shouldClearHistory?: boolean;
+  /** Whether to display conversation history */
+  shouldShowHistory?: boolean;
   /** Additional data from command */
   data?: unknown;
 }

@@ -7,6 +7,7 @@ import {
   COMMAND_EXIT,
   COMMAND_HELP,
   COMMAND_CLEAR,
+  COMMAND_HISTORY,
   COMMAND_TELEMETRY,
   matchesCommand,
   isShellCommand,
@@ -17,11 +18,12 @@ import {
 import { helpHandler } from './help.js';
 import { clearHandler } from './clear.js';
 import { exitHandler } from './exit.js';
+import { historyHandler } from './history.js';
 import { telemetryHandler } from './telemetry.js';
 import { shellHandler } from './shell.js';
 
 export type { CommandDefinition, CommandHandler, CommandContext, CommandResult };
-export { helpHandler, clearHandler, exitHandler, telemetryHandler, shellHandler };
+export { helpHandler, clearHandler, exitHandler, historyHandler, telemetryHandler, shellHandler };
 
 /** All registered commands */
 export const COMMANDS: CommandDefinition[] = [
@@ -39,6 +41,11 @@ export const COMMANDS: CommandDefinition[] = [
     aliases: COMMAND_CLEAR,
     description: 'Clear screen and history',
     handler: clearHandler,
+  },
+  {
+    aliases: COMMAND_HISTORY,
+    description: 'Show conversation history',
+    handler: historyHandler,
   },
   {
     aliases: COMMAND_TELEMETRY,
