@@ -35,8 +35,8 @@ async function createLocalFoundryClient(
     const foundryLocalManager = new FoundryLocalManager();
     const modelInfo = await foundryLocalManager.init(modelAlias);
 
-    // Validate modelInfo was returned
-    if (!modelInfo) {
+    // Validate modelInfo was returned with required id field
+    if (!modelInfo || !modelInfo.id) {
       return errorResponse(
         'MODEL_NOT_FOUND',
         `Foundry Local model '${modelAlias}' not found or failed to initialize`
@@ -102,6 +102,15 @@ function createCloudFoundryClient(
       );
     }
 
+    if (apiKey === undefined || apiKey === '') {
+      return Promise.resolve(
+        errorResponse(
+          'PROVIDER_NOT_CONFIGURED',
+          'Azure AI Foundry cloud mode requires apiKey to be configured via config or AZURE_FOUNDRY_API_KEY environment variable'
+        )
+      );
+    }
+
     // Construct the OpenAI v1-compatible endpoint
     // Azure AI Foundry v1 API: https://{resource}.services.ai.azure.com/openai/v1/
     // This format does NOT require api-version query parameter
@@ -120,7 +129,7 @@ function createCloudFoundryClient(
       configuration: {
         baseURL: baseUrl,
         defaultHeaders: {
-          'api-key': apiKey ?? '',
+          'api-key': apiKey, // Already validated as non-empty
         },
       },
     };
@@ -150,7 +159,7 @@ function createCloudFoundryClient(
  * Supports both local (on-device) and cloud modes.
  *
  * @param config - Foundry provider configuration
- * @returns Promise<ModelResponse> with BaseChatModel or error
+ * @returns Promise<ModelResponse<BaseChatModel>> with BaseChatModel or error
  */
 export async function createFoundryClient(
   config: FoundryProviderConfig | Record<string, unknown>
