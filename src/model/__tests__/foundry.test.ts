@@ -153,24 +153,19 @@ describe('createFoundryClient (async)', () => {
       );
     });
 
-    it('handles undefined apiKey in cloud mode', async () => {
+    it('returns error when apiKey is missing in cloud mode', async () => {
       const result = await createFoundryClient({
         mode: 'cloud',
         projectEndpoint: 'https://my-resource.services.ai.azure.com/',
         modelDeployment: 'gpt-4o',
       });
 
-      expect(result.success).toBe(true);
-      expect(mockChatOpenAI).toHaveBeenCalledWith(
-        expect.objectContaining({
-          openAIApiKey: 'azure-uses-api-key-header',
-          configuration: expect.objectContaining({
-            defaultHeaders: {
-              'api-key': '',
-            },
-          }),
-        })
-      );
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toBe('PROVIDER_NOT_CONFIGURED');
+        expect(result.message).toContain('apiKey');
+      }
+      expect(mockChatOpenAI).not.toHaveBeenCalled();
     });
 
     it('returns error when ChatOpenAI constructor throws in cloud mode', async () => {
