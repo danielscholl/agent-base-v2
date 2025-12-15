@@ -134,6 +134,14 @@ export class NodeFileSystem implements IFileSystem {
   dirname(filePath: string): string {
     return path.dirname(filePath);
   }
+
+  async unlink(filePath: string): Promise<void> {
+    await fs.unlink(filePath);
+  }
+
+  async readdir(dirPath: string): Promise<string[]> {
+    return fs.readdir(dirPath);
+  }
 }
 
 // -----------------------------------------------------------------------------

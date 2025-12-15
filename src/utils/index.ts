@@ -8,3 +8,10 @@ export {
   type StoredMessage,
   type MessageHistoryOptions,
 } from './message-history.js';
+
+export {
+  ContextManager,
+  type ContextPointer,
+  type StoredContext,
+  type ContextManagerOptions,
+} from './context.js';

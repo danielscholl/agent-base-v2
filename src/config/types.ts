@@ -69,6 +69,18 @@ export interface IFileSystem {
    * Get the directory name of a path.
    */
   dirname(filePath: string): string;
+
+  /**
+   * Delete a file.
+   * @throws Error if file doesn't exist or can't be deleted
+   */
+  unlink(path: string): Promise<void>;
+
+  /**
+   * Read directory contents.
+   * @returns Array of filenames (not full paths)
+   */
+  readdir(path: string): Promise<string[]>;
 }
 
 // -----------------------------------------------------------------------------
