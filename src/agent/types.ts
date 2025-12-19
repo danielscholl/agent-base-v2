@@ -6,6 +6,7 @@
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import type { AppConfig } from '../config/schema.js';
 import type { AgentCallbacks } from './callbacks.js';
+import type { SkillLoaderOptions } from '../skills/types.js';
 
 // -----------------------------------------------------------------------------
 // Telemetry Types
@@ -82,6 +83,10 @@ export interface AgentOptions {
   systemPrompt?: string;
   /** Maximum iterations for tool execution loop (default: 10) */
   maxIterations?: number;
+  /** Include discovered skills in system prompt (default: true) */
+  includeSkills?: boolean;
+  /** Options for skill loader (custom directories, debug callback) */
+  skillLoaderOptions?: SkillLoaderOptions;
 }
 
 /**

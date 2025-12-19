@@ -26,6 +26,9 @@ const mockGetProviderName = jest.fn<() => string>();
 jest.unstable_mockModule('node:fs/promises', () => ({
   readFile: () => Promise.resolve('You are a helpful assistant. Model: {{MODEL}}'),
   access: () => Promise.reject(new Error('ENOENT')),
+  readdir: () => Promise.resolve([]),
+  stat: () => Promise.resolve({ isDirectory: () => false }),
+  realpath: (path: string) => Promise.resolve(path),
   constants: { R_OK: 4 },
 }));
 

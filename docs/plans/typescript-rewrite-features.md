@@ -173,25 +173,86 @@ Add local inference via OpenAI-compatible API in `model/providers/local.ts`. Tar
 
 ## Phase 4: Skills System
 
-**Goal:** Skills system with toolsets (scripts deferred to post-MVP)
+**Goal:** Implement Agent Skills per the official [agentskills.io](https://agentskills.io) specification
 
-### Feature 25: Define SKILL.md manifest format with Zod validation
-Port the SKILL.md manifest format (YAML frontmatter + markdown instructions) with Zod validation. Fields: name, description, version, triggers (keywords, verbs, patterns), toolsets. Scripts field parsed but not executed in MVP. Document on-disk layout under `skills/` and `_bundled_skills/`.
+> **Spec Alignment (2024-12):** Phase 4 follows the official Agent Skills specification exactly.
+> Skills are portable across Claude Code, Claude.ai, and any spec-compliant agent.
 
-### Feature 26: Port skill discovery and loader
-Reimplement `agent-base/src/agent/skills/loader.py` to scan bundled and plugin directories for SKILL.md files, validate manifests, and dynamically import toolset classes. Implement 3-state enablement logic (user override → explicit setting → manifest default).
+### Feature 25: SKILL.md Manifest Schema with Spec-Compliant Zod Validation
+Implement Zod schemas for SKILL.md frontmatter matching the official Agent Skills spec exactly.
 
-### Feature 27: Implement skill registry and documentation index
-Port `registry.py` for persistent skill metadata (`~/.agent/skills/registry.json`) and `documentation_index.py` for runtime context injection. Support atomic writes and case-insensitive lookups via canonical name normalization.
+**Required fields:**
+- `name` - 1-64 chars, lowercase alphanumeric + hyphens, must match directory name
+- `description` - 1-1024 chars, describes what skill does and when to use it
 
-### Feature 28: Implement progressive disclosure context injection
-Port `skills/context_provider.py` with 4-tier disclosure: (0) nothing, (1) breadcrumb, (2) registry listing, (3) full documentation. Implement trigger matching (skill name, keywords, verbs, regex patterns) through callbacks.
+**Optional fields:**
+- `license` - License name or file reference
+- `compatibility` - 1-500 chars, environment requirements
+- `metadata` - Arbitrary key-value mapping for extensions
+- `allowed-tools` - Space-delimited tool patterns (experimental)
 
-### Feature 29: Implement Azure AI Foundry provider
-Build a custom LangChain `BaseChatModel` adapter that maps agent-base Foundry settings to the Foundry API in `model/providers/azure-foundry.ts`. This completes seven-provider parity.
+Port validation logic from [skills-ref](https://github.com/agentskills/agentskills/tree/main/skills-ref) Python reference. Include YAML frontmatter parser using `yaml` package.
 
-### Feature 30: Port bundled hello-extended skill (toolsets only)
-Migrate the `hello-extended` skill toolsets from Python to TypeScript as a reference implementation in `_bundled_skills/hello-extended/`. Validates the full toolset loading and context injection flow.
+**Key files:** `src/skills/manifest.ts`, `src/skills/parser.ts`
+
+### Feature 26: Skill Discovery and Loader
+Scan configured directories for valid skills (folders containing SKILL.md). Parse frontmatter and validate against spec schema. Build skill index with metadata and absolute paths.
+
+**Skill locations:**
+- Bundled: `src/_bundled_skills/`
+- User: `~/.agent/skills/`
+- Project: `./.agent/skills/` (future)
+
+No dynamic class loading or toolsets - just metadata collection per spec.
+
+**Key files:** `src/skills/loader.ts`, `src/skills/types.ts`
+
+### Feature 27: Skill Prompt Generation (`<available_skills>` XML)
+Generate `<available_skills>` XML block for system prompt injection per spec format:
+
+```xml
+<available_skills>
+<skill>
+<name>skill-name</name>
+<description>What it does and when to use it</description>
+<location>/absolute/path/to/skill/SKILL.md</location>
+</skill>
+</available_skills>
+```
+
+HTML-escape all content. Integrate with Agent system prompt assembly in `agent/prompts.ts`. No persistent registry needed - discover skills on startup.
+
+**Key files:** `src/skills/prompt.ts`
+
+### Feature 28: Progressive Disclosure (3-Tier Spec Model)
+Implement the spec's 3-tier progressive disclosure model:
+
+1. **Metadata** (~100 tokens/skill) - Inject `<available_skills>` XML at startup
+2. **Instructions** (<5000 tokens) - Agent reads full SKILL.md via Read tool when activated
+3. **Resources** (as needed) - Agent reads `scripts/`, `references/`, `assets/` on demand
+
+**No custom trigger matching** - the LLM decides which skill to activate based on the description field matching user intent. This is simpler and more portable than explicit triggers.
+
+**Key files:** `src/skills/context-provider.ts`
+
+### Feature 29: ~~Azure AI Foundry provider~~ (Moved to Phase 3)
+*Already implemented as Feature 23a in Phase 3.*
+
+### Feature 30: Bundled hello-world Skill (Spec-Compliant Example)
+Create `src/_bundled_skills/hello-world/` with spec-compliant structure:
+
+```
+hello-world/
+├── SKILL.md              # Frontmatter + instructions
+├── scripts/              # Optional executable scripts
+│   └── greet.sh
+└── references/           # Optional documentation
+    └── EXAMPLES.md
+```
+
+Validates the full discovery → prompt injection → activation → execution flow. Serves as reference implementation for skill authors.
+
+**Key files:** `src/_bundled_skills/hello-world/SKILL.md`
 
 ---
 
@@ -206,7 +267,7 @@ Recreate `config init`, `config show`, `config edit` commands in `commands/confi
 Port provider-specific setup flows from `agent-base/src/agent/config/providers/` that guide users through API key entry, endpoint configuration, and validation. Make each provider testable before saving.
 
 ### Feature 33: Implement skill management commands
-Add `skill list`, `skill enable`, `skill disable` commands in `commands/skills.tsx`. Show skill status, available triggers, and registered tools.
+Add `skill list`, `skill info <name>`, `skill validate <path>` commands in `commands/skills.tsx`. Show discovered skills, their descriptions, and locations. Validate skill directories against the spec.
 
 ### Feature 34: Add session management commands
 Implement `session list`, `session continue`, `session purge` in `commands/session.tsx`. Allow users to manage conversation history from the CLI.
@@ -249,8 +310,14 @@ Review all error paths for clear, actionable messages. Ensure graceful degradati
 
 These features are explicitly deferred to keep MVP scope manageable:
 
-### Feature 43: Skill script execution
-Add Bun subprocess execution for skill scripts. Port `script_tools.py` patterns: process isolation via `Bun.spawn()`, timeout enforcement (60s default), output size limits (1MB), argument validation (max 100 args, 4096 bytes). Scripts must return JSON with `{success, result|error, message}` format. This completes full parity with Python skills system.
+### Feature 43: Skill script execution (`scripts/` directory)
+Add Bun subprocess execution for scripts in skill `scripts/` directories per Agent Skills spec. Use `Bun.spawn()` with:
+- Process isolation and sandboxing
+- Timeout enforcement (60s default)
+- Output size limits (1MB)
+- Argument validation (max 100 args, 4096 bytes)
+
+Scripts are language-agnostic (Bash, Python, TypeScript, etc.) and executed via the agent's shell access. This completes spec-compliant skill execution.
 
 ### Feature 44: Git-based skill installation
 Support `skill install <git-url>` for installing skills from repositories. Port `manager.py` patterns: shallow clone, structure detection (single-skill, subdirectory, monorepo), atomic installation to `~/.agent/skills/`.
@@ -271,9 +338,11 @@ Prepare package.json for npm publication, set up CI/CD for releases.
 | 1b | 9-11 | 3 | Foundation observability: OpenTelemetry, GenAI conventions, Aspire Dashboard |
 | 2 | 12-17 | 6 | Multi-provider (Anthropic, Gemini, Azure), retry, CLI shell, input, display, **FileSystem tools** |
 | 3 | 18-24 (+23a) | 8 | Memory, context, sessions, streaming, tokens, GitHub, Azure Foundry (Local/Cloud), Local (Docker Model Runner) |
-| 4 | 25-30 | 6 | Skills: SKILL.md manifest, loader, registry, progressive disclosure, Foundry, bundled skill (**toolsets only**) |
+| 4 | 25-30 | 5 | Skills: **Spec-compliant** manifest, loader, prompt generation, progressive disclosure, bundled example |
 | 5 | 31-35 | 5 | Config commands, wizards, skill commands, session commands, help |
 | 6 | 36-42 | 7 | Tests, migration tool, prompts, CLAUDE.md, docs, polish |
-| Post | 43-46 | 4 | **Script execution**, git skills, Mem0, npm publish |
+| Post | 43-46 | 4 | **Script execution** (scripts/ dir), git skills, Mem0, npm publish |
 
-**MVP Total: 43 features** (script execution deferred to post-MVP)
+**MVP Total: 42 features** (Feature 29 merged into 23a; script execution deferred to post-MVP)
+
+> **Note:** Phase 4 aligns with the official [Agent Skills specification](https://agentskills.io). Skills created for this framework are portable to Claude Code, Claude.ai, and other spec-compliant agents.

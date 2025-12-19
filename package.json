@@ -11,7 +11,8 @@
   ],
   "scripts": {
     "dev": "bun run src/index.tsx",
-    "build": "bun build src/index.tsx --outdir dist --target bun",
+    "build": "bun build src/index.tsx --outdir dist --target bun && bun run build:assets",
+    "build:assets": "bun run scripts/copy-assets.ts",
     "typecheck": "tsc --noEmit",
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
     "lint": "eslint src/",
@@ -40,6 +41,7 @@
     "meow": "^14.0.0",
     "p-queue": "^9.0.1",
     "react": "^19.2.3",
+    "yaml": "^2.8.2",
     "zod": "^4.1.13"
   },
   "devDependencies": {

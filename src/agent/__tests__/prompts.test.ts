@@ -9,11 +9,17 @@ import type { AppConfig } from '../../config/schema.js';
 // Create mock functions that we can reference
 const mockReadFile = jest.fn<(path: string, encoding: BufferEncoding) => Promise<string>>();
 const mockAccess = jest.fn<(path: string, mode?: number) => Promise<void>>();
+const mockReaddir = jest.fn<() => Promise<never[]>>();
+const mockStat = jest.fn<() => Promise<{ isDirectory: () => boolean }>>();
+const mockRealpath = jest.fn<(path: string) => Promise<string>>();
 
 // Mock fs/promises BEFORE any imports that use it
 jest.unstable_mockModule('node:fs/promises', () => ({
   readFile: mockReadFile,
   access: mockAccess,
+  readdir: mockReaddir,
+  stat: mockStat,
+  realpath: mockRealpath,
   constants: { R_OK: 4 },
 }));
 

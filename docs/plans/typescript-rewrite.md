@@ -114,30 +114,33 @@ const ProviderConfigSchema = z.object({
 type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 ```
 
-### 5. Skills System (Ported from Python)
+### 5. Skills System (Agent Skills Specification)
 
-**From:** SKILL.md manifests + PEP 723 scripts + `uv run`
-**To:** SKILL.md manifests (YAML frontmatter) + TypeScript toolsets
+**From:** Custom SKILL.md + PEP 723 scripts + triggers
+**To:** Official [Agent Skills](https://agentskills.io) specification
 
 ```
 skills/
-├── hello-extended/
+├── hello-world/
 │   ├── SKILL.md            # Manifest (YAML frontmatter + markdown instructions)
-│   └── toolsets/
-│       └── index.ts        # Exported tool classes
+│   ├── scripts/            # Optional executable scripts
+│   ├── references/         # Optional documentation
+│   └── assets/             # Optional templates, resources
 ```
 
-**MVP Scope:** Toolsets only. Scripts deferred to post-MVP.
+**Manifest Fields (per spec):**
+- `name` (required) - 1-64 chars, lowercase alphanumeric + hyphens
+- `description` (required) - 1-1024 chars, what skill does + when to use
+- `license`, `compatibility`, `metadata`, `allowed-tools` (optional)
 
-**Toolsets vs Scripts:**
-- **Toolsets**: TypeScript classes loaded into LLM context, low latency, testable
-- **Scripts**: Subprocess execution with process isolation (post-MVP)
+**MVP Scope:** Discovery, prompt injection, and agent-driven activation. Scripts deferred to post-MVP.
 
-**Progressive disclosure preserved:**
-1. Tier 0: Nothing (no skills)
-2. Tier 1: Breadcrumb "[N skills available]"
-3. Tier 2: Registry with brief descriptions
-4. Tier 3: Full documentation for matched triggers
+**Progressive disclosure (3-tier per spec):**
+1. **Metadata** (~100 tokens/skill) - name + description in `<available_skills>` XML at startup
+2. **Instructions** (<5000 tokens) - full SKILL.md body when agent activates skill
+3. **Resources** (as needed) - scripts/, references/, assets/ loaded on demand
+
+**No custom triggers** - LLM matches user intent to skill descriptions. Simpler and portable.
 
 ### 6. Memory System
 
@@ -377,29 +380,31 @@ src/
 
 ### Phase 4: Skills System
 
-**Goal:** Skills system with toolsets (scripts deferred to post-MVP)
+**Goal:** Implement Agent Skills per the official [agentskills.io](https://agentskills.io) specification
+
+> **Spec Alignment:** Skills are portable across Claude Code, Claude.ai, and any spec-compliant agent.
 
 **Deliverables:**
-- [ ] SKILL.md manifest format with Zod validation
-- [ ] Skill loader and discovery (3-state enablement)
-- [ ] Skill registry with atomic persistence
-- [ ] Progressive disclosure context injection (4-tier)
-- [ ] Azure AI Foundry provider
-- [ ] Bundled hello-extended skill (toolsets only)
+- [ ] SKILL.md manifest schema with spec-compliant Zod validation
+- [ ] Skill discovery and loader (bundled + user directories)
+- [ ] `<available_skills>` XML prompt generation
+- [ ] Progressive disclosure (3-tier spec model)
+- [ ] Bundled hello-world skill (spec-compliant example)
 
 **Key Files:**
 ```
 src/
 ├── skills/
-│   ├── manifest.ts         # Zod schemas, YAML parsing
-│   ├── loader.ts           # Discovery, dynamic import
-│   ├── registry.ts         # Persistent metadata
+│   ├── manifest.ts         # Zod schemas for spec fields
+│   ├── parser.ts           # YAML frontmatter parsing
+│   ├── loader.ts           # Discovery, validation
+│   ├── prompt.ts           # XML generation for system prompt
 │   └── context-provider.ts # Progressive disclosure
 └── _bundled_skills/
-    └── hello-extended/
-        ├── SKILL.md
-        └── toolsets/
-            └── index.ts
+    └── hello-world/
+        ├── SKILL.md        # Spec-compliant manifest
+        ├── scripts/        # Optional executable scripts
+        └── references/     # Optional documentation
 ```
 
 ### Phase 5: CLI Completeness
@@ -409,7 +414,7 @@ src/
 **Deliverables:**
 - [ ] Config subcommands (init, show, edit)
 - [ ] Provider setup wizards
-- [ ] Skill management (list, enable, disable)
+- [ ] Skill management (list, info, validate)
 - [ ] Memory/session commands (list, continue, purge)
 - [ ] Help system and documentation
 

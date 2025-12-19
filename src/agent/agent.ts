@@ -17,8 +17,10 @@ import type { TokenUsage } from '../model/types.js';
 import type { AgentOptions, Message, SpanContext } from './types.js';
 import type { AgentCallbacks } from './callbacks.js';
 import type { AgentErrorCode, AgentErrorResponse, ProviderErrorMetadata } from '../errors/index.js';
+import type { DiscoveredSkill, SkillLoaderOptions } from '../skills/types.js';
 import { LLMClient } from '../model/llm.js';
-import { loadSystemPrompt } from './prompts.js';
+import { loadSystemPrompt, loadSkillsContext } from './prompts.js';
+import { generateAvailableSkillsXml } from '../skills/prompt.js';
 import { createSpanContext, createChildSpanContext } from './callbacks.js';
 import { extractTokenUsage } from '../model/base.js';
 import { errorResponse, mapModelErrorCodeToAgentErrorCode } from '../errors/index.js';
@@ -64,19 +66,24 @@ export class Agent {
   private readonly tools: StructuredToolInterface[];
   private readonly llmClient: LLMClient;
   private readonly maxIterations: number;
+  private readonly includeSkills: boolean;
+  private readonly skillLoaderOptions?: SkillLoaderOptions;
   private systemPrompt: string = '';
   private initialized: boolean = false;
+  private discoveredSkills: DiscoveredSkill[] = [];
 
   constructor(options: AgentOptions) {
     this.config = options.config;
     this.callbacks = options.callbacks;
     this.tools = options.tools ?? [];
     this.maxIterations = options.maxIterations ?? DEFAULT_MAX_ITERATIONS;
+    this.includeSkills = options.includeSkills !== false; // Default: true
+    this.skillLoaderOptions = options.skillLoaderOptions;
 
     // Create LLMClient from config
     this.llmClient = new LLMClient({ config: this.config });
 
-    // If system prompt override provided, use it directly
+    // If system prompt override provided, use it directly (skip skills)
     if (options.systemPrompt !== undefined && options.systemPrompt !== '') {
       this.systemPrompt = options.systemPrompt;
       this.initialized = true;
@@ -84,20 +91,96 @@ export class Agent {
   }
 
   /**
-   * Initialize agent (load system prompt).
+   * Initialize agent (load system prompt and discover skills).
    * Called automatically on first run() if not already initialized.
    */
   private async initialize(): Promise<void> {
     if (this.initialized) return;
 
-    // Load system prompt with three-tier fallback
-    this.systemPrompt = await loadSystemPrompt({
+    // Load base system prompt (without skills)
+    const basePrompt = await loadSystemPrompt({
       config: this.config,
       model: this.getModelName(),
       provider: this.getProviderName(),
     });
 
+    // Discover and filter skills if enabled
+    if (this.includeSkills) {
+      // Prepare skill loader options, merging config.skills with explicit options
+      const skillLoaderOptions: SkillLoaderOptions = {
+        userDir: this.config.skills.userDir ?? this.skillLoaderOptions?.userDir,
+        bundledDir: this.skillLoaderOptions?.bundledDir,
+        projectDir: this.skillLoaderOptions?.projectDir,
+        onDebug: this.skillLoaderOptions?.onDebug ?? this.callbacks?.onDebug,
+      };
+
+      // Discover all skills
+      const { skills } = await loadSkillsContext(skillLoaderOptions);
+
+      // Apply config.skills filtering (disabledBundled/enabledBundled)
+      const filteredSkills = this.filterSkillsByConfig(skills);
+
+      // Generate XML from filtered skills only
+      const skillsXml = generateAvailableSkillsXml(filteredSkills);
+
+      // Combine base prompt with filtered skills XML
+      this.systemPrompt = skillsXml ? `${basePrompt}\n\n${skillsXml}` : basePrompt;
+      this.discoveredSkills = filteredSkills;
+
+      this.callbacks?.onDebug?.('Agent initialized with skills', {
+        discoveredCount: skills.length,
+        filteredCount: filteredSkills.length,
+        skillNames: filteredSkills.map((s) => s.manifest.name),
+      });
+    } else {
+      this.systemPrompt = basePrompt;
+      this.discoveredSkills = [];
+
+      this.callbacks?.onDebug?.('Agent initialized without skills');
+    }
+
     this.initialized = true;
+  }
+
+  /**
+   * Filter discovered skills based on config.skills settings.
+   * - disabledBundled: Skills to exclude
+   * - enabledBundled: If non-empty, only include these bundled skills
+   */
+  private filterSkillsByConfig(skills: DiscoveredSkill[]): DiscoveredSkill[] {
+    const { disabledBundled, enabledBundled } = this.config.skills;
+
+    return skills.filter((skill) => {
+      // Only apply filtering to bundled skills
+      if (skill.source !== 'bundled') {
+        return true;
+      }
+
+      // Check if explicitly disabled
+      if (disabledBundled.includes(skill.manifest.name)) {
+        this.callbacks?.onDebug?.('Skill disabled by config', { name: skill.manifest.name });
+        return false;
+      }
+
+      // If enabledBundled is specified, only allow those skills
+      if (enabledBundled.length > 0 && !enabledBundled.includes(skill.manifest.name)) {
+        this.callbacks?.onDebug?.('Skill not in enabledBundled list', {
+          name: skill.manifest.name,
+        });
+        return false;
+      }
+
+      return true;
+    });
+  }
+
+  /**
+   * Get discovered skills (available after initialization).
+   *
+   * @returns Array of discovered skills
+   */
+  getDiscoveredSkills(): DiscoveredSkill[] {
+    return this.discoveredSkills;
   }
 
   /**

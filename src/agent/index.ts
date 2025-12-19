@@ -41,8 +41,14 @@ export {
 export { createSpanContext, createChildSpanContext } from './callbacks.js';
 export {
   loadSystemPrompt,
+  loadSystemPromptWithSkills,
+  loadSkillsContext,
   replacePlaceholders,
   stripYamlFrontMatter,
   type PromptOptions,
+  type PromptOptionsWithSkills,
   type PlaceholderValues,
 } from './prompts.js';
+
+// ─── Skills (re-exported for convenience) ───────────────────────────────────
+export type { DiscoveredSkill, SkillLoaderOptions } from '../skills/types.js';
