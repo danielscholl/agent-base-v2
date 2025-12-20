@@ -51,7 +51,7 @@ export async function setupAzure(context: CommandContext): Promise<ProviderSetup
     config: {
       endpoint,
       deployment: deploymentName,
-      apiKey: apiKey || undefined,
+      apiKey: apiKey.trim() || undefined,
       apiVersion,
     },
     message: 'Azure OpenAI configured successfully',

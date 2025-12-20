@@ -7,6 +7,14 @@ import type { CommandHandler, CommandResult } from './types.js';
 import { loadConfig, ConfigManager } from '../../config/manager.js';
 import { getDefaultConfig, type AppConfig } from '../../config/schema.js';
 import { getProviderWizards } from '../../config/providers/index.js';
+import { PROVIDER_NAMES, type ProviderName } from '../../config/constants.js';
+
+/**
+ * Type guard to check if a string is a valid provider name.
+ */
+function isValidProviderName(name: string): name is ProviderName {
+  return (PROVIDER_NAMES as readonly string[]).includes(name);
+}
 
 /**
  * Main config command handler.
@@ -213,12 +221,21 @@ export const configInitHandler: CommandHandler = async (_args, context): Promise
     ? (configResult.result as AppConfig)
     : getDefaultConfig();
 
+  // Validate provider name before using it
+  if (!isValidProviderName(selectedProvider.name)) {
+    context.onOutput(
+      `Invalid provider name: ${selectedProvider.name}. Expected one of: ${PROVIDER_NAMES.join(', ')}`,
+      'error'
+    );
+    return { success: false, message: 'Invalid provider name' };
+  }
+
   // Merge provider config
   const newConfig: AppConfig = {
     ...existingConfig,
     providers: {
       ...existingConfig.providers,
-      default: selectedProvider.name as AppConfig['providers']['default'],
+      default: selectedProvider.name,
       [selectedProvider.name]: wizardResult.config,
     },
   };
@@ -279,15 +296,14 @@ export const configEditHandler: CommandHandler = async (args, context): Promise<
 
   switch (fieldPath) {
     case 'providers.default': {
-      const providers = ['openai', 'anthropic', 'azure', 'foundry', 'gemini', 'github', 'local'];
       context.onOutput(`Current value: ${config.providers.default}`, 'info');
-      context.onOutput(`Valid options: ${providers.join(', ')}`, 'info');
+      context.onOutput(`Valid options: ${PROVIDER_NAMES.join(', ')}`, 'info');
       newValue = await context.onPrompt('New value:');
-      if (!providers.includes(newValue)) {
+      if (!isValidProviderName(newValue)) {
         context.onOutput('Invalid provider name', 'error');
         return { success: false, message: 'Invalid provider' };
       }
-      config.providers.default = newValue as AppConfig['providers']['default'];
+      config.providers.default = newValue;
       break;
     }
 

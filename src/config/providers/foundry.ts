@@ -58,8 +58,14 @@ export async function setupFoundry(context: CommandContext): Promise<ProviderSet
       'Project Endpoint (https://...services.ai.azure.com/):'
     );
 
-    if (!projectEndpoint || !projectEndpoint.includes('azure')) {
-      context.onOutput('Invalid endpoint format', 'error');
+    // Validate Azure AI Foundry endpoint format
+    const isValidEndpoint =
+      projectEndpoint !== '' &&
+      projectEndpoint.startsWith('https://') &&
+      projectEndpoint.includes('.ai.azure.com');
+
+    if (!isValidEndpoint) {
+      context.onOutput('Invalid endpoint format. Expected: https://...ai.azure.com/', 'error');
       return { success: false, message: 'Invalid project endpoint' };
     }
 
@@ -81,7 +87,7 @@ export async function setupFoundry(context: CommandContext): Promise<ProviderSet
         mode: 'cloud',
         projectEndpoint,
         modelDeployment,
-        apiKey: apiKey || undefined,
+        apiKey: apiKey.trim() || undefined,
       },
       message: 'Foundry (cloud) configured successfully',
     };

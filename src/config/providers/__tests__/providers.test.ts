@@ -230,18 +230,20 @@ describe('Provider Setup Wizards', () => {
       expect(result.message).toBe('Interactive prompts not available');
     });
 
-    it('validates API key length', async () => {
+    it('validates API key format', async () => {
       const { setupGemini } = await import('../gemini.js');
-      const context = createMockContext(['short']);
+      const context = createMockContext(['invalid-key']);
       const result = await setupGemini(context);
 
       expect(result.success).toBe(false);
       expect(result.message).toBe('Invalid API key format');
+      expect(
+        context.outputs.some((o) => o.content.includes('Expected key starting with "AIzaSy"'))
+      ).toBe(true);
     });
 
-    it('accepts valid API key (20+ chars)', async () => {
+    it('accepts valid API key with AIzaSy prefix', async () => {
       const { setupGemini } = await import('../gemini.js');
-      // API key must be at least 20 chars
       const context = createMockContext(['AIzaSyAbcdefghij1234567890', '']);
       const result = await setupGemini(context);
 

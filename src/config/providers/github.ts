@@ -43,7 +43,7 @@ export async function setupGitHub(context: CommandContext): Promise<ProviderSetu
       token,
       model,
       endpoint: DEFAULT_GITHUB_ENDPOINT,
-      org: org || undefined,
+      org: org.trim() || undefined,
     },
     message: 'GitHub Models configured successfully',
   };

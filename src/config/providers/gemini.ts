@@ -20,10 +20,10 @@ export async function setupGemini(context: CommandContext): Promise<ProviderSetu
   }
 
   // Prompt for API key
-  const apiKey = await context.onPrompt('Gemini API Key:');
+  const apiKey = await context.onPrompt('Gemini API Key (AIzaSy...):');
 
-  if (!apiKey || apiKey.length < 20) {
-    context.onOutput('Invalid API key. Key appears too short.', 'error');
+  if (!apiKey || !apiKey.startsWith('AIzaSy')) {
+    context.onOutput('Invalid API key format. Expected key starting with "AIzaSy"', 'error');
     return { success: false, message: 'Invalid API key format' };
   }
 
