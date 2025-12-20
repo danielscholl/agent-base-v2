@@ -14,6 +14,8 @@ export const COMMAND_SESSIONS = ['/sessions'] as const;
 export const COMMAND_RESUME = ['/resume'] as const;
 export const COMMAND_PURGE = ['/purge'] as const;
 export const COMMAND_CONTINUE = ['/continue'] as const;
+export const COMMAND_CONFIG = ['/config'] as const;
+export const COMMAND_SKILL = ['/skill', '/skills'] as const;
 
 /** Shell command prefix */
 export const SHELL_PREFIX = '!' as const;

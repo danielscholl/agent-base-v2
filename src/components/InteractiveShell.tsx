@@ -50,6 +50,16 @@ const INITIAL_TOKEN_USAGE: SessionTokenUsage = {
 };
 
 /**
+ * Prompt state for interactive command prompts.
+ */
+interface PromptState {
+  /** The question being asked */
+  question: string;
+  /** Resolver function to complete the prompt */
+  resolve: (value: string) => void;
+}
+
+/**
  * Shell state interface.
  */
 interface ShellState {
@@ -68,6 +78,8 @@ interface ShellState {
   resumedSessionId: string | null;
   /** Session-level token usage statistics */
   tokenUsage: SessionTokenUsage;
+  /** Active prompt state for interactive commands */
+  promptState: PromptState | null;
 }
 
 /**
@@ -98,6 +110,7 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
     completedTasks: [],
     resumedSessionId: null,
     tokenUsage: INITIAL_TOKEN_USAGE,
+    promptState: null,
   });
 
   // Load config on mount and handle session resume
@@ -294,7 +307,9 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
 
   // Handle input submission
   const handleSubmit = useCallback(async () => {
-    let query = state.input.trim();
+    // Use stateRef to access current state without adding state to dependencies
+    const currentState = stateRef.current;
+    let query = currentState.input.trim();
 
     if (query === '') return;
 
@@ -305,7 +320,7 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
     }
 
     // Add to history (original input, not unescaped)
-    historyRef.current.add(state.input.trim());
+    historyRef.current.add(currentState.input.trim());
     historyRef.current.reset();
 
     // Check if this is a command (after unescape, so // is not a command)
@@ -319,7 +334,7 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
       // Create command context with fresh output array
       const outputLines: string[] = [];
       const context: CommandContext = {
-        config: state.config,
+        config: currentState.config,
         onOutput: (content: string, _type?: 'info' | 'success' | 'warning' | 'error') => {
           // Collect all output lines
           outputLines.push(content);
@@ -345,6 +360,15 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
                 { role: 'system' as const, content: outputLines.join('\n'), timestamp: new Date() },
               ],
             };
+          });
+        },
+        onPrompt: (question: string): Promise<string> => {
+          return new Promise((resolve) => {
+            setState((s) => ({
+              ...s,
+              promptState: { question, resolve },
+              input: '', // Clear any existing input
+            }));
           });
         },
         exit,
@@ -390,9 +414,9 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
               const storedMessages: StoredMessage[] = allStored.filter((m) => m.role !== 'tool');
 
               // If no message history, convert current shell messages (adding required id field)
-              if (storedMessages.length === 0 && state.messages.length > 0) {
+              if (storedMessages.length === 0 && currentState.messages.length > 0) {
                 let msgIndex = 0;
-                for (const msg of state.messages) {
+                for (const msg of currentState.messages) {
                   if (msg.role === 'user' || msg.role === 'assistant') {
                     storedMessages.push({
                       id: `msg-${String(Date.now())}-${String(msgIndex++)}`,
@@ -423,9 +447,9 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
               }
 
               // Extract provider/model from config for session metadata
-              const saveProvider = state.config?.providers.default ?? 'unknown';
-              const saveProviderConfig = state.config?.providers[
-                saveProvider as keyof typeof state.config.providers
+              const saveProvider = currentState.config?.providers.default ?? 'unknown';
+              const saveProviderConfig = currentState.config?.providers[
+                saveProvider as keyof typeof currentState.config.providers
               ] as Record<string, unknown> | undefined;
               const saveModel = (saveProviderConfig?.model ??
                 saveProviderConfig?.deployment ??
@@ -581,10 +605,10 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
 
     // Synchronize filesystem writes config to env var before each run
     // This ensures config changes (e.g., via /config command) are propagated
-    syncFilesystemWritesEnvVar(state.config);
+    syncFilesystemWritesEnvVar(currentState.config);
 
     // Initialize agent lazily with callbacks wired to state
-    if (agentRef.current === null && state.config !== null) {
+    if (agentRef.current === null && currentState.config !== null) {
       const callbacks = createCallbacks({
         setSpinnerMessage: (msg) => {
           setState((s) => ({ ...s, spinnerMessage: msg ?? '' }));
@@ -685,7 +709,7 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
       ];
 
       agentRef.current = new Agent({
-        config: state.config,
+        config: currentState.config,
         callbacks,
         tools: filesystemTools,
       });
@@ -730,10 +754,10 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
         isProcessing: false,
       }));
     }
-    // Note: state.config?.memory?.enabled is intentionally NOT in the dependency array.
+    // Note: We use stateRef.current to access state without adding it to dependencies.
+    // This avoids unnecessary re-creation of the callback on every state change.
     // Runtime config changes to memory.enabled are not supported and require a session restart.
-    // messageHistoryRef is initialized once on mount (lines 91-95) and doesn't change during runtime.
-  }, [state.input, state.config, exit, addSystemMessage, syncFilesystemWritesEnvVar]);
+  }, [exit, addSystemMessage, syncFilesystemWritesEnvVar]);
 
   // Handle key input - gated until config loads
   useInput((input, key) => {
@@ -753,6 +777,32 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
 
     // Don't process input until config is loaded
     if (!state.configLoaded) return;
+
+    // Handle prompt mode input
+    if (state.promptState !== null) {
+      if (key.escape) {
+        // Cancel prompt with empty response
+        const { resolve } = state.promptState;
+        setState((s) => ({ ...s, promptState: null, input: '' }));
+        resolve('');
+        return;
+      }
+      if (key.return) {
+        // Resolve prompt with current input
+        const { resolve } = state.promptState;
+        const response = state.input;
+        setState((s) => ({ ...s, promptState: null, input: '' }));
+        resolve(response);
+        return;
+      }
+      // Handle text input in prompt mode
+      if (key.backspace || key.delete) {
+        setState((s) => ({ ...s, input: s.input.slice(0, -1) }));
+      } else if (!key.ctrl && !key.meta && input.length === 1) {
+        setState((s) => ({ ...s, input: s.input + input }));
+      }
+      return;
+    }
 
     // Don't process other input while agent is working
     if (state.isProcessing) return;
@@ -871,8 +921,17 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
         <TokenUsageDisplay usage={state.tokenUsage} />
       )}
 
+      {/* Interactive prompt for commands (e.g., /config init) */}
+      {state.promptState !== null && (
+        <Box>
+          <Text color="yellow">{state.promptState.question} </Text>
+          <Text>{state.input}</Text>
+          <Text color="yellow">{'█'}</Text>
+        </Box>
+      )}
+
       {/* Input prompt */}
-      {!state.isProcessing && (
+      {!state.isProcessing && state.promptState === null && (
         <Box>
           <Text color="cyan">{'> '}</Text>
           <Text>{state.input}</Text>

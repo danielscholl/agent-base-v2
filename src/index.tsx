@@ -21,15 +21,22 @@ const cli = meow(
     --check                Show configuration and connectivity
     --tools                Show tool configuration
     --version              Show version
-    --provider <name>      Override provider
+    --provider <name>      Override provider (openai|anthropic|azure|...)
     --model <name>         Override model name
     --continue             Resume last session
     --verbose              Show detailed execution
+
+  Interactive Commands
+    /help                  Show all available commands
+    /config init           Interactive configuration setup
+    /skill list            Show available skills
+    /save [name]           Save current session
 
   Examples
     $ agent                           # Interactive mode
     $ agent -p "Say hello"            # Single prompt
     $ agent --provider anthropic      # Use specific provider
+    $ agent --continue                # Resume last session
 `,
   {
     importMeta: import.meta,

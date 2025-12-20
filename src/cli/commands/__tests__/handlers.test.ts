@@ -77,19 +77,21 @@ describe('Command Handlers', () => {
       expect(context.outputs.length).toBeGreaterThan(0);
 
       const helpText = context.outputs[0].content;
-      expect(helpText).toContain('Available Commands');
+      expect(helpText).toContain('Agent Framework Help');
       expect(helpText).toContain('/exit');
       expect(helpText).toContain('/help');
       expect(helpText).toContain('/clear');
       expect(helpText).toContain('/telemetry');
-      expect(helpText).toContain('Keyboard Shortcuts');
+      expect(helpText).toContain('KEYBOARD SHORTCUTS');
       expect(helpText).toContain('ESC');
       expect(helpText).toContain('Ctrl+C');
       expect(helpText).toContain('Ctrl+D');
       expect(helpText).toContain('Up/Down');
-      // Should NOT contain unimplemented commands
-      expect(helpText).not.toContain('/continue');
-      expect(helpText).not.toContain('/purge');
+      // New commands should be present
+      expect(helpText).toContain('/config');
+      expect(helpText).toContain('/skill');
+      expect(helpText).toContain('/continue');
+      expect(helpText).toContain('/purge');
     });
   });
 
