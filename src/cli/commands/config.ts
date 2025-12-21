@@ -42,8 +42,50 @@ export const configHandler: CommandHandler = async (args, context): Promise<Comm
 };
 
 /**
+ * Get list of configured providers (have apiKey, token, or endpoint set).
+ */
+function getConfiguredProviders(config: AppConfig): ProviderName[] {
+  const configured: ProviderName[] = [];
+  for (const name of PROVIDER_NAMES) {
+    const providerConfig = config.providers[name] as Record<string, unknown> | undefined;
+    if (providerConfig === undefined) continue;
+
+    // Local is always "configured"
+    if (name === 'local') {
+      configured.push(name);
+      continue;
+    }
+
+    // Check for explicit configuration
+    const hasApiKey = providerConfig.apiKey !== undefined;
+    const hasToken = providerConfig.token !== undefined;
+    const hasEndpoint =
+      providerConfig.endpoint !== undefined || providerConfig.projectEndpoint !== undefined;
+
+    if (hasApiKey || hasToken || hasEndpoint) {
+      configured.push(name);
+    }
+  }
+  return configured;
+}
+
+/**
+ * Create a table row with proper padding.
+ */
+function tableRow(
+  setting: string,
+  value: string,
+  settingWidth: number,
+  valueWidth: number
+): string {
+  const paddedSetting = setting.padEnd(settingWidth);
+  const paddedValue = value.padEnd(valueWidth);
+  return `│ ${paddedSetting} │ ${paddedValue} │`;
+}
+
+/**
  * Handler for /config show command.
- * Displays current configuration in readable format.
+ * Displays current configuration in a formatted table like osdu-agent.
  */
 export const configShowHandler: CommandHandler = async (_args, context): Promise<CommandResult> => {
   const configResult = await loadConfig();
@@ -55,104 +97,126 @@ export const configShowHandler: CommandHandler = async (_args, context): Promise
 
   const config = configResult.result as AppConfig;
 
-  // Format and display each section
-  context.onOutput('Current Configuration:', 'success');
-  context.onOutput('─────────────────────', 'info');
+  // Build table rows
+  const rows: Array<{ setting: string; value: string }> = [];
 
-  // Provider section
-  context.onOutput('\n[Providers]', 'info');
-  context.onOutput(`  Default: ${config.providers.default}`, 'info');
+  // Get configured providers
+  const configuredProviders = getConfiguredProviders(config);
 
-  // Show configured providers
-  const providers = [
-    'openai',
-    'anthropic',
-    'azure',
-    'foundry',
-    'gemini',
-    'github',
-    'local',
-  ] as const;
-  for (const name of providers) {
-    const providerConfig = config.providers[name];
-    if (providerConfig) {
-      const model =
-        'model' in providerConfig
-          ? providerConfig.model
-          : 'modelAlias' in providerConfig
-            ? providerConfig.modelAlias
-            : 'deployment' in providerConfig
-              ? providerConfig.deployment
-              : 'N/A';
-      const hasAuth =
-        ('apiKey' in providerConfig &&
-          providerConfig.apiKey !== undefined &&
-          providerConfig.apiKey !== '') ||
-        ('token' in providerConfig &&
-          providerConfig.token !== undefined &&
-          providerConfig.token !== '') ||
-        name === 'local';
-      context.onOutput(
-        `  ${name}: ${model ?? 'N/A'} ${hasAuth ? '(configured)' : '(no auth)'}`,
-        'info'
-      );
+  // Enabled Providers row
+  rows.push({
+    setting: 'Enabled Providers',
+    value: configuredProviders.length > 0 ? configuredProviders.join(', ') : 'none',
+  });
+
+  // Default Provider row
+  rows.push({
+    setting: 'Default Provider',
+    value: config.providers.default,
+  });
+
+  // Provider-specific settings (indented)
+  const defaultProvider = config.providers.default;
+  const defaultConfig = config.providers[defaultProvider] as Record<string, unknown> | undefined;
+
+  if (defaultConfig !== undefined) {
+    // Show endpoint for azure/foundry
+    if (defaultProvider === 'azure') {
+      const endpoint = defaultConfig.endpoint as string | undefined;
+      if (endpoint !== undefined) {
+        rows.push({
+          setting: `  ${defaultProvider} Endpoint`,
+          value: endpoint,
+        });
+      }
+    }
+    if (defaultProvider === 'foundry') {
+      const endpoint = defaultConfig.projectEndpoint as string | undefined;
+      if (endpoint !== undefined) {
+        rows.push({
+          setting: `  ${defaultProvider} Endpoint`,
+          value: endpoint,
+        });
+      }
+    }
+
+    // Show model/deployment
+    const deployment = defaultConfig.deployment as string | undefined;
+    const modelDeployment = defaultConfig.modelDeployment as string | undefined;
+    const model = defaultConfig.model as string | undefined;
+    const modelAlias = defaultConfig.modelAlias as string | undefined;
+
+    if (deployment !== undefined) {
+      rows.push({
+        setting: `  ${defaultProvider} Deployment`,
+        value: deployment,
+      });
+    } else if (modelDeployment !== undefined) {
+      rows.push({
+        setting: `  ${defaultProvider} Deployment`,
+        value: modelDeployment,
+      });
+    } else if (model !== undefined) {
+      rows.push({
+        setting: `  ${defaultProvider} Model`,
+        value: model,
+      });
+    } else if (modelAlias !== undefined) {
+      rows.push({
+        setting: `  ${defaultProvider} Model`,
+        value: modelAlias,
+      });
     }
   }
 
-  // Agent section
-  context.onOutput('\n[Agent]', 'info');
-  context.onOutput(`  Data Dir: ${config.agent.dataDir}`, 'info');
-  context.onOutput(`  Log Level: ${config.agent.logLevel}`, 'info');
-  context.onOutput(
-    `  Filesystem Writes: ${config.agent.filesystemWritesEnabled ? 'enabled' : 'disabled'}`,
-    'info'
-  );
+  // Telemetry row
+  rows.push({
+    setting: 'Telemetry',
+    value: config.telemetry.enabled ? 'Enabled' : 'Disabled',
+  });
 
-  // Memory section
-  context.onOutput('\n[Memory]', 'info');
-  context.onOutput(`  Enabled: ${String(config.memory.enabled)}`, 'info');
-  context.onOutput(`  Type: ${config.memory.type}`, 'info');
-  context.onOutput(`  History Limit: ${String(config.memory.historyLimit)}`, 'info');
+  // Memory row
+  const memoryValue = config.memory.enabled
+    ? `${config.memory.type} (limit: ${String(config.memory.historyLimit)})`
+    : 'Disabled';
+  rows.push({
+    setting: 'Memory',
+    value: memoryValue,
+  });
 
-  // Session section
-  context.onOutput('\n[Session]', 'info');
-  context.onOutput(`  Auto Save: ${String(config.session.autoSave)}`, 'info');
-  context.onOutput(`  Max Sessions: ${String(config.session.maxSessions)}`, 'info');
+  // Data Directory row
+  rows.push({
+    setting: 'Data Directory',
+    value: config.agent.dataDir,
+  });
 
-  // Skills section
-  context.onOutput('\n[Skills]', 'info');
-  context.onOutput(
-    `  Disabled Bundled: ${config.skills.disabledBundled.length > 0 ? config.skills.disabledBundled.join(', ') : 'none'}`,
-    'info'
-  );
-  context.onOutput(
-    `  Enabled Bundled: ${config.skills.enabledBundled.length > 0 ? config.skills.enabledBundled.join(', ') : 'all'}`,
-    'info'
-  );
-  context.onOutput(
-    `  Plugins: ${config.skills.plugins.length > 0 ? config.skills.plugins.join(', ') : 'none'}`,
-    'info'
-  );
-  context.onOutput(`  Script Timeout: ${String(config.skills.scriptTimeout)}ms`, 'info');
+  // Calculate column widths
+  const settingWidth = Math.max(...rows.map((r) => r.setting.length), 'Setting'.length);
+  const valueWidth = Math.max(...rows.map((r) => r.value.length), 'Value'.length);
 
-  // Telemetry section
-  context.onOutput('\n[Telemetry]', 'info');
-  context.onOutput(`  Enabled: ${String(config.telemetry.enabled)}`, 'info');
-  context.onOutput(`  Sensitive Data: ${String(config.telemetry.enableSensitiveData)}`, 'info');
-  if (config.telemetry.otlpEndpoint !== undefined && config.telemetry.otlpEndpoint !== '') {
-    context.onOutput(`  OTLP Endpoint: ${config.telemetry.otlpEndpoint}`, 'info');
+  // Build table
+  const topBorder = `┏${'━'.repeat(settingWidth + 2)}┳${'━'.repeat(valueWidth + 2)}┓`;
+  const headerSep = `┡${'━'.repeat(settingWidth + 2)}╇${'━'.repeat(valueWidth + 2)}┩`;
+  const bottomBorder = `└${'─'.repeat(settingWidth + 2)}┴${'─'.repeat(valueWidth + 2)}┘`;
+
+  // Output title
+  context.onOutput('', 'info');
+  context.onOutput('                            Agent Configuration', 'success');
+
+  // Output table
+  context.onOutput(topBorder, 'info');
+  context.onOutput(tableRow('Setting', 'Value', settingWidth, valueWidth), 'info');
+  context.onOutput(headerSep, 'info');
+
+  for (const row of rows) {
+    context.onOutput(tableRow(row.setting, row.value, settingWidth, valueWidth), 'info');
   }
 
-  // Retry section
-  context.onOutput('\n[Retry]', 'info');
-  context.onOutput(`  Enabled: ${String(config.retry.enabled)}`, 'info');
-  context.onOutput(`  Max Retries: ${String(config.retry.maxRetries)}`, 'info');
-  context.onOutput(`  Base Delay: ${String(config.retry.baseDelayMs)}ms`, 'info');
-  context.onOutput(`  Max Delay: ${String(config.retry.maxDelayMs)}ms`, 'info');
-  context.onOutput(`  Jitter: ${String(config.retry.enableJitter)}`, 'info');
+  context.onOutput(bottomBorder, 'info');
 
-  context.onOutput('\n─────────────────────', 'info');
-  context.onOutput('Use /config edit to modify settings', 'info');
+  // Output config file location
+  context.onOutput('', 'info');
+  context.onOutput(`Configuration file: ~/.agent/settings.json`, 'info');
 
   return { success: true, data: config };
 };

@@ -2,6 +2,7 @@
 /**
  * CLI entry point for the agent framework.
  * Parses command-line arguments with meow and renders the appropriate mode.
+ * Handles subcommands (config, skill) before rendering React.
  */
 
 import React from 'react';
@@ -9,12 +10,28 @@ import { render } from 'ink';
 import meow from 'meow';
 import { CLI } from './cli.js';
 import type { CLIFlags } from './cli/types.js';
+import { createCliContext } from './cli/cli-context.js';
+import { configHandler } from './cli/commands/config.js';
+import { skillHandler } from './cli/commands/skills.js';
 
 const cli = meow(
   `
   Usage
     $ agent [options]
+    $ agent config [show|init|edit]
+    $ agent skill [list|info|validate]
     $ agent -p <prompt> [options]
+
+  Commands
+    config                 Manage agent configuration
+      config show          Display current configuration
+      config init          Interactive configuration setup
+      config edit          Edit configuration fields
+
+    skill                  Manage agent skills
+      skill list           List available skills
+      skill info <name>    Show skill details
+      skill validate       Validate skill file
 
   Options
     -p, --prompt <text>    Execute single prompt and exit
@@ -28,13 +45,16 @@ const cli = meow(
 
   Interactive Commands
     /help                  Show all available commands
-    /config init           Interactive configuration setup
-    /skill list            Show available skills
     /save [name]           Save current session
+    /history               Show conversation history
+    /clear                 Clear conversation
+    /exit                  Exit the agent
 
   Examples
     $ agent                           # Interactive mode
     $ agent -p "Say hello"            # Single prompt
+    $ agent config show               # Show configuration
+    $ agent skill list                # List skills
     $ agent --provider anthropic      # Use specific provider
     $ agent --continue                # Resume last session
 `,
@@ -52,6 +72,23 @@ const cli = meow(
     },
   }
 );
+
+// Handle subcommands before rendering React
+const [command, ...restArgs] = cli.input;
+
+if (command === 'config') {
+  const context = await createCliContext();
+  const subArgs = restArgs.join(' ');
+  const result = await configHandler(subArgs, context);
+  process.exit(result.success ? 0 : 1);
+}
+
+if (command === 'skill') {
+  const context = await createCliContext();
+  const subArgs = restArgs.join(' ');
+  const result = await skillHandler(subArgs, context);
+  process.exit(result.success ? 0 : 1);
+}
 
 // Apply overrides to environment before rendering
 if (cli.flags.provider !== undefined && cli.flags.provider !== '') {

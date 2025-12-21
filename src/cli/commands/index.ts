@@ -14,8 +14,6 @@ import {
   COMMAND_RESUME,
   COMMAND_PURGE,
   COMMAND_CONTINUE,
-  COMMAND_CONFIG,
-  COMMAND_SKILL,
   matchesCommand,
   isShellCommand,
   isSlashCommand,
@@ -35,8 +33,11 @@ import {
   purgeHandler,
   continueHandler,
 } from './session.js';
-import { configHandler } from './config.js';
-import { skillHandler } from './skills.js';
+
+// Note: configHandler and skillHandler are exported for CLI subcommand use,
+// but are no longer registered as interactive commands (use `agent config` / `agent skill` instead)
+export { configHandler } from './config.js';
+export { skillHandler } from './skills.js';
 
 export type { CommandDefinition, CommandHandler, CommandContext, CommandResult };
 export {
@@ -51,8 +52,6 @@ export {
   resumeHandler,
   purgeHandler,
   continueHandler,
-  configHandler,
-  skillHandler,
 };
 
 /** All registered commands */
@@ -110,18 +109,6 @@ export const COMMANDS: CommandDefinition[] = [
     aliases: COMMAND_CONTINUE,
     description: 'Continue the last session',
     handler: continueHandler,
-  },
-  {
-    aliases: COMMAND_CONFIG,
-    description: 'Manage configuration',
-    handler: configHandler,
-    usage: '/config [init|show|edit]',
-  },
-  {
-    aliases: COMMAND_SKILL,
-    description: 'Manage skills',
-    handler: skillHandler,
-    usage: '/skill [list|info <name>|validate <path>]',
   },
 ];
 

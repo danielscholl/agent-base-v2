@@ -1,99 +1,335 @@
 /**
  * HealthCheck component.
- * Displays configuration and connectivity status.
+ * Displays configuration and connectivity status in grouped sections.
+ * Follows osdu-agent CLI style with System, Agent, Memory, Docker, and LLM Providers sections.
  */
 
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useApp } from 'ink';
+import * as os from 'node:os';
 import { loadConfig } from '../config/manager.js';
 import { VERSION } from '../cli/version.js';
 import { Spinner } from './Spinner.js';
+import type { AppConfig } from '../config/schema.js';
+import { PROVIDER_NAMES, type ProviderName } from '../config/constants.js';
 
 /**
- * Health check status for a single item.
+ * Status types for color coding.
+ * - ok: green - success, enabled, working
+ * - warning: yellow - disabled, attention needed
+ * - error: red - failed, critical issues
+ * - info: cyan - informational, system data
  */
-interface HealthStatus {
+type ItemStatus = 'ok' | 'warning' | 'error' | 'info';
+
+/**
+ * Item within a health check section.
+ */
+interface SectionItem {
+  label: string;
+  value: string;
+  status: ItemStatus;
+  isDefault?: boolean;
+}
+
+/**
+ * A section of related health check items.
+ */
+interface HealthSection {
   name: string;
-  status: 'ok' | 'error' | 'warning';
-  message: string;
+  items: SectionItem[];
+}
+
+/**
+ * Docker status information.
+ */
+interface DockerStatus {
+  running: boolean;
+  version?: string;
+}
+
+/**
+ * Mask a secret value, showing only the last 6 characters.
+ */
+function maskSecret(secret: string | undefined): string {
+  if (secret === undefined || secret === '') return 'Not configured';
+  if (secret.length <= 8) return '****';
+  return '****' + secret.slice(-6);
+}
+
+/**
+ * Format bytes as GiB.
+ */
+function formatMemory(bytes: number): string {
+  const gib = bytes / 1024 ** 3;
+  return `${gib.toFixed(1)} GiB`;
+}
+
+/**
+ * Get the provider display name (capitalized).
+ */
+function getProviderDisplayName(name: ProviderName): string {
+  const displayNames: Record<ProviderName, string> = {
+    local: 'Local',
+    openai: 'OpenAI',
+    anthropic: 'Anthropic',
+    azure: 'Azure OpenAI',
+    foundry: 'Azure AI Foundry',
+    gemini: 'Google Gemini',
+    github: 'GitHub Models',
+  };
+  return displayNames[name];
+}
+
+/**
+ * Get model name for a provider config.
+ */
+function getModelName(providerName: ProviderName, providerConfig: Record<string, unknown>): string {
+  if (providerName === 'azure') {
+    return (providerConfig.deployment as string) || 'default';
+  }
+  if (providerName === 'foundry') {
+    const mode = providerConfig.mode as string;
+    if (mode === 'local') {
+      return (providerConfig.modelAlias as string) || 'default';
+    }
+    return (providerConfig.modelDeployment as string) || 'default';
+  }
+  return (providerConfig.model as string) || 'default';
+}
+
+/**
+ * Get secret/key for a provider config.
+ */
+function getProviderSecret(
+  providerName: ProviderName,
+  providerConfig: Record<string, unknown>
+): string | undefined {
+  if (providerName === 'local') {
+    return 'N/A';
+  }
+  if (providerName === 'github') {
+    return providerConfig.token as string | undefined;
+  }
+  return providerConfig.apiKey as string | undefined;
+}
+
+/**
+ * Check Docker status asynchronously using child_process.
+ */
+async function getDockerStatus(): Promise<DockerStatus> {
+  const { spawn } = await import('node:child_process');
+
+  return new Promise((resolve) => {
+    try {
+      const proc = spawn('docker', ['info', '--format', '{{.ServerVersion}}']);
+      let output = '';
+
+      proc.stdout.on('data', (data: Buffer) => {
+        output += data.toString();
+      });
+
+      proc.on('error', () => {
+        resolve({ running: false });
+      });
+
+      proc.on('close', (code: number | null) => {
+        if (code === 0 && output.trim()) {
+          resolve({ running: true, version: output.trim() });
+        } else {
+          resolve({ running: false });
+        }
+      });
+    } catch {
+      resolve({ running: false });
+    }
+  });
+}
+
+/**
+ * Build the System section.
+ * System info uses 'info' status (cyan) for neutral informational items.
+ */
+function buildSystemSection(config: AppConfig): HealthSection {
+  return {
+    name: 'System',
+    items: [
+      { label: `Node.js ${process.version}`, value: '', status: 'info' },
+      { label: `Platform: ${process.platform} (${process.arch})`, value: '', status: 'info' },
+      { label: `Data: ${config.agent.dataDir}`, value: '', status: 'info' },
+    ],
+  };
+}
+
+/**
+ * Build the Agent section.
+ * Agent config uses 'ok' status (green) for configured items.
+ */
+function buildAgentSection(config: AppConfig): HealthSection {
+  const systemPromptFile = config.agent.systemPromptFile;
+  let promptDisplay = 'Default';
+  if (systemPromptFile !== undefined && systemPromptFile !== '') {
+    const filename = systemPromptFile.split('/').pop();
+    promptDisplay = '~/' + (filename ?? 'system.md');
+  }
+  return {
+    name: 'Agent',
+    items: [
+      { label: `Version: ${VERSION}`, value: '', status: 'ok' },
+      { label: `Log Level: ${config.agent.logLevel.toUpperCase()}`, value: '', status: 'ok' },
+      { label: `System Prompt: ${promptDisplay}`, value: '', status: 'ok' },
+    ],
+  };
+}
+
+/**
+ * Build the Memory section.
+ * Shows 'warning' (yellow) if disabled, 'ok' (green) if enabled.
+ */
+function buildMemorySection(config: AppConfig): HealthSection {
+  const isEnabled = config.memory.enabled;
+  const backend = isEnabled ? config.memory.type : 'disabled';
+  return {
+    name: 'Memory',
+    items: [{ label: `Backend: ${backend}`, value: '', status: isEnabled ? 'ok' : 'warning' }],
+  };
+}
+
+/**
+ * Build the Docker section.
+ * Shows 'ok' (green) if running, 'warning' (yellow) if not running.
+ */
+function buildDockerSection(dockerStatus: DockerStatus): HealthSection {
+  const cpuCount = String(os.cpus().length);
+  const totalMemory = formatMemory(os.totalmem());
+
+  if (dockerStatus.running) {
+    const version = dockerStatus.version ?? 'unknown';
+    return {
+      name: 'Docker',
+      items: [
+        {
+          label: `Running (${version}) · ${cpuCount} cores, ${totalMemory}`,
+          value: '',
+          status: 'ok',
+        },
+      ],
+    };
+  }
+
+  return {
+    name: 'Docker',
+    items: [{ label: 'Not Running', value: '', status: 'warning' }],
+  };
+}
+
+/**
+ * Check if a provider is explicitly configured in settings (not just env vars).
+ * A provider is considered "configured" if it has any non-default values set.
+ */
+function isProviderConfigured(
+  providerName: ProviderName,
+  providerConfig: Record<string, unknown> | undefined
+): boolean {
+  if (providerConfig === undefined) return false;
+
+  // Local provider is always configured if present
+  if (providerName === 'local') return true;
+
+  // Check for explicit configuration (apiKey, token, endpoint, etc.)
+  const hasApiKey = providerConfig.apiKey !== undefined;
+  const hasToken = providerConfig.token !== undefined;
+  const hasEndpoint =
+    providerConfig.endpoint !== undefined || providerConfig.projectEndpoint !== undefined;
+
+  return hasApiKey || hasToken || hasEndpoint;
+}
+
+/**
+ * Build the LLM Providers section.
+ * Shows 'ok' (green) if API key configured, 'warning' (yellow) if not configured.
+ */
+function buildProvidersSection(config: AppConfig): HealthSection {
+  const defaultProvider = config.providers.default;
+  const items: SectionItem[] = [];
+
+  for (const providerName of PROVIDER_NAMES) {
+    const providerConfig = config.providers[providerName] as Record<string, unknown> | undefined;
+
+    // Only show providers that are explicitly configured in settings
+    if (!isProviderConfigured(providerName, providerConfig)) continue;
+
+    const displayName = getProviderDisplayName(providerName);
+    const modelName = getModelName(providerName, providerConfig as Record<string, unknown>);
+    const secret = getProviderSecret(providerName, providerConfig as Record<string, unknown>);
+    const hasSecret = secret !== undefined && secret !== '' && secret !== 'N/A';
+    const maskedSecret = providerName === 'local' ? '' : ` · ${maskSecret(secret)}`;
+
+    // Determine status: ok if has credentials, warning if not configured
+    const status: ItemStatus = hasSecret || providerName === 'local' ? 'ok' : 'warning';
+
+    items.push({
+      label: `${displayName} (${modelName})`,
+      value: maskedSecret,
+      status,
+      isDefault: providerName === defaultProvider,
+    });
+  }
+
+  // If no providers configured, show an error
+  if (items.length === 0) {
+    items.push({
+      label: 'No providers configured',
+      value: '',
+      status: 'error',
+    });
+  }
+
+  return {
+    name: 'LLM Providers',
+    items,
+  };
 }
 
 /**
  * HealthCheck component.
- * Shows configuration status, environment, and provider availability.
+ * Shows configuration status, environment, and provider availability in grouped sections.
  */
 export function HealthCheck(): React.ReactElement {
   const { exit } = useApp();
   const [loading, setLoading] = useState(true);
-  const [checks, setChecks] = useState<HealthStatus[]>([]);
+  const [sections, setSections] = useState<HealthSection[]>([]);
+  const [configError, setConfigError] = useState<string | null>(null);
 
   useEffect(() => {
     async function runChecks(): Promise<void> {
-      const results: HealthStatus[] = [];
-
-      // System info
-      results.push({
-        name: 'Platform',
-        status: 'ok',
-        message: `${process.platform} (${process.arch})`,
-      });
-
-      results.push({
-        name: 'Node.js',
-        status: 'ok',
-        message: process.version,
-      });
-
-      results.push({
-        name: 'Version',
-        status: 'ok',
-        message: VERSION,
-      });
-
-      // Config loading
+      // Load config first
       const configResult = await loadConfig();
-      if (configResult.success) {
-        results.push({
-          name: 'Config',
-          status: 'ok',
-          message: 'Loaded successfully',
-        });
 
-        // Check default provider - safe to access since success is true
-        const config = configResult.result as NonNullable<typeof configResult.result>;
-        const provider = config.providers.default;
-        results.push({
-          name: 'Default Provider',
-          status: 'ok',
-          message: provider,
-        });
-
-        // Check for API key presence (without revealing it)
-        const providerConfig = config.providers[provider as keyof typeof config.providers] as
-          | Record<string, unknown>
-          | undefined;
-
-        if (providerConfig !== undefined) {
-          const hasApiKey =
-            providerConfig.apiKey !== undefined ||
-            providerConfig.token !== undefined ||
-            provider === 'local';
-
-          results.push({
-            name: 'API Key',
-            status: hasApiKey ? 'ok' : 'warning',
-            message: hasApiKey ? 'Configured' : 'Not configured (may use env vars)',
-          });
-        }
-      } else {
-        results.push({
-          name: 'Config',
-          status: 'error',
-          message: configResult.message,
-        });
+      if (!configResult.success) {
+        setConfigError(configResult.message);
+        setLoading(false);
+        setTimeout(() => {
+          exit();
+        }, 100);
+        return;
       }
 
-      setChecks(results);
+      const config = configResult.result as NonNullable<typeof configResult.result>;
+
+      // Get Docker status
+      const dockerStatus = await getDockerStatus();
+
+      // Build all sections
+      const allSections: HealthSection[] = [
+        buildSystemSection(config),
+        buildAgentSection(config),
+        buildMemorySection(config),
+        buildDockerSection(dockerStatus),
+        buildProvidersSection(config),
+      ];
+
+      setSections(allSections);
       setLoading(false);
 
       // Exit after a brief delay to show results
@@ -109,21 +345,55 @@ export function HealthCheck(): React.ReactElement {
     return <Spinner message="Running health checks..." />;
   }
 
+  if (configError !== null) {
+    return (
+      <Box flexDirection="column" paddingTop={1}>
+        <Text color="red">Configuration Error:</Text>
+        <Box paddingLeft={2}>
+          <Text color="red">◉</Text>
+          <Text> {configError}</Text>
+        </Box>
+      </Box>
+    );
+  }
+
   return (
-    <Box flexDirection="column" padding={1}>
-      <Text color="green" bold>
-        Health Check
-      </Text>
-      <Text dimColor>─────────────────────────</Text>
-      {checks.map((check) => (
-        <Box key={check.name} gap={1}>
-          <Text
-            color={check.status === 'ok' ? 'green' : check.status === 'warning' ? 'yellow' : 'red'}
-          >
-            {check.status === 'ok' ? '✓' : check.status === 'warning' ? '!' : '✗'}
-          </Text>
-          <Text>{check.name}:</Text>
-          <Text dimColor>{check.message}</Text>
+    <Box flexDirection="column" paddingTop={1}>
+      {sections.map((section, sectionIndex) => (
+        <Box
+          key={section.name}
+          flexDirection="column"
+          marginBottom={sectionIndex < sections.length - 1 ? 1 : 0}
+        >
+          {/* Section header */}
+          <Text>{section.name}:</Text>
+
+          {/* Section items */}
+          {section.items.map((item, itemIndex) => {
+            // Determine bullet color based on status
+            const bulletColor =
+              item.status === 'ok'
+                ? 'green'
+                : item.status === 'warning'
+                  ? 'yellow'
+                  : item.status === 'error'
+                    ? 'red'
+                    : 'cyan'; // info
+
+            return (
+              <Box key={itemIndex} paddingLeft={2}>
+                {/* Show checkmark for default provider */}
+                {section.name === 'LLM Providers' && item.isDefault === true ? (
+                  <Text color="green">✓ </Text>
+                ) : (
+                  <Text> </Text>
+                )}
+                <Text color={bulletColor}>◉</Text>
+                <Text> {item.label}</Text>
+                {item.value !== '' && <Text dimColor>{item.value}</Text>}
+              </Box>
+            );
+          })}
         </Box>
       ))}
     </Box>

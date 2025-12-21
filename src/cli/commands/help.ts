@@ -10,18 +10,6 @@ export const helpHandler: CommandHandler = (_args, context): Promise<CommandResu
                       Agent Framework Help
 ══════════════════════════════════════════════════════════════
 
-CONFIGURATION
-  /config              Show current configuration
-  /config init         Interactive setup wizard
-  /config show         Display all settings
-  /config edit [field] Edit specific configuration field
-
-SKILLS
-  /skill, /skills      List all discovered skills
-  /skill list          Show skills by source (bundled/user/project)
-  /skill info <name>   Display skill details and SKILL.md preview
-  /skill validate <path> Validate a SKILL.md manifest
-
 SESSION MANAGEMENT
   /save [name]         Save current session
   /sessions            List all saved sessions
@@ -53,6 +41,10 @@ KEYBOARD SHORTCUTS
 SPECIAL INPUT
   //path               Send message starting with / (escape)
                        Example: //etc/hosts sends "/etc/hosts"
+
+CLI SUBCOMMANDS (run from shell, not in interactive mode)
+  agent config         Manage configuration (show/init/edit)
+  agent skill          Manage skills (list/info/validate)
 
 TIPS
   - Use --provider <name> to override the default provider

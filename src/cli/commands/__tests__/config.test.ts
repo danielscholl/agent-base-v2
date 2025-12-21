@@ -150,7 +150,7 @@ describe('config command handlers', () => {
       const result = await configHandler('', context);
 
       expect(result.success).toBe(true);
-      expect(context.outputs.some((o) => o.content.includes('Current Configuration'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('Agent Configuration'))).toBe(true);
     });
 
     it('routes to show subcommand', async () => {
@@ -179,7 +179,7 @@ describe('config command handlers', () => {
       const result = await configHandler('show', context);
 
       expect(result.success).toBe(true);
-      expect(context.outputs.some((o) => o.content.includes('Current Configuration'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('Agent Configuration'))).toBe(true);
     });
 
     it('shows error for unknown subcommand', async () => {
@@ -219,13 +219,13 @@ describe('config command handlers', () => {
       const result = await configShowHandler('', context);
 
       expect(result.success).toBe(true);
-      expect(context.outputs.some((o) => o.content.includes('[Providers]'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('Agent Configuration'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('Enabled Providers'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('Default Provider'))).toBe(true);
       expect(context.outputs.some((o) => o.content.includes('openai'))).toBe(true);
-      expect(context.outputs.some((o) => o.content.includes('[Memory]'))).toBe(true);
-      expect(context.outputs.some((o) => o.content.includes('[Session]'))).toBe(true);
-      expect(context.outputs.some((o) => o.content.includes('[Skills]'))).toBe(true);
-      expect(context.outputs.some((o) => o.content.includes('[Telemetry]'))).toBe(true);
-      expect(context.outputs.some((o) => o.content.includes('[Retry]'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('Telemetry'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('Memory'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('Data Directory'))).toBe(true);
     });
 
     it('shows error when config fails to load', async () => {

@@ -87,11 +87,13 @@ describe('Command Handlers', () => {
       expect(helpText).toContain('Ctrl+C');
       expect(helpText).toContain('Ctrl+D');
       expect(helpText).toContain('Up/Down');
-      // New commands should be present
-      expect(helpText).toContain('/config');
-      expect(helpText).toContain('/skill');
+      // Session commands should be present
       expect(helpText).toContain('/continue');
       expect(helpText).toContain('/purge');
+      // CLI subcommands section should be present
+      expect(helpText).toContain('CLI SUBCOMMANDS');
+      expect(helpText).toContain('agent config');
+      expect(helpText).toContain('agent skill');
     });
   });
 
