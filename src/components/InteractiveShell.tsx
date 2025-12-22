@@ -80,6 +80,8 @@ interface ShellState {
   tokenUsage: SessionTokenUsage;
   /** Active prompt state for interactive commands */
   promptState: PromptState | null;
+  /** Current git branch for header display */
+  gitBranch: string | null;
 }
 
 /**
@@ -111,7 +113,34 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
     resumedSessionId: null,
     tokenUsage: INITIAL_TOKEN_USAGE,
     promptState: null,
+    gitBranch: null,
   });
+
+  // Get git branch on mount
+  useEffect(() => {
+    async function getGitBranch(): Promise<void> {
+      try {
+        const { spawn } = await import('node:child_process');
+        const proc = spawn('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+          cwd: process.cwd(),
+        });
+
+        let output = '';
+        proc.stdout.on('data', (data: Buffer) => {
+          output += data.toString();
+        });
+
+        proc.on('close', (code: number | null) => {
+          if (code === 0 && output.trim() !== '') {
+            setState((prev) => ({ ...prev, gitBranch: output.trim() }));
+          }
+        });
+      } catch {
+        // Not in a git repo or git not available - ignore
+      }
+    }
+    void getGitBranch();
+  }, []);
 
   // Load config on mount and handle session resume
   useEffect(() => {
@@ -872,14 +901,13 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
 
   return (
     <Box flexDirection="column" padding={1}>
-      <Header version={VERSION} model={model} provider={provider} />
-
-      {/* Welcome message */}
-      {state.messages.length === 0 && !state.isProcessing && (
-        <Box marginBottom={1}>
-          <Text dimColor>Type a message to chat with the agent. Use /help for commands.</Text>
-        </Box>
-      )}
+      <Header
+        version={VERSION}
+        model={model}
+        provider={provider}
+        cwd={process.cwd()}
+        gitBranch={state.gitBranch ?? undefined}
+      />
 
       {/* Message history */}
       {state.messages.map((msg, index) => (

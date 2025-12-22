@@ -163,11 +163,11 @@ describe('InteractiveShell', () => {
       });
       elapsed += interval;
       const frame = lastFrame();
-      if (frame !== undefined && frame.includes('Agent Framework')) break;
+      if (frame !== undefined && frame.includes('Agent - Conversational Assistant')) break;
     }
 
-    // Should show header with version
-    expect(lastFrame()).toContain('Agent Framework v0.1.0');
+    // Should show header with title
+    expect(lastFrame()).toContain('Agent - Conversational Assistant');
   });
 
   it('renders header with model info after config loads', async () => {
@@ -186,29 +186,9 @@ describe('InteractiveShell', () => {
       if (frame !== undefined && frame.includes('openai')) break;
     }
 
-    // Should show model info
-    expect(lastFrame()).toContain('openai');
+    // Should show model info (provider display name is capitalized)
+    expect(lastFrame()).toContain('OpenAI');
     expect(lastFrame()).toContain('gpt-4o');
-  });
-
-  it('shows welcome message when no messages exist', async () => {
-    const { lastFrame } = render(<InteractiveShell />);
-
-    // Wait for config load with polling
-    const maxWait = 1000;
-    const interval = 20;
-    let elapsed = 0;
-    while (elapsed < maxWait) {
-      await new Promise((resolve) => {
-        setTimeout(resolve, interval);
-      });
-      elapsed += interval;
-      const frame = lastFrame();
-      if (frame !== undefined && frame.includes('Type a message')) break;
-    }
-
-    // Should show welcome message
-    expect(lastFrame()).toContain('Type a message to chat');
   });
 
   it('shows input prompt when not processing', async () => {
