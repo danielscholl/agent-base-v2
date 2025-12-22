@@ -101,6 +101,8 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
   const currentQueryRef = useRef<string>('');
   // Track if exit was via Ctrl+C - spec says "do NOT save on Ctrl+C"
   const exitViaCtrlCRef = useRef(false);
+  // Track if config loading has been initiated to prevent duplicate loads
+  const configLoadInitiatedRef = useRef(false);
 
   const [state, setState] = useState<ShellState>({
     input: '',
@@ -123,6 +125,12 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
 
   // Load config on mount and handle session resume
   useEffect(() => {
+    // Prevent duplicate loading using ref instead of state to avoid dependency issues
+    if (configLoadInitiatedRef.current) {
+      return;
+    }
+    configLoadInitiatedRef.current = true;
+
     async function loadConfiguration(): Promise<void> {
       // Check if any config file exists (user or project)
       const hasConfigFile = await configFileExists();
@@ -235,11 +243,8 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
       }
     }
 
-    // Only load if not already loaded (configLoaded is false)
-    if (!state.configLoaded) {
-      void loadConfiguration();
-    }
-  }, [resumeSession, state.configLoaded]);
+    void loadConfiguration();
+  }, [resumeSession]);
 
   // Run config init when setup is needed (no settings.json)
   useEffect(() => {

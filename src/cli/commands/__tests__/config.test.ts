@@ -284,10 +284,16 @@ describe('config command handlers', () => {
   describe('configEditHandler', () => {
     it('opens config file in editor', async () => {
       // Mock spawn to simulate successful editor open
+      const eventHandlers: Record<string, ((arg: number | null | Error) => void)[]> = {};
       const mockProcess = {
-        on: jest.fn((event: string, callback: (code: number | null) => void) => {
+        on: jest.fn((event: string, callback: (arg: number | null | Error) => void) => {
+          if (!eventHandlers[event]) {
+            eventHandlers[event] = [];
+          }
+          eventHandlers[event].push(callback);
+
+          // Simulate editor closing successfully
           if (event === 'close') {
-            // Simulate editor closing successfully
             setTimeout(() => {
               callback(0);
             }, 10);

@@ -44,7 +44,10 @@ export async function setupOpenAI(context: CommandContext): Promise<ProviderSetu
     return { success: false, message: 'API key required' };
   }
 
-  // Validate format only for manually entered keys
+  // Validate format only for manually entered keys (not environment variables)
+  // Rationale: We trust keys from environment variables to support enterprise setups
+  // that may use non-standard key formats (e.g., proxies, custom auth layers).
+  // Only validate keys entered interactively to provide immediate feedback on typos.
   if (apiKeyInput.trim() !== '' && !apiKeyInput.startsWith('sk-')) {
     context.onOutput('Invalid API key format. Expected key starting with "sk-"', 'error');
     return { success: false, message: 'Invalid API key format' };

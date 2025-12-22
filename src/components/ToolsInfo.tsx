@@ -40,6 +40,10 @@ interface ToolsetMeta {
 
 /**
  * Shared tiktoken encoder instance.
+ * Intentionally a module-level singleton for performance - tiktoken encoding is
+ * stateless, so a single encoder instance can safely be reused across all tool
+ * descriptions. Lazy initialization is unnecessary as the cost is minimal and
+ * this component is only loaded when explicitly displaying tool information.
  */
 const tokenEncoder = new Tiktoken(cl100k_base);
 

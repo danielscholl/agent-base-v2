@@ -3,32 +3,14 @@
  * Creates ChatOpenAI instances for GitHub's OpenAI-compatible API.
  */
 
-import { spawnSync } from 'node:child_process';
 import { ChatOpenAI } from '@langchain/openai';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
+
 import type { GitHubProviderConfig } from '../../config/schema.js';
 import type { ModelResponse } from '../types.js';
 import { successResponse, errorResponse, mapErrorToCode } from '../base.js';
 import { DEFAULT_GITHUB_MODEL, DEFAULT_GITHUB_ENDPOINT } from '../../config/constants.js';
-
-/**
- * Try to get GitHub token from gh CLI.
- * Returns the token or undefined if not available.
- */
-function getGitHubCLIToken(): string | undefined {
-  try {
-    const result = spawnSync('gh', ['auth', 'token'], {
-      encoding: 'utf-8',
-      timeout: 5000,
-    });
-    if (result.status === 0 && result.stdout) {
-      return result.stdout.trim();
-    }
-    return undefined;
-  } catch {
-    return undefined;
-  }
-}
+import { getGitHubCLIToken } from '../../config/providers/github.js';
 
 /**
  * Create a ChatOpenAI instance for GitHub Models.
@@ -68,9 +50,9 @@ export function createGitHubClient(
         errorResponse(
           'PROVIDER_NOT_CONFIGURED',
           'GitHub Models requires authentication. Options:\n' +
-            '  1. Run: gh auth login\n' +
-            '  2. Set GITHUB_TOKEN environment variable\n' +
-            '  3. Configure providers.github.token in settings'
+            '  - Configure providers.github.token in settings\n' +
+            '  - Set GITHUB_TOKEN environment variable\n' +
+            '  - Run: gh auth login'
         )
       );
     }

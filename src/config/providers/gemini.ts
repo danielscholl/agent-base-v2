@@ -45,6 +45,10 @@ export async function setupGemini(context: CommandContext): Promise<ProviderSetu
   }
 
   // Validate format only for manually entered keys
+  // Note: We intentionally skip format validation for keys from environment variables.
+  // This design choice allows enterprise setups and testing environments to use
+  // non-standard API key formats (e.g., proxied keys, custom auth tokens) while
+  // still catching typos during interactive setup.
   if (apiKeyInput.trim() !== '' && !apiKeyInput.startsWith('AIzaSy')) {
     context.onOutput('Invalid API key format. Expected key starting with "AIzaSy"', 'error');
     return { success: false, message: 'Invalid API key format' };

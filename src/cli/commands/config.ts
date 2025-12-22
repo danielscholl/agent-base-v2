@@ -1,6 +1,6 @@
 /**
  * Config command handlers.
- * Provides config (show), config init, config edit subcommands.
+ * `config` with no subcommand shows the current configuration; `config init` and `config edit` are subcommands.
  */
 
 import { spawn } from 'node:child_process';
@@ -30,7 +30,11 @@ export const configHandler: CommandHandler = async (args, context): Promise<Comm
       // Config init is only available from CLI, not as a slash command in interactive mode
       if (context.isInteractive === true) {
         context.onOutput('To configure a new provider, exit and run: agent config init', 'info');
-        return { success: false, message: 'Use CLI for config init' };
+        return {
+          success: false,
+          message:
+            'Configuration changes must be done from the command line. Exit and run: agent config init',
+        };
       }
       return configInitHandler(subArgs, context);
     case 'edit':
@@ -352,6 +356,8 @@ export const configInitHandler: CommandHandler = async (_args, context): Promise
  */
 async function openInEditor(filePath: string): Promise<{ success: boolean; message?: string }> {
   return new Promise((resolve) => {
+    let resolved = false;
+
     // Try environment variables first
     const editor = process.env.EDITOR ?? process.env.VISUAL;
 
@@ -363,14 +369,20 @@ async function openInEditor(filePath: string): Promise<{ success: boolean; messa
       });
 
       proc.on('error', (err) => {
-        resolve({ success: false, message: `Failed to open editor: ${err.message}` });
+        if (!resolved) {
+          resolved = true;
+          resolve({ success: false, message: `Failed to open editor: ${err.message}` });
+        }
       });
 
       proc.on('close', (code) => {
-        if (code === 0) {
-          resolve({ success: true });
-        } else {
-          resolve({ success: false, message: `Editor exited with code ${String(code)}` });
+        if (!resolved) {
+          resolved = true;
+          if (code === 0) {
+            resolve({ success: true });
+          } else {
+            resolve({ success: false, message: `Editor exited with code ${String(code)}` });
+          }
         }
       });
       return;
@@ -401,25 +413,37 @@ async function openInEditor(filePath: string): Promise<{ success: boolean; messa
     });
 
     proc.on('error', () => {
-      // If xdg-open fails on Linux, try nano
-      if (platform === 'linux') {
+      // If xdg-open fails on Unix-like systems, try nano
+      if (platform !== 'darwin' && platform !== 'win32') {
         const fallback = spawn('nano', [filePath], { stdio: 'inherit' });
         fallback.on('error', (err) => {
-          resolve({ success: false, message: `No editor found: ${err.message}` });
+          if (!resolved) {
+            resolved = true;
+            resolve({ success: false, message: `No editor found: ${err.message}` });
+          }
         });
         fallback.on('close', (code) => {
-          resolve(code === 0 ? { success: true } : { success: false, message: 'Editor failed' });
+          if (!resolved) {
+            resolved = true;
+            resolve(code === 0 ? { success: true } : { success: false, message: 'Editor failed' });
+          }
         });
       } else {
-        resolve({ success: false, message: 'Failed to open editor' });
+        if (!resolved) {
+          resolved = true;
+          resolve({ success: false, message: 'Failed to open editor' });
+        }
       }
     });
 
     proc.on('close', (code) => {
-      if (code === 0) {
-        resolve({ success: true });
-      } else {
-        resolve({ success: false, message: `Editor exited with code ${String(code)}` });
+      if (!resolved) {
+        resolved = true;
+        if (code === 0) {
+          resolve({ success: true });
+        } else {
+          resolve({ success: false, message: `Editor exited with code ${String(code)}` });
+        }
       }
     });
   });

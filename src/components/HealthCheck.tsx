@@ -228,7 +228,7 @@ function buildDockerSection(dockerStatus: DockerStatus): HealthSection {
       name: 'Docker',
       items: [
         {
-          label: `Running (${version}) · ${cpuCount} cores, ${totalMemory}`,
+          label: `Running (${version}) · ${cpuCount} allocated cores, ${totalMemory} allocated`,
           value: '',
           status: 'ok',
         },
@@ -250,16 +250,15 @@ function isProviderConfigured(
   providerName: ProviderName,
   providerConfig: Record<string, unknown> | undefined
 ): boolean {
+  // Provider config must be defined and not an empty object
   if (providerConfig === undefined) return false;
 
-  // Local provider is always configured if present
+  // Local provider is always configured if present (even if empty)
   if (providerName === 'local') return true;
 
   // Check if any property is set (model, apiKey, endpoint, etc.)
-  // A provider with just a model set is still explicitly configured
-  const hasAnyProperty = Object.keys(providerConfig).length > 0;
-
-  return hasAnyProperty;
+  // An empty object {} is not considered configured
+  return Object.keys(providerConfig).length > 0;
 }
 
 /**

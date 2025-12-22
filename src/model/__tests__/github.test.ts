@@ -147,7 +147,7 @@ describe('createGitHubClient', () => {
   describe('gh CLI fallback', () => {
     it('uses token from gh CLI when no token provided', async () => {
       // Mock gh auth token returning a valid token
-      mockSpawnSync.mockReturnValueOnce({
+      mockSpawnSync.mockReturnValue({
         status: 0,
         stdout: 'gho_cli_token_12345\n',
         stderr: '',

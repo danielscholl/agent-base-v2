@@ -53,15 +53,20 @@ function formatPath(path: string): string {
  */
 function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
-  if (maxLength <= 3) return '...'.slice(0, maxLength);
+  if (maxLength <= 3) return maxLength >= 3 ? '...' : '';
   return text.slice(0, maxLength - 3) + '...';
 }
 
 /**
- * Padding constant - must match InteractiveShell's padding={1}
- * which adds 1 space on each side = 2 total.
+ * Side padding from InteractiveShell's padding={1}.
+ * Must match the padding prop value.
  */
-const SHELL_PADDING = 2;
+const SHELL_SIDE_PADDING = 1;
+
+/**
+ * Total horizontal padding (left + right).
+ */
+const SHELL_PADDING = SHELL_SIDE_PADDING * 2;
 
 /**
  * Hook to get terminal width with resize support.
@@ -70,7 +75,7 @@ const SHELL_PADDING = 2;
  */
 function useTerminalWidth(): number {
   const { stdout } = useStdout();
-  // Account for shell padding (1 on each side = 2 total)
+  // Account for shell padding (left + right sides)
   const getUsableWidth = (): number => Math.max(stdout.columns - SHELL_PADDING, 40);
   const [width, setWidth] = useState(getUsableWidth);
 

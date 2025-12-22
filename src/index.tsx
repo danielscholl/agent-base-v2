@@ -18,6 +18,7 @@ const cli = meow(
   `
   Usage
     $ agent [options]
+    $ agent config
     $ agent config [init|edit]
     $ agent skill [list|info|validate]
     $ agent -p <prompt> [options]

@@ -11,7 +11,7 @@ import { DEFAULT_GITHUB_MODEL, DEFAULT_GITHUB_ENDPOINT } from '../constants.js';
 /**
  * Get token from GitHub CLI if logged in.
  */
-function getGitHubCLIToken(): string | undefined {
+export function getGitHubCLIToken(): string | undefined {
   try {
     const result = spawnSync('gh', ['auth', 'token'], {
       encoding: 'utf-8',

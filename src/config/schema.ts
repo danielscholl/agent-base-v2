@@ -515,7 +515,11 @@ export function validateProviderCredentials(config: AppConfig): ProviderValidati
     }
 
     case 'github': {
-      // GitHub Models - token is optional, gh CLI auth is checked at runtime
+      // GitHub Models - token is optional because authentication commonly relies on gh CLI auth state.
+      // Unlike other providers that require explicit API keys/tokens at config time, GitHub supports
+      // delegating authentication to the gh CLI, which can handle interactive prompts and credential
+      // management at runtime. This allows users to authenticate via gh CLI without embedding tokens
+      // in configuration. Credential checks are performed at runtime where gh can handle auth flows.
       // No validation needed here
       break;
     }
