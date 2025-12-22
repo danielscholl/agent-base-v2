@@ -160,15 +160,43 @@ describe('Provider Setup Wizards', () => {
     });
 
     it('allows Azure CLI auth when API key is empty', async () => {
-      const { setupAzure } = await import('../azure.js');
-      const context = createMockContext(['https://myresource.openai.azure.com/', '', '', '']);
-      const result = await setupAzure(context);
+      // Clear Azure env vars to test the non-env-var path
+      const savedEnv = {
+        AZURE_OPENAI_ENDPOINT: process.env.AZURE_OPENAI_ENDPOINT,
+        AZURE_OPENAI_DEPLOYMENT_NAME: process.env.AZURE_OPENAI_DEPLOYMENT_NAME,
+        AZURE_OPENAI_API_KEY: process.env.AZURE_OPENAI_API_KEY,
+        AZURE_OPENAI_API_VERSION: process.env.AZURE_OPENAI_API_VERSION,
+      };
+      delete process.env.AZURE_OPENAI_ENDPOINT;
+      delete process.env.AZURE_OPENAI_DEPLOYMENT_NAME;
+      delete process.env.AZURE_OPENAI_API_KEY;
+      delete process.env.AZURE_OPENAI_API_VERSION;
 
-      expect(result.success).toBe(true);
-      expect(result.config?.apiKey).toBeUndefined();
-      expect(context.outputs.some((o) => o.content.includes('Azure CLI authentication'))).toBe(
-        true
-      );
+      try {
+        const { setupAzure } = await import('../azure.js');
+        const context = createMockContext(['https://myresource.openai.azure.com/', '', '', '']);
+        const result = await setupAzure(context);
+
+        expect(result.success).toBe(true);
+        expect(result.config?.apiKey).toBeUndefined();
+        expect(context.outputs.some((o) => o.content.includes('Azure CLI authentication'))).toBe(
+          true
+        );
+      } finally {
+        // Restore env vars
+        if (savedEnv.AZURE_OPENAI_ENDPOINT !== undefined) {
+          process.env.AZURE_OPENAI_ENDPOINT = savedEnv.AZURE_OPENAI_ENDPOINT;
+        }
+        if (savedEnv.AZURE_OPENAI_DEPLOYMENT_NAME !== undefined) {
+          process.env.AZURE_OPENAI_DEPLOYMENT_NAME = savedEnv.AZURE_OPENAI_DEPLOYMENT_NAME;
+        }
+        if (savedEnv.AZURE_OPENAI_API_KEY !== undefined) {
+          process.env.AZURE_OPENAI_API_KEY = savedEnv.AZURE_OPENAI_API_KEY;
+        }
+        if (savedEnv.AZURE_OPENAI_API_VERSION !== undefined) {
+          process.env.AZURE_OPENAI_API_VERSION = savedEnv.AZURE_OPENAI_API_VERSION;
+        }
+      }
     });
   });
 

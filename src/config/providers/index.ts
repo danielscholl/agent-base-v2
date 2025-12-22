@@ -6,6 +6,34 @@
 import type { CommandContext } from '../../cli/commands/types.js';
 
 /**
+ * Mask a secret for display, showing only last 4 characters.
+ */
+export function maskSecret(secret: string): string {
+  if (secret.length <= 8) return '****';
+  return '****' + secret.slice(-4);
+}
+
+/**
+ * Check for an environment variable and display status.
+ * Returns the env value if found, undefined otherwise.
+ */
+export function checkEnvVar(
+  context: CommandContext,
+  envVarName: string,
+  displayName: string
+): string | undefined {
+  const value = process.env[envVarName];
+  if (value !== undefined && value !== '') {
+    context.onOutput(
+      `  ✓ Detected: ${displayName} from ${envVarName} (${maskSecret(value)})`,
+      'success'
+    );
+    return value;
+  }
+  return undefined;
+}
+
+/**
  * Result of a provider setup wizard.
  */
 export interface ProviderSetupResult {
