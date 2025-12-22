@@ -316,6 +316,49 @@ describe('Provider Setup Wizards', () => {
       expect(result.success).toBe(true);
       expect(result.config?.token).toBe('github_pat_token123');
     });
+
+    it('accepts gho_ format (OAuth token)', async () => {
+      const { setupGitHub } = await import('../github.js');
+      const context = createMockContext(['gho_oauthtoken123', '']);
+      const result = await setupGitHub(context);
+
+      expect(result.success).toBe(true);
+      expect(result.config?.token).toBe('gho_oauthtoken123');
+    });
+
+    it('detects GITHUB_TOKEN from environment', async () => {
+      const savedToken = process.env.GITHUB_TOKEN;
+      process.env.GITHUB_TOKEN = 'ghp_envtoken123';
+
+      try {
+        const { setupGitHub } = await import('../github.js');
+        // Empty inputs - should use env token
+        const context = createMockContext(['', '', '']);
+        const result = await setupGitHub(context);
+
+        expect(result.success).toBe(true);
+        // Token should NOT be in config when using env var
+        expect(result.config?.token).toBeUndefined();
+        expect(
+          context.outputs.some((o) => o.content.includes('Detected: Token from GITHUB_TOKEN'))
+        ).toBe(true);
+      } finally {
+        if (savedToken !== undefined) {
+          process.env.GITHUB_TOKEN = savedToken;
+        } else {
+          delete process.env.GITHUB_TOKEN;
+        }
+      }
+    });
+
+    it('accepts organization parameter', async () => {
+      const { setupGitHub } = await import('../github.js');
+      const context = createMockContext(['ghp_validtoken123', '', 'my-org']);
+      const result = await setupGitHub(context);
+
+      expect(result.success).toBe(true);
+      expect(result.config?.org).toBe('my-org');
+    });
   });
 
   describe('setupLocal', () => {
