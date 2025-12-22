@@ -49,14 +49,6 @@ const cli = meow(
     /history               Show conversation history
     /clear                 Clear conversation
     /exit                  Exit the agent
-
-  Examples
-    $ agent                           # Interactive mode
-    $ agent -p "Say hello"            # Single prompt
-    $ agent config show               # Show configuration
-    $ agent skill list                # List skills
-    $ agent --provider anthropic      # Use specific provider
-    $ agent --continue                # Resume last session
 `,
   {
     importMeta: import.meta,
