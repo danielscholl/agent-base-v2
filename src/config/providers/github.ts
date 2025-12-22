@@ -77,7 +77,9 @@ export async function setupGitHub(context: CommandContext): Promise<ProviderSetu
     return { success: false, message: 'Token required' };
   }
 
-  // Validate format only for manually entered tokens
+  // Validate format only for manually entered tokens.
+  // Note: We intentionally skip format validation for tokens from environment variables or gh CLI.
+  // This allows enterprise setups to use non-standard token formats (proxied auth, custom tokens).
   if (
     tokenInput.trim() !== '' &&
     !tokenInput.startsWith('ghp_') &&

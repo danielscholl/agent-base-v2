@@ -47,7 +47,9 @@ export async function setupAnthropic(context: CommandContext): Promise<ProviderS
     return { success: false, message: 'API key required' };
   }
 
-  // Validate format only for manually entered keys
+  // Validate format only for manually entered keys.
+  // Note: We intentionally skip format validation for keys from environment variables.
+  // This allows enterprise setups to use non-standard key formats (proxied keys, custom auth).
   if (apiKeyInput.trim() !== '' && !apiKeyInput.startsWith('sk-ant-')) {
     context.onOutput('Invalid API key format. Expected key starting with "sk-ant-"', 'error');
     return { success: false, message: 'Invalid API key format' };
