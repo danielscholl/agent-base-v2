@@ -1,7 +1,7 @@
 /**
  * Header component for CLI shell.
- * Displays banner with version, model, and context information.
- * Styled to match osdu-agent.
+ * Displays banner with version and model information.
+ * Path and divider are handled by PromptDivider before each prompt.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -17,7 +17,7 @@ export interface HeaderProps {
   model?: string;
   /** Current provider name */
   provider?: string;
-  /** Current working directory */
+  /** Current working directory (unused, kept for API compatibility) */
   cwd?: string;
 }
 
@@ -38,70 +38,22 @@ function getProviderDisplayName(provider: string): string {
 }
 
 /**
- * Format path for display (shorten home directory).
+ * Header banner component.
+ * Shows title, version, model information, and a divider to start the chat session.
  */
-function formatPath(path: string): string {
-  const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
-  if (home !== '' && path.startsWith(home)) {
-    return '~' + path.slice(home.length);
-  }
-  return path;
-}
-
-/**
- * Truncate text with ellipsis if it exceeds maxLength.
- */
-function truncate(text: string, maxLength: number): string {
-  if (text.length <= maxLength) return text;
-  if (maxLength <= 3) return maxLength >= 3 ? '...' : '';
-  return text.slice(0, maxLength - 3) + '...';
-}
-
-/**
- * Side padding from InteractiveShell's padding={1}.
- * Must match the padding prop value.
- */
-const SHELL_SIDE_PADDING = 1;
-
-/**
- * Total horizontal padding (left + right).
- */
-const SHELL_PADDING = SHELL_SIDE_PADDING * 2;
-
-/**
- * Hook to get terminal width with resize support.
- * Clears the screen on resize to prevent visual artifacts.
- * Returns usable width accounting for shell padding.
- */
-function useTerminalWidth(): number {
+export function Header({ version, model, provider }: HeaderProps): React.ReactElement {
   const { stdout } = useStdout();
-  // Account for shell padding (left + right sides)
-  const getUsableWidth = (): number => Math.max(stdout.columns - SHELL_PADDING, 40);
-  const [width, setWidth] = useState(getUsableWidth);
+  const [termWidth, setTermWidth] = useState(stdout.columns - 2);
 
   useEffect(() => {
     const handleResize = (): void => {
-      // Clear terminal and move cursor to home position
-      // This prevents visual artifacts when Ink re-renders
-      stdout.write('\x1b[2J\x1b[H');
-      setWidth(Math.max(stdout.columns - SHELL_PADDING, 40));
+      setTermWidth(stdout.columns - 2);
     };
-
     stdout.on('resize', handleResize);
     return () => {
       stdout.off('resize', handleResize);
     };
   }, [stdout]);
-
-  return width;
-}
-
-/**
- * Header banner component.
- * Shows title, version, model, and current directory.
- */
-export function Header({ version, model, provider, cwd }: HeaderProps): React.ReactElement {
-  const termWidth = useTerminalWidth();
 
   // Build version/model info
   const providerDisplay = provider !== undefined ? getProviderDisplayName(provider) : '';
@@ -111,28 +63,18 @@ export function Header({ version, model, provider, cwd }: HeaderProps): React.Re
       ? `Version ${version} • ${providerDisplay}/${modelDisplay}`
       : `Version ${version}`;
 
-  // Build context info (cwd), truncating path if needed
-  // Calculate available space: termWidth - versionModel - 2 spaces minimum gap
-  const minGap = 2;
-  const availableForPath = termWidth - versionModel.length - minGap;
-  const rawPath = cwd !== undefined ? formatPath(cwd) : '';
-  const contextInfo = availableForPath > 10 ? truncate(rawPath, availableForPath) : '';
-
   // Create divider line
-  const divider = '─'.repeat(termWidth);
+  const divider = '─'.repeat(Math.max(10, termWidth));
 
   return (
     <Box flexDirection="column">
       {/* Title */}
       <Text bold>Agent - Conversational Assistant</Text>
 
-      {/* Version and model info, with context on the right */}
-      <Box justifyContent="space-between" width={termWidth}>
-        <Text dimColor>{versionModel}</Text>
-        {contextInfo !== '' && <Text dimColor>{contextInfo}</Text>}
-      </Box>
+      {/* Version and model info */}
+      <Text dimColor>{versionModel}</Text>
 
-      {/* Divider line */}
+      {/* Divider to indicate chat session start */}
       <Text dimColor>{divider}</Text>
     </Box>
   );

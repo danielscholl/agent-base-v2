@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Box, Text, useInput, useApp } from 'ink';
+import { Box, Text, useInput, useApp, useStdout } from 'ink';
 import { Agent } from '../agent/agent.js';
 import { loadConfig, configFileExists } from '../config/manager.js';
 import { validateProviderCredentials } from '../config/schema.js';
@@ -32,12 +32,15 @@ import type { StoredMessage, SessionTokenUsage } from '../utils/index.js';
 import { Header } from './Header.js';
 import { Spinner } from './Spinner.js';
 import { ErrorDisplay } from './ErrorDisplay.js';
-import { TaskProgress } from './TaskProgress.js';
 import { AnswerBox } from './AnswerBox.js';
-import { TokenUsageDisplay } from './TokenUsageDisplay.js';
+import { ExecutionStatus } from './ExecutionStatus.js';
+import { PromptDivider } from './PromptDivider.js';
+import type { ToolNode } from './ExecutionStatus.js';
 import { initializeTelemetry } from '../telemetry/index.js';
-import type { ActiveTask, CompletedTask } from './TaskProgress.js';
 import type { InteractiveShellProps, ShellMessage } from '../cli/types.js';
+
+// Re-use task types from TaskProgress for consistency
+import type { ActiveTask, CompletedTask } from './TaskProgress.js';
 import type { CommandContext } from '../cli/commands/types.js';
 import type { AgentErrorResponse } from '../errors/index.js';
 import type { AppConfig } from '../config/schema.js';
@@ -53,6 +56,19 @@ const INITIAL_TOKEN_USAGE: SessionTokenUsage = {
   tokens: 0,
   queryCount: 0,
 };
+
+/**
+ * Format tool arguments for display.
+ * Shows first arg value, truncated.
+ */
+function formatToolArgs(args: Record<string, unknown>): string {
+  const entries = Object.entries(args);
+  if (entries.length === 0) return '';
+  const [key, value] = entries[0] as [string, unknown];
+  const strValue = String(value);
+  const truncated = strValue.length > 30 ? strValue.slice(0, 27) + '...' : strValue;
+  return `${key}: ${truncated}`;
+}
 
 /**
  * Prompt state for interactive command prompts.
@@ -91,6 +107,12 @@ interface ShellState {
   runningConfigInit: boolean;
   /** Selected index in command autocomplete */
   autocompleteIndex: number;
+  /** Message count sent to LLM (for execution status) */
+  messageCount: number;
+  /** Execution start time in ms (for duration calculation) */
+  executionStartTime: number | null;
+  /** Last execution duration in seconds (calculated when execution completes) */
+  lastExecutionDuration: number | null;
 }
 
 /**
@@ -99,6 +121,7 @@ interface ShellState {
  */
 export function InteractiveShell({ resumeSession }: InteractiveShellProps): React.ReactElement {
   const { exit } = useApp();
+  const { stdout } = useStdout();
   const agentRef = useRef<Agent | null>(null);
   const historyRef = useRef<InputHistory>(new InputHistory());
   const messageHistoryRef = useRef<MessageHistory | null>(null);
@@ -130,6 +153,9 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
     promptState: null,
     runningConfigInit: false,
     autocompleteIndex: 0,
+    messageCount: 0,
+    executionStartTime: null,
+    lastExecutionDuration: null,
   });
 
   // Load config on mount and handle session resume
@@ -754,6 +780,8 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
       error: null,
       activeTasks: [],
       completedTasks: [],
+      messageCount: 0,
+      executionStartTime: Date.now(),
     }));
 
     // Synchronize filesystem writes config to env var before each run
@@ -779,9 +807,18 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
           // Add assistant message to history and clear streaming output
           // Skip if error already set (emitError calls both onError and onAgentEnd)
           setState((s) => {
+            // Calculate duration when execution completes
+            const duration =
+              s.executionStartTime !== null ? (Date.now() - s.executionStartTime) / 1000 : null;
+
             if (s.error !== null || answer.startsWith('Error:')) {
               // Error already displayed via ErrorDisplay, don't duplicate
-              return { ...s, streamingOutput: '', isProcessing: false };
+              return {
+                ...s,
+                streamingOutput: '',
+                isProcessing: false,
+                lastExecutionDuration: duration,
+              };
             }
             // State management design:
             // - state.messages: UI display for current session (always populated)
@@ -801,6 +838,7 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
               ],
               streamingOutput: '',
               isProcessing: false,
+              lastExecutionDuration: duration,
             };
           });
         },
@@ -846,6 +884,9 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
               queryCount: s.tokenUsage.queryCount + usage.queryCount,
             },
           }));
+        },
+        setMessageCount: (count) => {
+          setState((s) => ({ ...s, messageCount: count }));
         },
       });
 
@@ -1150,32 +1191,85 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
     <Box flexDirection="column" padding={1}>
       <Header version={VERSION} model={model} provider={provider} cwd={process.cwd()} />
 
-      {/* Message history */}
-      {state.messages.map((msg, index) => (
-        <Box key={index} marginBottom={1}>
-          <Text color={msg.role === 'user' ? 'blue' : msg.role === 'system' ? 'yellow' : 'green'}>
-            {msg.role === 'user' ? '> ' : msg.role === 'system' ? '! ' : ''}
-          </Text>
-          <Text>{msg.content}</Text>
-        </Box>
-      ))}
+      {/* Message history with completion status before assistant responses */}
+      {state.messages.map((msg, index) => {
+        const isLastMessage = index === state.messages.length - 1;
+        const isLastAssistantMessage =
+          msg.role === 'assistant' && isLastMessage && !state.isProcessing;
 
-      {/* Task progress - show active and completed tool executions */}
-      {(state.activeTasks.length > 0 || state.completedTasks.length > 0) && (
-        <TaskProgress activeTasks={state.activeTasks} completedTasks={state.completedTasks} />
+        // Show horizontal rule after assistant messages that aren't the last
+        const showDividerAfter = msg.role === 'assistant' && !isLastMessage;
+
+        // No bottom margin on last message when not processing (PromptDivider follows)
+        const hasBottomMargin = !(isLastMessage && !state.isProcessing);
+
+        // Create horizontal rule for history dividers
+        const hrWidth = Math.max(10, stdout.columns - 2);
+        const horizontalRule = '─'.repeat(hrWidth);
+
+        return (
+          <React.Fragment key={index}>
+            {/* Show completion status before the last assistant message */}
+            {isLastAssistantMessage &&
+              state.tokenUsage.queryCount > 0 &&
+              state.lastExecutionDuration !== null && (
+                <ExecutionStatus
+                  status="complete"
+                  messageCount={state.messageCount}
+                  toolCount={state.completedTasks.length}
+                  duration={state.lastExecutionDuration}
+                />
+              )}
+            <Box marginBottom={hasBottomMargin ? 1 : 0}>
+              <Text
+                color={msg.role === 'user' ? 'blue' : msg.role === 'system' ? 'yellow' : 'green'}
+              >
+                {msg.role === 'user' ? '> ' : msg.role === 'system' ? '! ' : ''}
+              </Text>
+              <Text>{msg.content}</Text>
+            </Box>
+            {/* Horizontal rule after assistant messages in history */}
+            {showDividerAfter && <Text dimColor>{horizontalRule}</Text>}
+          </React.Fragment>
+        );
+      })}
+
+      {/* Execution status - working state with tree display */}
+      {state.isProcessing && (
+        <ExecutionStatus
+          status="working"
+          messageCount={state.messageCount}
+          toolCount={state.completedTasks.length + state.activeTasks.length}
+          thinkingState={{
+            messageCount: state.messageCount,
+            isActive: state.spinnerMessage !== '' && state.streamingOutput === '',
+          }}
+          toolNodes={[
+            ...state.completedTasks.map(
+              (task): ToolNode => ({
+                id: task.id,
+                name: task.name,
+                status: task.success ? 'complete' : 'error',
+                duration: task.duration >= 0 ? task.duration / 1000 : undefined,
+                error: task.error,
+              })
+            ),
+            ...state.activeTasks.map(
+              (task): ToolNode => ({
+                id: task.id,
+                name: task.name,
+                args: task.args !== undefined ? formatToolArgs(task.args) : undefined,
+                status: 'running',
+              })
+            ),
+          ]}
+        />
       )}
 
       {/* Streaming output with AnswerBox */}
       {/* Show when: has output OR (processing AND no spinner showing) */}
       {(state.streamingOutput !== '' || (state.isProcessing && state.spinnerMessage === '')) && (
         <AnswerBox content={state.streamingOutput} isStreaming={state.isProcessing} />
-      )}
-
-      {/* Spinner during processing (only when not streaming and spinner message is set) */}
-      {state.isProcessing && state.spinnerMessage !== '' && state.streamingOutput === '' && (
-        <Box marginBottom={1}>
-          <Spinner message={state.spinnerMessage} />
-        </Box>
       )}
 
       {/* Error display */}
@@ -1185,11 +1279,6 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
         </Box>
       )}
 
-      {/* Token usage display - visible while user is idle (not processing) */}
-      {!state.isProcessing && state.tokenUsage.queryCount > 0 && (
-        <TokenUsageDisplay usage={state.tokenUsage} />
-      )}
-
       {/* Interactive prompt for commands (e.g., /config init) */}
       {state.promptState !== null && (
         <Box>
@@ -1197,6 +1286,11 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
           <Text>{state.input}</Text>
           <Text color="yellow">{'█'}</Text>
         </Box>
+      )}
+
+      {/* Prompt divider with path+branch and horizontal rule (only after messages exist) */}
+      {!state.isProcessing && state.promptState === null && state.messages.length > 0 && (
+        <PromptDivider cwd={process.cwd()} />
       )}
 
       {/* Input prompt with autocomplete */}

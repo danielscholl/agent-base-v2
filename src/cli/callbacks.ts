@@ -59,6 +59,8 @@ export interface CallbackState {
   ) => void;
   /** Update session token usage with per-request data */
   updateTokenUsage?: (usage: SessionTokenUsage) => void;
+  /** Set message count from LLM context (for execution status display) */
+  setMessageCount?: (count: number) => void;
 }
 
 /**
@@ -94,6 +96,11 @@ export function createCallbacks(
       // Only clear spinner message, not processing state
       // This allows streaming to continue after spinner stops
       state.setSpinnerMessage(null);
+    },
+
+    onLLMStart: (_ctx, _model, messages) => {
+      // Track message count for execution status display
+      state.setMessageCount?.(messages.length);
     },
 
     onLLMStream: (_ctx, chunk) => {
