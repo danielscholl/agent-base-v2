@@ -253,7 +253,7 @@ describe('TelemetryConfigSchema', () => {
 describe('MemoryConfigSchema', () => {
   it('should apply default values', () => {
     const result = MemoryConfigSchema.parse({});
-    expect(result.enabled).toBe(false);
+    expect(result.enabled).toBe(true);
     expect(result.type).toBe('local');
     expect(result.historyLimit).toBe(DEFAULT_MEMORY_HISTORY_LIMIT);
   });
@@ -307,7 +307,7 @@ describe('AppConfigSchema', () => {
     expect(result.providers.default).toBe('openai');
     expect(result.agent.logLevel).toBe('info');
     expect(result.telemetry.enabled).toBe(false);
-    expect(result.memory.enabled).toBe(false);
+    expect(result.memory.enabled).toBe(true);
     expect(result.skills.plugins).toEqual([]);
   });
 

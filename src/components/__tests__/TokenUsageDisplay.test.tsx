@@ -44,12 +44,28 @@ describe('TokenUsageDisplay', () => {
       expect(lastFrame()).toContain('1 query');
     });
 
-    it('formats large numbers with separators', () => {
+    it('formats large numbers in compact k notation', () => {
       const usage = createUsage(10000, 5000, 5);
 
       const { lastFrame } = render(<TokenUsageDisplay usage={usage} />);
 
-      expect(lastFrame()).toContain('15,000');
+      expect(lastFrame()).toContain('15k');
+    });
+
+    it('formats numbers under 10k with one decimal', () => {
+      const usage = createUsage(4000, 2400, 3);
+
+      const { lastFrame } = render(<TokenUsageDisplay usage={usage} />);
+
+      expect(lastFrame()).toContain('6.4k');
+    });
+
+    it('keeps small numbers as-is', () => {
+      const usage = createUsage(500, 300, 2);
+
+      const { lastFrame } = render(<TokenUsageDisplay usage={usage} />);
+
+      expect(lastFrame()).toContain('800');
     });
 
     it('shows correct query count plural', () => {
@@ -110,12 +126,12 @@ describe('TokenUsageDisplay', () => {
   });
 
   describe('edge cases', () => {
-    it('handles very large token counts', () => {
+    it('handles very large token counts with M notation', () => {
       const usage = createUsage(1000000, 500000, 100);
 
       const { lastFrame } = render(<TokenUsageDisplay usage={usage} />);
 
-      expect(lastFrame()).toContain('1,500,000');
+      expect(lastFrame()).toContain('1.5M');
     });
 
     it('handles usage with zero completion tokens', () => {

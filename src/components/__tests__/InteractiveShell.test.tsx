@@ -33,6 +33,11 @@ jest.unstable_mockModule('../../config/manager.js', () => ({
 jest.unstable_mockModule('../../cli/commands/index.js', () => ({
   executeCommand: jest.fn(),
   isCommand: jest.fn(() => false),
+  getAutocompleteCommands: jest.fn(() => [
+    { name: 'help', description: 'Show help message' },
+    { name: 'clear', description: 'Clear screen and history' },
+    { name: 'exit', description: 'Exit the shell' },
+  ]),
 }));
 
 // Mock config command handler for setup flow

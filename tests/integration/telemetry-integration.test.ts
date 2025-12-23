@@ -126,7 +126,8 @@ describe('Telemetry Integration', () => {
       await agent.run('Hello');
 
       const spans = capture.getSpans();
-      const agentSpan = spans.find((s) => s.name.includes('agent.'));
+      // Agent span name follows GenAI convention: "invoke_agent <model>"
+      const agentSpan = spans.find((s) => s.name.includes('invoke_agent'));
 
       assertDefined(agentSpan, 'agentSpan');
       expect(agentSpan.attributes[ATTR_GEN_AI_OPERATION_NAME]).toBe(GEN_AI_OPERATION.INVOKE_AGENT);
@@ -149,7 +150,7 @@ describe('Telemetry Integration', () => {
       await agent.run('Hello');
 
       const spans = capture.getSpans();
-      const agentSpan = spans.find((s) => s.name.includes('agent.'));
+      const agentSpan = spans.find((s) => s.name.includes('invoke_agent'));
       const llmSpan = spans.find((s) => s.name.includes('chat'));
 
       assertDefined(agentSpan, 'agentSpan');
@@ -199,7 +200,7 @@ describe('Telemetry Integration', () => {
       await agent.run('Greet World');
 
       const spans = capture.getSpans();
-      const agentSpan = spans.find((s) => s.name.includes('agent.'));
+      const agentSpan = spans.find((s) => s.name.includes('invoke_agent'));
       const toolSpan = spans.find((s) => s.name.includes('execute_tool'));
 
       assertDefined(agentSpan, 'agentSpan');
@@ -502,7 +503,7 @@ describe('Telemetry Integration', () => {
       await agent.run('Hello');
 
       const spans = capture.getSpans();
-      const agentSpan = spans.find((s) => s.name.includes('agent.'));
+      const agentSpan = spans.find((s) => s.name.includes('invoke_agent'));
 
       // Agent should complete (possibly with error in response text)
       expect(agentSpan).toBeDefined();

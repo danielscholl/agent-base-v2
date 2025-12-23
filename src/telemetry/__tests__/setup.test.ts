@@ -151,6 +151,7 @@ describe('Telemetry Setup', () => {
 
       expect(result.success).toBe(true);
       if (isTelemetrySuccess(result)) {
+        // Default endpoint uses HTTP port 4318 (not gRPC port 4317)
         expect(result.result.endpoint).toBe('http://localhost:4318/v1/traces');
       }
     });

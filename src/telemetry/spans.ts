@@ -233,7 +233,11 @@ export function startAgentSpan(options: AgentSpanOptions = {}): Span {
   const tracer = getTracer(TRACER_NAME);
   const operationName = options.operationName ?? GEN_AI_OPERATION.INVOKE_AGENT;
 
-  const span = tracer.startSpan(`agent.${operationName}`, {
+  // Span name follows GenAI convention: "{operation_name} {model_name}"
+  const spanName =
+    options.modelName !== undefined ? `${operationName} ${options.modelName}` : operationName;
+
+  const span = tracer.startSpan(spanName, {
     kind: SpanKind.SERVER,
     attributes: {
       [ATTR_GEN_AI_OPERATION_NAME]: operationName,

@@ -3,7 +3,14 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { findCommand, extractArgs, isCommand, executeCommand, COMMANDS } from '../index.js';
+import {
+  findCommand,
+  extractArgs,
+  isCommand,
+  executeCommand,
+  getAutocompleteCommands,
+  COMMANDS,
+} from '../index.js';
 import type { CommandContext } from '../types.js';
 
 describe('COMMANDS', () => {
@@ -164,5 +171,54 @@ describe('executeCommand', () => {
     expect(result).toBeDefined();
     expect(result?.success).toBe(false);
     expect(context.outputs[0].content).toContain('/foo');
+  });
+});
+
+describe('getAutocompleteCommands', () => {
+  it('should return commands without leading slash', () => {
+    const commands = getAutocompleteCommands();
+    for (const cmd of commands) {
+      expect(cmd.name).not.toMatch(/^\//);
+    }
+  });
+
+  it('should return commands sorted alphabetically', () => {
+    const commands = getAutocompleteCommands();
+    const names = commands.map((c) => c.name);
+    const sorted = [...names].sort();
+    expect(names).toEqual(sorted);
+  });
+
+  it('should include all slash commands from COMMANDS', () => {
+    const commands = getAutocompleteCommands();
+    const names = commands.map((c) => c.name);
+
+    // Check that key commands are present
+    expect(names).toContain('clear');
+    expect(names).toContain('help');
+    expect(names).toContain('history');
+    expect(names).toContain('telemetry');
+    expect(names).toContain('save');
+    expect(names).toContain('sessions');
+  });
+
+  it('should include descriptions', () => {
+    const commands = getAutocompleteCommands();
+    for (const cmd of commands) {
+      expect(cmd.description).toBeDefined();
+      expect(cmd.description.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('should not include non-slash aliases', () => {
+    // Commands like 'exit', 'quit', 'q' should not be duplicated
+    // Only /exit should appear as 'exit'
+    const commands = getAutocompleteCommands();
+    const names = commands.map((c) => c.name);
+
+    // Should have 'exit' (from /exit) but not 'quit' or 'q'
+    expect(names).toContain('exit');
+    expect(names).not.toContain('quit');
+    expect(names).not.toContain('q');
   });
 });

@@ -176,3 +176,36 @@ export function isCommand(input: string): boolean {
   if (isSlashCommand(input)) return true;
   return findCommand(input) !== undefined;
 }
+
+/**
+ * Command info for autocomplete display.
+ */
+export interface AutocompleteCommandInfo {
+  /** Command name (without leading slash) */
+  name: string;
+  /** Brief description */
+  description: string;
+}
+
+/**
+ * Get all commands formatted for autocomplete.
+ * Returns unique command names (using first alias that starts with /).
+ */
+export function getAutocompleteCommands(): AutocompleteCommandInfo[] {
+  const commands: AutocompleteCommandInfo[] = [];
+
+  for (const cmd of COMMANDS) {
+    // Find the primary slash command alias
+    const slashAlias = cmd.aliases.find((a) => a.startsWith('/'));
+    if (slashAlias !== undefined) {
+      // Remove leading slash for display
+      commands.push({
+        name: slashAlias.slice(1),
+        description: cmd.description,
+      });
+    }
+  }
+
+  // Sort alphabetically by name
+  return commands.sort((a, b) => a.name.localeCompare(b.name));
+}

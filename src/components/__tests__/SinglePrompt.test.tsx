@@ -19,6 +19,59 @@ jest.unstable_mockModule('../../config/manager.js', () => ({
   configFileExists: mockConfigFileExists,
 }));
 
+// Mock telemetry module - include all exports used by cli/callbacks.js
+// Create mock functions that return proper Promises
+const mockInitializeTelemetry = (): Promise<{
+  success: boolean;
+  result: { enabled: boolean; exporterType: string; serviceName: string };
+  message: string;
+}> =>
+  Promise.resolve({
+    success: true,
+    result: { enabled: false, exporterType: 'none', serviceName: 'test' },
+    message: 'Telemetry disabled',
+  });
+
+const mockShutdown = (): Promise<{ success: boolean; message: string }> =>
+  Promise.resolve({
+    success: true,
+    message: 'Shutdown complete',
+  });
+
+jest.unstable_mockModule('../../telemetry/index.js', () => ({
+  initializeTelemetry: mockInitializeTelemetry,
+  shutdown: mockShutdown,
+  isEnabled: () => false,
+  startAgentSpan: jest.fn(),
+  endAgentSpan: jest.fn(),
+  startLLMSpan: jest.fn(),
+  endLLMSpan: jest.fn(),
+  startToolSpan: jest.fn(),
+  endToolSpan: jest.fn(),
+  getSpanKey: (ctx: { traceId: string; spanId: string }) => `${ctx.traceId}:${ctx.spanId}`,
+  mapProviderName: (name: string) => name,
+  getTracer: () => ({
+    startSpan: jest.fn().mockReturnValue({
+      setAttribute: jest.fn(),
+      setStatus: jest.fn(),
+      end: jest.fn(),
+    }),
+  }),
+  // GenAI semantic convention constants
+  ATTR_GEN_AI_OPERATION_NAME: 'gen_ai.operation.name',
+  ATTR_GEN_AI_PROVIDER_NAME: 'gen_ai.provider.name',
+  ATTR_GEN_AI_REQUEST_MODEL: 'gen_ai.request.model',
+  ATTR_GEN_AI_INPUT_MESSAGES: 'gen_ai.request.messages',
+  ATTR_GEN_AI_TOOL_NAME: 'gen_ai.tool.name',
+  ATTR_GEN_AI_TOOL_CALL_ID: 'gen_ai.tool.call.id',
+  ATTR_GEN_AI_TOOL_CALL_ARGUMENTS: 'gen_ai.tool.call.arguments',
+  GEN_AI_OPERATION: {
+    CHAT: 'chat',
+    EXECUTE_TOOL: 'execute_tool',
+    INVOKE_AGENT: 'invoke_agent',
+  },
+}));
+
 // Mock Agent that invokes callbacks properly
 // - run(): Invokes onAgentEnd only (no streaming)
 // - runStream(): Invokes onLLMStream for each chunk, then onAgentEnd

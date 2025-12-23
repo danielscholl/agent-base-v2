@@ -228,7 +228,7 @@ describe('extractTokenUsage', () => {
     expect(extractTokenUsage({ other: 'data' })).toBeUndefined();
   });
 
-  it('defaults to 0 for missing usage fields', () => {
+  it('defaults to 0 for missing usage fields and calculates total', () => {
     const metadata = {
       usage: {
         prompt_tokens: 10,
@@ -239,7 +239,55 @@ describe('extractTokenUsage', () => {
     expect(extractTokenUsage(metadata)).toEqual({
       promptTokens: 10,
       completionTokens: 0,
-      totalTokens: 0,
+      totalTokens: 10, // calculated from prompt + completion
+    });
+  });
+
+  it('extracts Anthropic format token usage (input_tokens/output_tokens)', () => {
+    const metadata = {
+      usage: {
+        input_tokens: 487,
+        output_tokens: 145,
+      },
+    };
+
+    expect(extractTokenUsage(metadata)).toEqual({
+      promptTokens: 487,
+      completionTokens: 145,
+      totalTokens: 632, // calculated: 487 + 145
+    });
+  });
+
+  it('extracts Anthropic format with camelCase (inputTokens/outputTokens)', () => {
+    const metadata = {
+      usage: {
+        inputTokens: 100,
+        outputTokens: 50,
+      },
+    };
+
+    expect(extractTokenUsage(metadata)).toEqual({
+      promptTokens: 100,
+      completionTokens: 50,
+      totalTokens: 150, // calculated: 100 + 50
+    });
+  });
+
+  it('prefers OpenAI format over Anthropic format when both present', () => {
+    const metadata = {
+      usage: {
+        prompt_tokens: 10,
+        completion_tokens: 20,
+        total_tokens: 30,
+        input_tokens: 100, // Should be ignored
+        output_tokens: 200, // Should be ignored
+      },
+    };
+
+    expect(extractTokenUsage(metadata)).toEqual({
+      promptTokens: 10,
+      completionTokens: 20,
+      totalTokens: 30,
     });
   });
 });
