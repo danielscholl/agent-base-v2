@@ -7,6 +7,7 @@ import type { StructuredToolInterface } from '@langchain/core/tools';
 import type { AppConfig } from '../config/schema.js';
 import type { AgentCallbacks } from './callbacks.js';
 import type { SkillLoaderOptions } from '../skills/types.js';
+import type { ToolPermission, ToolExecutionResult } from '../tools/index.js';
 
 // -----------------------------------------------------------------------------
 // Telemetry Types
@@ -77,7 +78,10 @@ export interface AgentOptions {
   config: AppConfig;
   /** Optional callbacks for lifecycle events */
   callbacks?: AgentCallbacks;
-  /** Optional tools to bind for function calling */
+  /**
+   * Optional tools to bind for function calling (legacy mode).
+   * If useToolRegistry is true, these are combined with registry tools.
+   */
   tools?: StructuredToolInterface[];
   /** Override for system prompt (skips file loading) */
   systemPrompt?: string;
@@ -87,6 +91,23 @@ export interface AgentOptions {
   includeSkills?: boolean;
   /** Options for skill loader (custom directories, debug callback) */
   skillLoaderOptions?: SkillLoaderOptions;
+  /**
+   * Use ToolRegistry for tool management (default: false for backward compatibility).
+   * When true, tools are retrieved from ToolRegistry based on enabledPermissions.
+   * Set to true to use the new tool system with structured results and metadata.
+   */
+  useToolRegistry?: boolean;
+  /**
+   * Enabled permissions for ToolRegistry filtering.
+   * Only tools with these permissions will be available.
+   * Defaults to all permissions if not specified.
+   */
+  enabledPermissions?: Set<ToolPermission>;
+  /**
+   * Callback for receiving structured tool execution results.
+   * Called with full Tool.Result including metadata for each tool execution.
+   */
+  onToolResult?: (result: ToolExecutionResult) => void;
 }
 
 /**

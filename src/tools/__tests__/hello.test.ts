@@ -1,217 +1,115 @@
 /**
  * Tests for Hello tools.
+ * Tests the new Tool.define() pattern tools.
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { helloWorldTool, greetUserTool } from '../hello.js';
-import type { ToolResponse } from '../index.js';
-import { isSuccessResponse, isErrorResponse } from '../index.js';
+import { helloTool, greetTool } from '../hello.js';
+import { Tool } from '../tool.js';
 
-// Type helper for test assertions
-interface HelloWorldResult {
-  greeting: string;
-}
+describe('helloTool', () => {
+  it('has correct ID', () => {
+    expect(helloTool.id).toBe('hello');
+  });
 
-interface GreetUserResult {
-  greeting: string;
-  language: string;
-}
+  it('initializes with description', async () => {
+    const initialized = await helloTool.init();
+    expect(initialized.description).toBe('Say hello to someone. Returns greeting message.');
+  });
 
-describe('helloWorldTool', () => {
   it('returns greeting for provided name', async () => {
-    const result = await helloWorldTool.invoke({ name: 'Alice' });
+    const initialized = await helloTool.init();
+    const ctx = Tool.createNoopContext({ callID: 'test-1' });
+    const result = await initialized.execute({ name: 'Alice' }, ctx);
 
-    expect(result).toEqual({
-      success: true,
-      result: { greeting: 'Hello, Alice!' },
-      message: 'Greeted Alice',
-    });
+    expect(result.title).toBe('Greeted Alice');
+    expect(result.output).toBe('Hello, Alice!');
+    expect(result.metadata).toEqual({ name: 'Alice' });
   });
 
   it('uses default name when not provided', async () => {
-    const result = await helloWorldTool.invoke({});
+    const initialized = await helloTool.init();
+    const ctx = Tool.createNoopContext({ callID: 'test-2' });
+    // Parse through schema to apply defaults
+    const args = initialized.parameters.parse({});
+    const result = await initialized.execute(args, ctx);
 
-    expect(result).toEqual({
-      success: true,
-      result: { greeting: 'Hello, World!' },
-      message: 'Greeted World',
-    });
+    expect(result.title).toBe('Greeted World');
+    expect(result.output).toBe('Hello, World!');
+    expect(result.metadata).toEqual({ name: 'World' });
   });
 
   it('handles empty string name', async () => {
-    const result = (await helloWorldTool.invoke({ name: '' })) as ToolResponse<HelloWorldResult>;
+    const initialized = await helloTool.init();
+    const ctx = Tool.createNoopContext({ callID: 'test-3' });
+    const result = await initialized.execute({ name: '' }, ctx);
 
-    expect(result.success).toBe(true);
-    if (isSuccessResponse(result)) {
-      expect(result.result.greeting).toBe('Hello, !');
-    }
+    expect(result.output).toBe('Hello, !');
   });
 
   it('handles special characters in name', async () => {
-    const result = (await helloWorldTool.invoke({
-      name: "O'Brien",
-    })) as ToolResponse<HelloWorldResult>;
+    const initialized = await helloTool.init();
+    const ctx = Tool.createNoopContext({ callID: 'test-4' });
+    const result = await initialized.execute({ name: "O'Brien" }, ctx);
 
-    expect(result.success).toBe(true);
-    if (isSuccessResponse(result)) {
-      expect(result.result.greeting).toContain("O'Brien");
-    }
-  });
-
-  it('handles unicode characters in name', async () => {
-    const result = (await helloWorldTool.invoke({
-      name: '日本語',
-    })) as ToolResponse<HelloWorldResult>;
-
-    expect(result.success).toBe(true);
-    if (isSuccessResponse(result)) {
-      expect(result.result.greeting).toBe('Hello, 日本語!');
-    }
-  });
-
-  it('has correct tool metadata', () => {
-    expect(helloWorldTool.name).toBe('hello_world');
-    expect(helloWorldTool.description).toBe('Say hello to someone. Returns greeting message.');
-  });
-
-  describe('schema validation (LangChain layer)', () => {
-    it('throws when invalid type is passed (LangChain validates before execute)', async () => {
-      // LangChain's tool() validates input schema BEFORE calling execute().
-      // Invalid types cause LangChain to throw, not return a ToolResponse.
-      // This is by design - schema validation happens at the LangChain layer.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await expect(helloWorldTool.invoke({ name: 123 as any })).rejects.toThrow();
-    });
+    expect(result.output).toContain("O'Brien");
   });
 });
 
-describe('greetUserTool', () => {
-  describe('success cases', () => {
-    it('greets in English (default)', async () => {
-      const result = await greetUserTool.invoke({ name: 'Alice' });
-
-      expect(result).toEqual({
-        success: true,
-        result: { greeting: 'Hello, Alice!', language: 'en' },
-        message: 'Greeted Alice in en',
-      });
-    });
-
-    it('greets in Spanish', async () => {
-      const result = await greetUserTool.invoke({ name: 'Carlos', language: 'es' });
-
-      expect(result).toEqual({
-        success: true,
-        result: { greeting: '¡Hola, Carlos!', language: 'es' },
-        message: 'Greeted Carlos in es',
-      });
-    });
-
-    it('greets in French', async () => {
-      const result = await greetUserTool.invoke({ name: 'Marie', language: 'fr' });
-
-      expect(result).toEqual({
-        success: true,
-        result: { greeting: 'Bonjour, Marie!', language: 'fr' },
-        message: 'Greeted Marie in fr',
-      });
-    });
-
-    it.each(['en', 'es', 'fr'])('supports language: %s', async (language) => {
-      const result = (await greetUserTool.invoke({
-        name: 'Test',
-        language,
-      })) as ToolResponse<GreetUserResult>;
-
-      expect(result.success).toBe(true);
-      if (isSuccessResponse(result)) {
-        expect(result.result.language).toBe(language);
-      }
-    });
+describe('greetTool', () => {
+  it('has correct ID', () => {
+    expect(greetTool.id).toBe('greet');
   });
 
-  describe('error cases', () => {
-    it('returns error for unsupported language', async () => {
-      const result = await greetUserTool.invoke({ name: 'Hans', language: 'de' });
-
-      expect(result).toEqual({
-        success: false,
-        error: 'VALIDATION_ERROR',
-        message: "Language 'de' not supported. Use: en, es, fr",
-      });
-    });
-
-    it('returns error for empty language code', async () => {
-      const result = (await greetUserTool.invoke({
-        name: 'Test',
-        language: '',
-      })) as ToolResponse<GreetUserResult>;
-
-      expect(result.success).toBe(false);
-      if (isErrorResponse(result)) {
-        expect(result.error).toBe('VALIDATION_ERROR');
-      }
-    });
-
-    it('returns error for invalid language code', async () => {
-      const result = (await greetUserTool.invoke({
-        name: 'Test',
-        language: 'xyz',
-      })) as ToolResponse<GreetUserResult>;
-
-      expect(result.success).toBe(false);
-      if (isErrorResponse(result)) {
-        expect(result.error).toBe('VALIDATION_ERROR');
-        expect(result.message).toContain('xyz');
-        expect(result.message).toContain('en, es, fr');
-      }
-    });
-
-    it('rejects prototype keys as language codes (prototype pollution protection)', async () => {
-      // 'toString' exists on Object.prototype but should not be treated as a supported language
-      const result = (await greetUserTool.invoke({
-        name: 'Test',
-        language: 'toString',
-      })) as ToolResponse<GreetUserResult>;
-
-      expect(result.success).toBe(false);
-      if (isErrorResponse(result)) {
-        expect(result.error).toBe('VALIDATION_ERROR');
-        expect(result.message).toContain('toString');
-      }
-    });
-  });
-
-  describe('edge cases', () => {
-    it('handles empty name', async () => {
-      const result = (await greetUserTool.invoke({
-        name: '',
-        language: 'en',
-      })) as ToolResponse<GreetUserResult>;
-
-      expect(result.success).toBe(true);
-      if (isSuccessResponse(result)) {
-        expect(result.result.greeting).toBe('Hello, !');
-      }
-    });
-
-    it('handles special characters in name', async () => {
-      const result = (await greetUserTool.invoke({
-        name: 'José María',
-        language: 'es',
-      })) as ToolResponse<GreetUserResult>;
-
-      expect(result.success).toBe(true);
-      if (isSuccessResponse(result)) {
-        expect(result.result.greeting).toContain('José María');
-      }
-    });
-  });
-
-  it('has correct tool metadata', () => {
-    expect(greetUserTool.name).toBe('greet_user');
-    expect(greetUserTool.description).toBe(
-      'Greet user in different languages (en, es, fr). Returns localized greeting or error if language unsupported.'
+  it('initializes with description', async () => {
+    const initialized = await greetTool.init();
+    expect(initialized.description).toBe(
+      'Greet user in different languages (en, es, fr). Returns localized greeting.'
     );
+  });
+
+  it('greets in English by default', async () => {
+    const initialized = await greetTool.init();
+    const ctx = Tool.createNoopContext({ callID: 'test-1' });
+    // Parse through schema to apply defaults
+    const args = initialized.parameters.parse({ name: 'Alice' });
+    const result = await initialized.execute(args, ctx);
+
+    expect(result.output).toBe('Hello, Alice!');
+    expect(result.metadata).toEqual({ name: 'Alice', language: 'en' });
+  });
+
+  it('greets in Spanish', async () => {
+    const initialized = await greetTool.init();
+    const ctx = Tool.createNoopContext({ callID: 'test-2' });
+    const result = await initialized.execute({ name: 'Bob', language: 'es' }, ctx);
+
+    expect(result.output).toBe('¡Hola, Bob!');
+    expect(result.metadata).toEqual({ name: 'Bob', language: 'es' });
+  });
+
+  it('greets in French', async () => {
+    const initialized = await greetTool.init();
+    const ctx = Tool.createNoopContext({ callID: 'test-3' });
+    const result = await initialized.execute({ name: 'Claire', language: 'fr' }, ctx);
+
+    expect(result.output).toBe('Bonjour, Claire!');
+    expect(result.metadata).toEqual({ name: 'Claire', language: 'fr' });
+  });
+
+  it('throws error for unsupported language', async () => {
+    const initialized = await greetTool.init();
+    const ctx = Tool.createNoopContext({ callID: 'test-4' });
+
+    expect(() => initialized.execute({ name: 'Test', language: 'de' }, ctx)).toThrow(
+      "Language 'de' not supported"
+    );
+  });
+
+  it('includes supported languages in error message', async () => {
+    const initialized = await greetTool.init();
+    const ctx = Tool.createNoopContext({ callID: 'test-5' });
+
+    expect(() => initialized.execute({ name: 'Test', language: 'xx' }, ctx)).toThrow('en, es, fr');
   });
 });

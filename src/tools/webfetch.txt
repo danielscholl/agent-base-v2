@@ -1,0 +1,7 @@
+Fetch content from URLs with format conversion.
+
+Usage:
+- Fetches web pages or API endpoints
+- Converts HTML to plain text or markdown
+- Size limit: 5MB
+- Default timeout: 30 seconds

@@ -1,0 +1,8 @@
+Execute shell commands with timeout and output limits.
+
+Usage:
+- Runs commands in a shell environment
+- Default timeout: 2 minutes, max: 10 minutes
+- Output truncated at 30KB
+- Supports custom working directory
+- Respects abort signals for cancellation

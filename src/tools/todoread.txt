@@ -1,0 +1,6 @@
+Read the current task list.
+
+Usage:
+- Returns all todos for the current session
+- Shows content, status, and priority
+- No parameters required

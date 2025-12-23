@@ -1,0 +1,7 @@
+Write/update the task list.
+
+Usage:
+- Creates or updates a list of todos
+- Each todo has content, status, and optional priority
+- Statuses: pending, in_progress, completed
+- Session-scoped (todos are per-session)

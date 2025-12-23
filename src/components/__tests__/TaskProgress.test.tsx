@@ -3,21 +3,41 @@
  */
 
 import React from 'react';
-import { describe, it, expect } from '@jest/globals';
-import { render } from 'ink-testing-library';
+import { describe, it, expect, afterEach } from '@jest/globals';
+import { render, type RenderOptions } from 'ink-testing-library';
 import { TaskProgress } from '../TaskProgress.js';
 import type { ActiveTask, CompletedTask } from '../TaskProgress.js';
 
+// Track render instances for cleanup
+let currentInstance: ReturnType<typeof render> | null = null;
+
+// Helper to render and track for cleanup
+function renderWithCleanup(
+  element: React.ReactElement,
+  options?: RenderOptions
+): ReturnType<typeof render> {
+  currentInstance = render(element, options);
+  return currentInstance;
+}
+
 describe('TaskProgress', () => {
+  afterEach(() => {
+    // Cleanup any rendered component to stop timers
+    if (currentInstance) {
+      currentInstance.unmount();
+      currentInstance = null;
+    }
+  });
+
   it('renders nothing when no tasks', () => {
-    const { lastFrame } = render(<TaskProgress />);
+    const { lastFrame } = renderWithCleanup(<TaskProgress />);
     expect(lastFrame()).toBe('');
   });
 
   it('renders active task with spinner', () => {
     const activeTasks: ActiveTask[] = [{ id: 'span-1', name: 'read_file', startTime: Date.now() }];
 
-    const { lastFrame } = render(<TaskProgress activeTasks={activeTasks} />);
+    const { lastFrame } = renderWithCleanup(<TaskProgress activeTasks={activeTasks} />);
 
     expect(lastFrame()).toContain('read_file');
     // Spinner frame should be present (one of the braille characters)
@@ -34,7 +54,7 @@ describe('TaskProgress', () => {
       },
     ];
 
-    const { lastFrame } = render(<TaskProgress activeTasks={activeTasks} />);
+    const { lastFrame } = renderWithCleanup(<TaskProgress activeTasks={activeTasks} />);
 
     expect(lastFrame()).toContain('read_file');
     expect(lastFrame()).toContain('path: /test/file.txt');
@@ -50,7 +70,7 @@ describe('TaskProgress', () => {
       },
     ];
 
-    const { lastFrame } = render(<TaskProgress activeTasks={activeTasks} />);
+    const { lastFrame } = renderWithCleanup(<TaskProgress activeTasks={activeTasks} />);
 
     // formatArgs truncates values longer than 20 chars to 17 chars + '...'
     expect(lastFrame()).toContain('path: /very/long/path/t');
@@ -62,7 +82,7 @@ describe('TaskProgress', () => {
       { id: 'c1', name: 'read_file', success: true, duration: 150 },
     ];
 
-    const { lastFrame } = render(<TaskProgress completedTasks={completedTasks} />);
+    const { lastFrame } = renderWithCleanup(<TaskProgress completedTasks={completedTasks} />);
 
     expect(lastFrame()).toContain('✓');
     expect(lastFrame()).toContain('read_file');
@@ -74,7 +94,7 @@ describe('TaskProgress', () => {
       { id: 'c2', name: 'read_file', success: false, duration: 50, error: 'File not found' },
     ];
 
-    const { lastFrame } = render(<TaskProgress completedTasks={completedTasks} />);
+    const { lastFrame } = renderWithCleanup(<TaskProgress completedTasks={completedTasks} />);
 
     expect(lastFrame()).toContain('✗');
     expect(lastFrame()).toContain('read_file');
@@ -90,7 +110,9 @@ describe('TaskProgress', () => {
       { id: 'c7', name: 'task5', success: true, duration: 100 },
     ];
 
-    const { lastFrame } = render(<TaskProgress completedTasks={completedTasks} maxCompleted={3} />);
+    const { lastFrame } = renderWithCleanup(
+      <TaskProgress completedTasks={completedTasks} maxCompleted={3} />
+    );
 
     // Should show last 3 tasks
     expect(lastFrame()).not.toContain('task1');
@@ -108,7 +130,7 @@ describe('TaskProgress', () => {
       { id: 'c8', name: 'done_tool', success: true, duration: 100 },
     ];
 
-    const { lastFrame } = render(
+    const { lastFrame } = renderWithCleanup(
       <TaskProgress activeTasks={activeTasks} completedTasks={completedTasks} />
     );
 
@@ -122,7 +144,7 @@ describe('TaskProgress', () => {
       { id: 'c9', name: 'done_tool', success: true, duration: 100 },
     ];
 
-    const { lastFrame } = render(
+    const { lastFrame } = renderWithCleanup(
       <TaskProgress completedTasks={completedTasks} showCompleted={false} />
     );
 
@@ -140,7 +162,7 @@ describe('TaskProgress', () => {
       },
     ];
 
-    const { lastFrame } = render(<TaskProgress activeTasks={activeTasks} />);
+    const { lastFrame } = renderWithCleanup(<TaskProgress activeTasks={activeTasks} />);
 
     expect(lastFrame()).toContain('arg1: val1');
     expect(lastFrame()).toContain('arg2: val2');
@@ -157,7 +179,7 @@ describe('TaskProgress', () => {
       },
     ];
 
-    const { lastFrame } = render(<TaskProgress activeTasks={activeTasks} />);
+    const { lastFrame } = renderWithCleanup(<TaskProgress activeTasks={activeTasks} />);
 
     expect(lastFrame()).toContain('no_args_tool');
     // Should not show empty parentheses
@@ -173,7 +195,7 @@ describe('TaskProgress', () => {
       },
     ];
 
-    const { lastFrame } = render(<TaskProgress activeTasks={activeTasks} />);
+    const { lastFrame } = renderWithCleanup(<TaskProgress activeTasks={activeTasks} />);
 
     expect(lastFrame()).toContain('undefined_args_tool');
   });
@@ -184,7 +206,7 @@ describe('TaskProgress', () => {
       { id: 'span-b', name: 'read_file', startTime: Date.now() },
     ];
 
-    const { lastFrame } = render(<TaskProgress activeTasks={activeTasks} />);
+    const { lastFrame } = renderWithCleanup(<TaskProgress activeTasks={activeTasks} />);
 
     // Both tasks should be displayed (same name, different ids)
     const frame = lastFrame() ?? '';

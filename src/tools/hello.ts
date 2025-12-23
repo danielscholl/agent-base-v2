@@ -1,51 +1,50 @@
 /**
- * Hello tools - reference implementation for tool development.
- * Demonstrates the createTool pattern with success and error responses.
+ * Hello tools - reference implementation for the new Tool.define() pattern.
+ * Demonstrates both simple and complex tool definitions with metadata.
  */
 
 import { z } from 'zod';
-import { createTool, successResponse, errorResponse } from './base.js';
-import type { ToolResponse } from './types.js';
+import { Tool } from './tool.js';
 
-// === Hello World Tool ===
-
-const HelloWorldInputSchema = z.object({
-  name: z.string().default('World').describe('Name to greet'),
-});
-
-interface HelloWorldResult {
-  greeting: string;
+/**
+ * Hello World tool metadata type.
+ */
+interface HelloMetadata extends Tool.Metadata {
+  /** Name that was greeted */
+  name: string;
 }
 
 /**
- * Hello World tool - greets a user by name.
- * Demonstrates basic tool pattern with success responses.
- *
- * @example
- * const result = await helloWorldTool.invoke({ name: 'Alice' });
- * // { success: true, result: { greeting: 'Hello, Alice!' }, message: 'Greeted Alice' }
+ * Hello World tool - demonstrates basic Tool.define() pattern.
+ * Greets a user by name with simple metadata.
  */
-export const helloWorldTool = createTool<z.infer<typeof HelloWorldInputSchema>, HelloWorldResult>({
-  name: 'hello_world',
+export const helloTool = Tool.define<
+  z.ZodObject<{ name: z.ZodDefault<z.ZodString> }>,
+  HelloMetadata
+>('hello', {
   description: 'Say hello to someone. Returns greeting message.',
-  schema: HelloWorldInputSchema,
-  execute: (input): Promise<ToolResponse<HelloWorldResult>> => {
-    const greeting = `Hello, ${input.name}!`;
-    return Promise.resolve(
-      successResponse<HelloWorldResult>({ greeting }, `Greeted ${input.name}`)
-    );
+  parameters: z.object({
+    name: z.string().default('World').describe('Name to greet'),
+  }),
+  execute: (args, ctx) => {
+    // Stream metadata update for UI
+    ctx.metadata({ title: `Greeting ${args.name}...` });
+
+    return {
+      title: `Greeted ${args.name}`,
+      metadata: { name: args.name },
+      output: `Hello, ${args.name}!`,
+    };
   },
 });
 
-// === Greet User Tool ===
-
-const GreetUserInputSchema = z.object({
-  name: z.string().describe("User's name"),
-  language: z.string().default('en').describe('Language code (en, es, fr)'),
-});
-
-interface GreetUserResult {
-  greeting: string;
+/**
+ * Greet User tool metadata type.
+ */
+interface GreetMetadata extends Tool.Metadata {
+  /** Name that was greeted */
+  name: string;
+  /** Language used */
   language: string;
 }
 
@@ -62,37 +61,36 @@ function isSupportedLanguage(lang: string): lang is SupportedLanguage {
 }
 
 /**
- * Greet User tool - greets in different languages with error handling.
- * Demonstrates error responses for invalid input scenarios.
- *
- * @example
- * // Success case
- * const result = await greetUserTool.invoke({ name: 'Alice', language: 'es' });
- * // { success: true, result: { greeting: '¡Hola, Alice!', language: 'es' }, message: 'Greeted Alice in es' }
- *
- * @example
- * // Error case - unsupported language
- * const result = await greetUserTool.invoke({ name: 'Bob', language: 'de' });
- * // { success: false, error: 'VALIDATION_ERROR', message: "Language 'de' not supported. Use: en, es, fr" }
+ * Greet User tool - demonstrates error handling and multiple outputs.
+ * Greets in different languages with validation.
  */
-export const greetUserTool = createTool<z.infer<typeof GreetUserInputSchema>, GreetUserResult>({
-  name: 'greet_user',
-  description:
-    'Greet user in different languages (en, es, fr). Returns localized greeting or error if language unsupported.',
-  schema: GreetUserInputSchema,
-  execute: (input): Promise<ToolResponse<GreetUserResult>> => {
-    const { name, language } = input;
+export const greetTool = Tool.define<
+  z.ZodObject<{ name: z.ZodString; language: z.ZodDefault<z.ZodString> }>,
+  GreetMetadata
+>('greet', {
+  description: 'Greet user in different languages (en, es, fr). Returns localized greeting.',
+  parameters: z.object({
+    name: z.string().describe("User's name"),
+    language: z.string().default('en').describe('Language code (en, es, fr)'),
+  }),
+  execute: (args, ctx) => {
+    const { name, language } = args;
 
+    // Stream progress
+    ctx.metadata({ title: `Greeting ${name} in ${language}...` });
+
+    // Validate language
     if (!isSupportedLanguage(language)) {
       const supported = Object.keys(GREETINGS).join(', ');
-      return Promise.resolve(
-        errorResponse('VALIDATION_ERROR', `Language '${language}' not supported. Use: ${supported}`)
-      );
+      throw new Error(`Language '${language}' not supported. Use: ${supported}`);
     }
 
     const greeting = `${GREETINGS[language]}, ${name}!`;
-    return Promise.resolve(
-      successResponse<GreetUserResult>({ greeting, language }, `Greeted ${name} in ${language}`)
-    );
+
+    return {
+      title: `Greeted ${name} in ${language}`,
+      metadata: { name, language },
+      output: greeting,
+    };
   },
 });

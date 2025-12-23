@@ -1,0 +1,7 @@
+Launch a subagent to handle complex tasks.
+
+Usage:
+- Delegates work to specialized subagents
+- Supports session continuation
+- Streams progress via metadata
+- Respects abort signals
