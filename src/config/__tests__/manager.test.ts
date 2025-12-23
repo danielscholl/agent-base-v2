@@ -562,11 +562,13 @@ describe('ConfigManager', () => {
       expect(saved.version).toBe('1.0');
       expect(saved.providers).toBeDefined();
 
-      // Should NOT include default agent/telemetry/memory/skills sections
+      // Should NOT include default agent/telemetry/skills sections
       // (unless they have non-default values)
       expect(saved.telemetry).toBeUndefined();
-      expect(saved.memory).toBeUndefined();
       expect(saved.skills).toBeUndefined();
+
+      // Memory is included because it's enabled by default
+      expect(saved.memory).toBeDefined();
     });
 
     it('should include telemetry when enabled', async () => {

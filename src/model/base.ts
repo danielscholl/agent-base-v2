@@ -104,6 +104,11 @@ export function mapErrorToCode(error: unknown): ModelErrorCode {
  * Extract token usage from LangChain response metadata.
  * Handles various metadata formats from different providers.
  *
+ * Supported formats:
+ * - OpenAI: { usage: { prompt_tokens, completion_tokens, total_tokens } }
+ * - Anthropic: { usage: { input_tokens, output_tokens } }
+ * - Generic: { token_usage: { prompt_tokens, completion_tokens, total_tokens } }
+ *
  * @param metadata - Response metadata from LangChain
  * @returns TokenUsage if found, undefined otherwise
  */
@@ -112,13 +117,25 @@ export function extractTokenUsage(
 ): TokenUsage | undefined {
   if (!metadata) return undefined;
 
-  // OpenAI format (snake_case or camelCase)
+  // Check for usage object (OpenAI and Anthropic)
   const usage = metadata.usage as Record<string, number> | undefined;
   if (usage) {
+    // Anthropic format uses input_tokens/output_tokens
+    const promptTokens =
+      usage.prompt_tokens ?? usage.promptTokens ?? usage.input_tokens ?? usage.inputTokens ?? 0;
+    const completionTokens =
+      usage.completion_tokens ??
+      usage.completionTokens ??
+      usage.output_tokens ??
+      usage.outputTokens ??
+      0;
+    // Calculate total if not provided (Anthropic doesn't include total_tokens)
+    const totalTokens = usage.total_tokens ?? usage.totalTokens ?? promptTokens + completionTokens;
+
     return {
-      promptTokens: usage.prompt_tokens ?? usage.promptTokens ?? 0,
-      completionTokens: usage.completion_tokens ?? usage.completionTokens ?? 0,
-      totalTokens: usage.total_tokens ?? usage.totalTokens ?? 0,
+      promptTokens,
+      completionTokens,
+      totalTokens,
     };
   }
 

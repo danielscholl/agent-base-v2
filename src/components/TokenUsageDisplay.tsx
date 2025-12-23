@@ -25,6 +25,25 @@ function formatNumber(num: number): string {
 }
 
 /**
+ * Format token count in compact form (k/M notation).
+ * - Under 1,000: show as-is (e.g., "842")
+ * - 1,000-999,999: show as Xk (e.g., "6.4k")
+ * - 1,000,000+: show as XM (e.g., "1.2M")
+ */
+function formatTokensCompact(num: number): string {
+  if (num < 1000) {
+    return String(num);
+  }
+  if (num < 1_000_000) {
+    const k = num / 1000;
+    // Show one decimal place if under 10k, otherwise whole numbers
+    return k < 10 ? `${k.toFixed(1)}k` : `${String(Math.round(k))}k`;
+  }
+  const m = num / 1_000_000;
+  return m < 10 ? `${m.toFixed(1)}M` : `${String(Math.round(m))}M`;
+}
+
+/**
  * TokenUsageDisplay component.
  * Shows token statistics in a compact or detailed format.
  */
@@ -65,11 +84,11 @@ export function TokenUsageDisplay({
     );
   }
 
-  // Compact view - single line
+  // Compact view - single line with k/M notation
   return (
     <Box marginTop={1}>
       <Text dimColor>Tokens: </Text>
-      <Text color="cyan">{formatNumber(usage.tokens)}</Text>
+      <Text color="cyan">{formatTokensCompact(usage.tokens)}</Text>
       <Text dimColor>
         {' '}
         ({formatNumber(usage.queryCount)} {usage.queryCount === 1 ? 'query' : 'queries'})

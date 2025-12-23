@@ -63,7 +63,7 @@ export const DEFAULT_TELEMETRY_ENABLED = false;
 export const DEFAULT_ENABLE_SENSITIVE_DATA = false;
 
 // Memory defaults
-export const DEFAULT_MEMORY_ENABLED = false;
+export const DEFAULT_MEMORY_ENABLED = true;
 export const DEFAULT_MEMORY_TYPE = 'local' as const;
 export const DEFAULT_MEMORY_HISTORY_LIMIT = 100;
 

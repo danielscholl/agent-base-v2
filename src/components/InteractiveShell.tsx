@@ -9,7 +9,7 @@ import { Box, Text, useInput, useApp } from 'ink';
 import { Agent } from '../agent/agent.js';
 import { loadConfig, configFileExists } from '../config/manager.js';
 import { validateProviderCredentials } from '../config/schema.js';
-import { createCallbacks } from '../cli/callbacks.js';
+import { createCallbacks, wrapWithTelemetry } from '../cli/callbacks.js';
 import {
   getPathInfoTool,
   listDirectoryTool,
@@ -21,7 +21,9 @@ import {
   applyFilePatchTool,
 } from '../tools/index.js';
 import { VERSION } from '../cli/version.js';
-import { executeCommand, isCommand } from '../cli/commands/index.js';
+import { executeCommand, isCommand, getAutocompleteCommands } from '../cli/commands/index.js';
+import { CommandAutocomplete, filterCommands } from './CommandAutocomplete.js';
+import type { AutocompleteCommand } from './CommandAutocomplete.js';
 import { configInitHandler } from '../cli/commands/config.js';
 import { unescapeSlash } from '../cli/constants.js';
 import { InputHistory } from '../cli/input/index.js';
@@ -33,6 +35,7 @@ import { ErrorDisplay } from './ErrorDisplay.js';
 import { TaskProgress } from './TaskProgress.js';
 import { AnswerBox } from './AnswerBox.js';
 import { TokenUsageDisplay } from './TokenUsageDisplay.js';
+import { initializeTelemetry } from '../telemetry/index.js';
 import type { ActiveTask, CompletedTask } from './TaskProgress.js';
 import type { InteractiveShellProps, ShellMessage } from '../cli/types.js';
 import type { CommandContext } from '../cli/commands/types.js';
@@ -86,6 +89,8 @@ interface ShellState {
   promptState: PromptState | null;
   /** Whether config init is currently running */
   runningConfigInit: boolean;
+  /** Selected index in command autocomplete */
+  autocompleteIndex: number;
 }
 
 /**
@@ -104,6 +109,9 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
   // Track if config loading has been initiated to prevent duplicate loads
   const configLoadInitiatedRef = useRef(false);
 
+  // Get autocomplete commands once
+  const autocompleteCommandsRef = useRef<AutocompleteCommand[]>(getAutocompleteCommands());
+
   const [state, setState] = useState<ShellState>({
     input: '',
     isProcessing: false,
@@ -121,6 +129,7 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
     tokenUsage: INITIAL_TOKEN_USAGE,
     promptState: null,
     runningConfigInit: false,
+    autocompleteIndex: 0,
   });
 
   // Load config on mount and handle session resume
@@ -226,6 +235,30 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
               configError: errorMsg,
             }));
             return;
+          }
+
+          // Initialize telemetry if enabled in config
+          if (config.telemetry.enabled) {
+            const debugOtel = process.env.DEBUG_OTEL === 'true';
+            initializeTelemetry({
+              config: config.telemetry,
+              serviceName: 'agent-cli',
+              onDebug: (msg) => {
+                if (debugOtel) {
+                  process.stderr.write(`[OTEL] ${msg}\n`);
+                }
+              },
+            })
+              .then((result) => {
+                if (debugOtel) {
+                  process.stderr.write(`[OTEL] Init result: ${JSON.stringify(result)}\n`);
+                }
+              })
+              .catch((err: unknown) => {
+                process.stderr.write(
+                  `[OTEL] Init error: ${err instanceof Error ? err.message : String(err)}\n`
+                );
+              });
           }
         }
 
@@ -828,10 +861,31 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
         applyFilePatchTool,
       ];
 
+      // Wrap callbacks with telemetry if enabled
+      // This adds automatic OpenTelemetry spans for agent, LLM, and tool operations
+      const providerName = currentState.config.providers.default;
+      const providerConfig = currentState.config.providers[providerName] as
+        | Record<string, unknown>
+        | undefined;
+      const modelName =
+        providerConfig !== undefined
+          ? providerName === 'azure'
+            ? ((providerConfig.deployment as string | undefined) ?? 'unknown')
+            : providerName === 'foundry'
+              ? ((providerConfig.modelDeployment as string | undefined) ?? 'unknown')
+              : ((providerConfig.model as string | undefined) ?? 'unknown')
+          : 'unknown';
+
+      const tracedCallbacks = wrapWithTelemetry(callbacks, {
+        providerName,
+        modelName,
+        enableSensitiveData: currentState.config.telemetry.enableSensitiveData,
+      });
+
       try {
         agentRef.current = new Agent({
           config: currentState.config,
-          callbacks,
+          callbacks: tracedCallbacks,
           tools: filesystemTools,
         });
       } catch (error) {
@@ -943,41 +997,103 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
     // Don't process other input while agent is working
     if (state.isProcessing) return;
 
-    // ESC to clear input
+    // Check if autocomplete should be active
+    // Active when input starts with '/' but not '//' (escape sequence)
+    const showAutocomplete =
+      state.input.startsWith('/') &&
+      !state.input.startsWith('//') &&
+      state.input.indexOf(' ') === -1;
+    const autocompleteFilter = showAutocomplete ? state.input.slice(1) : '';
+    const filteredCommands = showAutocomplete
+      ? filterCommands(autocompleteCommandsRef.current, autocompleteFilter)
+      : [];
+    const hasAutocomplete = filteredCommands.length > 0;
+
+    // ESC to clear input (or close autocomplete)
     if (key.escape) {
-      setState((s) => ({ ...s, input: '' }));
+      setState((s) => ({ ...s, input: '', autocompleteIndex: 0 }));
       historyRef.current.reset();
       return;
     }
 
-    // Up arrow - navigate history backward
+    // Up arrow - navigate autocomplete or history
     if (key.upArrow) {
-      const previousEntry = historyRef.current.previous(state.input);
-      if (previousEntry !== undefined) {
-        setState((s) => ({ ...s, input: previousEntry }));
+      if (hasAutocomplete) {
+        // Navigate autocomplete up
+        setState((s) => ({
+          ...s,
+          autocompleteIndex:
+            s.autocompleteIndex > 0 ? s.autocompleteIndex - 1 : filteredCommands.length - 1,
+        }));
+      } else {
+        // Navigate history backward
+        const previousEntry = historyRef.current.previous(state.input);
+        if (previousEntry !== undefined) {
+          setState((s) => ({ ...s, input: previousEntry }));
+        }
       }
       return;
     }
 
-    // Down arrow - navigate history forward
+    // Down arrow - navigate autocomplete or history
     if (key.downArrow) {
-      const nextEntry = historyRef.current.next();
-      if (nextEntry !== undefined) {
-        setState((s) => ({ ...s, input: nextEntry }));
+      if (hasAutocomplete) {
+        // Navigate autocomplete down
+        setState((s) => ({
+          ...s,
+          autocompleteIndex:
+            s.autocompleteIndex < filteredCommands.length - 1 ? s.autocompleteIndex + 1 : 0,
+        }));
+      } else {
+        // Navigate history forward
+        const nextEntry = historyRef.current.next();
+        if (nextEntry !== undefined) {
+          setState((s) => ({ ...s, input: nextEntry }));
+        }
+      }
+      return;
+    }
+
+    // Tab to accept autocomplete selection
+    if (key.tab && hasAutocomplete) {
+      const selectedCommand = filteredCommands[state.autocompleteIndex];
+      if (selectedCommand !== undefined) {
+        setState((s) => ({
+          ...s,
+          input: `/${selectedCommand.name} `,
+          autocompleteIndex: 0,
+        }));
       }
       return;
     }
 
     if (key.return) {
+      // If autocomplete is showing and has a selection, select it first
+      if (hasAutocomplete && filteredCommands.length > 0) {
+        const selectedCommand = filteredCommands[state.autocompleteIndex];
+        if (selectedCommand !== undefined) {
+          // If it's an exact match, submit it; otherwise fill in and add space
+          if (autocompleteFilter.toLowerCase() === selectedCommand.name.toLowerCase()) {
+            void handleSubmit();
+          } else {
+            setState((s) => ({
+              ...s,
+              input: `/${selectedCommand.name} `,
+              autocompleteIndex: 0,
+            }));
+          }
+          return;
+        }
+      }
       void handleSubmit();
     } else if (key.backspace || key.delete) {
-      // Reset history navigation on edit
+      // Reset history navigation and autocomplete index on edit
       historyRef.current.reset();
-      setState((s) => ({ ...s, input: s.input.slice(0, -1) }));
+      setState((s) => ({ ...s, input: s.input.slice(0, -1), autocompleteIndex: 0 }));
     } else if (!key.ctrl && !key.meta && input.length === 1) {
-      // Reset history navigation on edit
+      // Reset history navigation and autocomplete index on edit
       historyRef.current.reset();
-      setState((s) => ({ ...s, input: s.input + input }));
+      setState((s) => ({ ...s, input: s.input + input, autocompleteIndex: 0 }));
     }
   });
 
@@ -1083,13 +1199,25 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
         </Box>
       )}
 
-      {/* Input prompt */}
+      {/* Input prompt with autocomplete */}
       {!state.isProcessing && state.promptState === null && (
-        <Box>
-          <Text color="cyan">{'> '}</Text>
-          <Text>{state.input}</Text>
-          <Text color="cyan">{'█'}</Text>
-        </Box>
+        <>
+          <Box>
+            <Text color="cyan">{'> '}</Text>
+            <Text>{state.input}</Text>
+            <Text color="cyan">{'█'}</Text>
+          </Box>
+          {/* Command autocomplete - show when typing slash commands */}
+          {state.input.startsWith('/') &&
+            !state.input.startsWith('//') &&
+            state.input.indexOf(' ') === -1 && (
+              <CommandAutocomplete
+                commands={autocompleteCommandsRef.current}
+                filter={state.input.slice(1)}
+                selectedIndex={state.autocompleteIndex}
+              />
+            )}
+        </>
       )}
     </Box>
   );

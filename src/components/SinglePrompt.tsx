@@ -9,7 +9,8 @@ import { Box, Text, useApp } from 'ink';
 import { Agent } from '../agent/agent.js';
 import { loadConfig, configFileExists } from '../config/manager.js';
 import { validateProviderCredentials } from '../config/schema.js';
-import { createCallbacks } from '../cli/callbacks.js';
+import { createCallbacks, wrapWithTelemetry } from '../cli/callbacks.js';
+import { initializeTelemetry, shutdown as shutdownTelemetry } from '../telemetry/index.js';
 import {
   getPathInfoTool,
   listDirectoryTool,
@@ -121,6 +122,31 @@ export function SinglePrompt({
         spinnerMessage: 'Thinking...',
       }));
 
+      // Initialize telemetry if enabled
+      if (config.telemetry.enabled) {
+        const debugOtel = process.env['DEBUG_OTEL'] === 'true';
+        try {
+          const telemetryResult = await initializeTelemetry({
+            config: config.telemetry,
+            serviceName: 'agent-cli',
+            onDebug: (msg) => {
+              if (debugOtel) {
+                process.stderr.write(`[OTEL] ${msg}\n`);
+              }
+            },
+          });
+          if (debugOtel) {
+            process.stderr.write(`[OTEL] Init result: ${JSON.stringify(telemetryResult)}\n`);
+          }
+        } catch (err: unknown) {
+          if (debugOtel) {
+            process.stderr.write(
+              `[OTEL] Init error: ${err instanceof Error ? err.message : String(err)}\n`
+            );
+          }
+        }
+      }
+
       // Propagate filesystem writes config to env var for tools to check
       if (!config.agent.filesystemWritesEnabled) {
         process.env['AGENT_FILESYSTEM_WRITES_ENABLED'] = 'false';
@@ -130,7 +156,7 @@ export function SinglePrompt({
       }
 
       // Create agent with callbacks wired to state
-      const callbacks = createCallbacks(
+      const baseCallbacks = createCallbacks(
         {
           setSpinnerMessage: (msg) => {
             if (mountedRef.current) {
@@ -164,6 +190,24 @@ export function SinglePrompt({
         },
         { verbose: verbose === true }
       );
+
+      // Wrap callbacks with telemetry spans if enabled
+      const providerName = config.providers.default;
+      const providerConfig = config.providers[providerName] as Record<string, unknown> | undefined;
+      const modelName =
+        providerConfig !== undefined
+          ? providerName === 'azure'
+            ? ((providerConfig['deployment'] as string | undefined) ?? 'unknown')
+            : providerName === 'foundry'
+              ? ((providerConfig['modelDeployment'] as string | undefined) ?? 'unknown')
+              : ((providerConfig['model'] as string | undefined) ?? 'unknown')
+          : 'unknown';
+
+      const callbacks = wrapWithTelemetry(baseCallbacks, {
+        providerName,
+        modelName,
+        enableSensitiveData: config.telemetry.enableSensitiveData,
+      });
 
       // Create filesystem tools array
       const filesystemTools = [
@@ -230,7 +274,10 @@ export function SinglePrompt({
   useEffect(() => {
     if (state.phase === 'done') {
       const timer = setTimeout(() => {
-        exit();
+        // Shutdown telemetry before exiting to flush spans
+        void shutdownTelemetry().finally(() => {
+          exit();
+        });
       }, 100);
       return () => {
         clearTimeout(timer);
@@ -247,7 +294,10 @@ export function SinglePrompt({
         process.stderr.write(`Error: ${message}\n`);
       }
       const timer = setTimeout(() => {
-        exit(new Error('Command failed'));
+        // Shutdown telemetry before exiting to flush spans
+        void shutdownTelemetry().finally(() => {
+          exit(new Error('Command failed'));
+        });
       }, 100);
       return () => {
         clearTimeout(timer);
