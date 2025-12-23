@@ -13,7 +13,8 @@ import type { Tracer, Meter } from '@opentelemetry/api';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 import { BasicTracerProvider, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { OTLPTraceExporter as OTLPHttpExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { OTLPTraceExporter as OTLPGrpcExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
 import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-base';
 import type { SpanExporter } from '@opentelemetry/sdk-trace-base';
 
@@ -31,7 +32,9 @@ import type {
 
 const DEFAULT_SERVICE_NAME = 'agent-framework';
 const DEFAULT_SERVICE_VERSION = '0.1.0';
-const DEFAULT_OTLP_ENDPOINT = 'http://localhost:4318/v1/traces';
+// OTLP endpoints - try HTTP first (4318), then gRPC (4317)
+const DEFAULT_OTLP_HTTP_ENDPOINT = 'http://localhost:4318/v1/traces';
+const DEFAULT_OTLP_GRPC_ENDPOINT = 'http://localhost:4317';
 const ENDPOINT_CHECK_TIMEOUT_MS = 500;
 
 // -----------------------------------------------------------------------------
@@ -141,10 +144,11 @@ export async function initializeTelemetry(
 
   const serviceName = options.serviceName ?? DEFAULT_SERVICE_NAME;
   const serviceVersion = options.serviceVersion ?? DEFAULT_SERVICE_VERSION;
-  const endpoint = options.endpoint ?? config.otlpEndpoint ?? DEFAULT_OTLP_ENDPOINT;
 
-  // Determine exporter type
+  // Determine exporter type and endpoint
   let exporterType: ExporterType = options.exporterType ?? 'otlp';
+  let endpoint: string | undefined;
+  let useGrpc = false;
 
   // Auto-detect endpoint availability if using OTLP (skip when using custom exporter)
   if (
@@ -152,14 +156,46 @@ export async function initializeTelemetry(
     options.skipEndpointCheck !== true &&
     options.customExporter === undefined
   ) {
-    debug(`Checking endpoint availability: ${endpoint}`);
-    const reachable = await isEndpointReachable(endpoint);
-    if (!reachable) {
-      debug(`Endpoint unreachable: ${endpoint}, falling back to no-op`);
-      exporterType = 'none';
-    } else {
-      debug(`Endpoint reachable: ${endpoint}`);
+    // If user specified an endpoint, use it
+    const userEndpoint = options.endpoint ?? config.otlpEndpoint;
+    if (userEndpoint !== undefined) {
+      debug(`Checking user endpoint availability: ${userEndpoint}`);
+      const reachable = await isEndpointReachable(userEndpoint);
+      if (reachable) {
+        endpoint = userEndpoint;
+        // Detect gRPC vs HTTP based on port
+        useGrpc = userEndpoint.includes(':4317');
+        debug(`User endpoint reachable: ${endpoint} (${useGrpc ? 'gRPC' : 'HTTP'})`);
+      } else {
+        debug(`User endpoint unreachable: ${userEndpoint}, falling back to auto-detect`);
+      }
     }
+
+    // If no user endpoint or it's unreachable, auto-detect
+    if (endpoint === undefined) {
+      // Try HTTP first (port 4318)
+      debug(`Checking HTTP endpoint: ${DEFAULT_OTLP_HTTP_ENDPOINT}`);
+      if (await isEndpointReachable(DEFAULT_OTLP_HTTP_ENDPOINT)) {
+        endpoint = DEFAULT_OTLP_HTTP_ENDPOINT;
+        useGrpc = false;
+        debug(`HTTP endpoint reachable: ${endpoint}`);
+      } else {
+        // Try gRPC (port 4317)
+        debug(`HTTP unreachable, checking gRPC endpoint: ${DEFAULT_OTLP_GRPC_ENDPOINT}`);
+        if (await isEndpointReachable(DEFAULT_OTLP_GRPC_ENDPOINT)) {
+          endpoint = DEFAULT_OTLP_GRPC_ENDPOINT;
+          useGrpc = true;
+          debug(`gRPC endpoint reachable: ${endpoint}`);
+        } else {
+          debug('No OTLP endpoints reachable, falling back to no-op');
+          exporterType = 'none';
+        }
+      }
+    }
+  } else if (exporterType === 'otlp') {
+    // Skip endpoint check but still need to determine endpoint
+    endpoint = options.endpoint ?? config.otlpEndpoint ?? DEFAULT_OTLP_HTTP_ENDPOINT;
+    useGrpc = endpoint.includes(':4317');
   }
 
   // Handle no-op case first to avoid any allocations (unless custom exporter provided)
@@ -183,10 +219,17 @@ export async function initializeTelemetry(
   } else {
     switch (exporterType) {
       case 'otlp':
-        debug(`Creating OTLP exporter for ${endpoint}`);
-        exporter = new OTLPTraceExporter({
-          url: endpoint,
-        });
+        if (useGrpc) {
+          debug(`Creating OTLP gRPC exporter for ${endpoint ?? 'default'}`);
+          exporter = new OTLPGrpcExporter({
+            url: endpoint,
+          });
+        } else {
+          debug(`Creating OTLP HTTP exporter for ${endpoint ?? 'default'}`);
+          exporter = new OTLPHttpExporter({
+            url: endpoint,
+          });
+        }
         break;
       case 'console':
         debug('Creating console exporter');

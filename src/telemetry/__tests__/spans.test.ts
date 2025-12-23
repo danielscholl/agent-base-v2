@@ -1321,7 +1321,8 @@ describe('GenAI Span Attribute Validation', () => {
 
       expect(capture.getSpans()).toHaveLength(1);
       const agentSpan = capture.getFirstSpan();
-      expect(agentSpan.name).toBe('agent.invoke_agent');
+      // Span name follows GenAI convention: "{operation_name} {model_name}"
+      expect(agentSpan.name).toBe('invoke_agent gpt-4o');
       expect(capture.getAttribute(agentSpan, ATTR_GEN_AI_OPERATION_NAME)).toBe('invoke_agent');
       expect(capture.getAttribute(agentSpan, ATTR_GEN_AI_PROVIDER_NAME)).toBe('openai');
       expect(capture.getAttribute(agentSpan, ATTR_GEN_AI_REQUEST_MODEL)).toBe('gpt-4o');
@@ -1337,7 +1338,8 @@ describe('GenAI Span Attribute Validation', () => {
       span.end();
 
       const recorded = capture.getFirstSpan();
-      expect(recorded.name).toBe('agent.create_agent');
+      // Span name is just operation name when no model is provided
+      expect(recorded.name).toBe('create_agent');
       expect(capture.getAttribute(recorded, ATTR_GEN_AI_OPERATION_NAME)).toBe('create_agent');
     });
 
