@@ -116,7 +116,7 @@ export class Agent {
 
     // Generate session ID (once per agent lifetime)
     // Message ID is generated per turn in run()/runStream()
-    this.sessionId = `session-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`;
+    this.sessionId = `session-${String(Date.now())}-${crypto.randomUUID().slice(0, 8)}`;
 
     // Load system prompt if not already provided via constructor
     if (this.systemPrompt === '') {
@@ -485,7 +485,7 @@ export class Agent {
     this.abortController = new AbortController();
 
     // Generate new message ID per turn (session ID is stable)
-    this.messageId = `msg-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`;
+    this.messageId = `msg-${String(Date.now())}-${crypto.randomUUID().slice(0, 8)}`;
 
     // Create root span context
     const rootCtx = createSpanContext();
@@ -650,7 +650,7 @@ export class Agent {
     this.abortController = new AbortController();
 
     // Generate new message ID per turn (session ID is stable)
-    this.messageId = `msg-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`;
+    this.messageId = `msg-${String(Date.now())}-${crypto.randomUUID().slice(0, 8)}`;
 
     // Create root span context
     const rootCtx = createSpanContext();

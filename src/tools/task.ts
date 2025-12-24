@@ -83,7 +83,7 @@ export const taskTool = Tool.define<typeof taskParametersSchema, TaskMetadata>('
 
     // Generate session ID if not provided
     const taskSessionID =
-      sessionId ?? `task-${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`;
+      sessionId ?? `task-${String(Date.now())}-${crypto.randomUUID().slice(0, 8)}`;
 
     // Since tools cannot call LLMs directly, we return a structured response
     // indicating that the Agent layer should handle this request.

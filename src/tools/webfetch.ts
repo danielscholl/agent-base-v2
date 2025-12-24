@@ -41,10 +41,15 @@ interface WebFetchMetadata extends Tool.Metadata {
  * Strips HTML tags and decodes common entities.
  */
 function htmlToText(html: string): string {
-  // Remove script and style elements
-  let text = html
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+  // Remove script and style elements with loop to handle nested cases
+  let text = html;
+  let previousLength: number;
+  do {
+    previousLength = text.length;
+    text = text
+      .replace(/<script[^>]*>[\s\S]*?<\/script\s*>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style\s*>/gi, '');
+  } while (text.length !== previousLength);
 
   // Replace block elements with newlines
   text = text
@@ -55,10 +60,10 @@ function htmlToText(html: string): string {
   // Remove remaining tags
   text = text.replace(/<[^>]+>/g, '');
 
-  // Decode common HTML entities
+  // Decode HTML entities (decode &amp; first to avoid double-unescaping)
   text = text
-    .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
+    .replace(/&nbsp;/g, ' ')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
@@ -83,10 +88,15 @@ function htmlToText(html: string): string {
  * Converts common HTML elements to markdown.
  */
 function htmlToMarkdown(html: string): string {
-  // Remove script and style elements
-  let md = html
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+  // Remove script and style elements with loop to handle nested cases
+  let md = html;
+  let previousLength: number;
+  do {
+    previousLength = md.length;
+    md = md
+      .replace(/<script[^>]*>[\s\S]*?<\/script\s*>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style\s*>/gi, '');
+  } while (md.length !== previousLength);
 
   // Convert headings
   md = md
@@ -122,10 +132,10 @@ function htmlToMarkdown(html: string): string {
   // Remove remaining tags
   md = md.replace(/<[^>]+>/g, '');
 
-  // Decode HTML entities
+  // Decode HTML entities (decode &amp; first to avoid double-unescaping)
   md = md
-    .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
+    .replace(/&nbsp;/g, ' ')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
