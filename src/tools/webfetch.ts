@@ -69,28 +69,37 @@ function decodeHtmlEntities(text: string): string {
 }
 
 /**
+ * Remove dangerous script and style elements from HTML.
+ * Uses iterative approach to handle nested cases and malformed tags.
+ */
+function stripDangerousElements(html: string): string {
+  let result = html;
+  let previousLength: number;
+  do {
+    previousLength = result.length;
+    // Use [^>]* after closing tag to match malformed tags like </script\t\n bar>
+    result = result
+      .replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, '');
+  } while (result.length !== previousLength);
+  return result;
+}
+
+/**
  * Simple HTML to text conversion.
  * Strips HTML tags and decodes common entities.
  */
 function htmlToText(html: string): string {
-  // Remove script and style elements with loop to handle nested cases
-  // Use [^>]* after closing tag name to match malformed tags like </script\t\n bar>
-  let text = html;
-  let previousLength: number;
-  do {
-    previousLength = text.length;
-    text = text
-      .replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, '')
-      .replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, '');
-  } while (text.length !== previousLength);
+  // First, completely remove script and style elements
+  const safeHtml = stripDangerousElements(html);
 
   // Replace block elements with newlines
-  text = text
+  let text = safeHtml
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n')
     .replace(/<(p|div|h[1-6]|li|tr)[^>]*>/gi, '\n');
 
-  // Remove remaining tags
+  // Remove remaining tags (safe HTML only has non-dangerous elements)
   text = text.replace(/<[^>]+>/g, '');
 
   // Decode HTML entities in a single pass
@@ -111,16 +120,11 @@ function htmlToText(html: string): string {
  * Converts common HTML elements to markdown.
  */
 function htmlToMarkdown(html: string): string {
-  // Remove script and style elements with loop to handle nested cases
-  // Use [^>]* after closing tag name to match malformed tags like </script\t\n bar>
-  let md = html;
-  let previousLength: number;
-  do {
-    previousLength = md.length;
-    md = md
-      .replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, '')
-      .replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, '');
-  } while (md.length !== previousLength);
+  // First, completely remove script and style elements
+  const safeHtml = stripDangerousElements(html);
+
+  // Now work with safe HTML that has no dangerous elements
+  let md = safeHtml;
 
   // Convert headings
   md = md
