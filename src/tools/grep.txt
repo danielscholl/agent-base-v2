@@ -1,0 +1,8 @@
+Search file contents with regex patterns.
+
+Usage:
+- Searches for text patterns in files
+- Supports both literal and regex patterns
+- Shows line numbers and context
+- Can filter by file glob pattern
+- Limited to 50 matches by default

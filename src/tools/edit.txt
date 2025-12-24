@@ -1,0 +1,7 @@
+Edit file by exact string replacement.
+
+Usage:
+- Replaces exact text matches in a file
+- Requires unique match unless replaceAll is true
+- Shows diff-style output of changes
+- Validates paths within workspace bounds

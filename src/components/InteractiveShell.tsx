@@ -10,16 +10,6 @@ import { Agent } from '../agent/agent.js';
 import { loadConfig, configFileExists } from '../config/manager.js';
 import { validateProviderCredentials } from '../config/schema.js';
 import { createCallbacks, wrapWithTelemetry } from '../cli/callbacks.js';
-import {
-  getPathInfoTool,
-  listDirectoryTool,
-  readFileTool,
-  searchTextTool,
-  writeFileTool,
-  applyTextEditTool,
-  createDirectoryTool,
-  applyFilePatchTool,
-} from '../tools/index.js';
 import { VERSION } from '../cli/version.js';
 import { executeCommand, isCommand, getAutocompleteCommands } from '../cli/commands/index.js';
 import { CommandAutocomplete, filterCommands } from './CommandAutocomplete.js';
@@ -890,18 +880,6 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
         },
       });
 
-      // Create filesystem tools array
-      const filesystemTools = [
-        getPathInfoTool,
-        listDirectoryTool,
-        readFileTool,
-        searchTextTool,
-        writeFileTool,
-        applyTextEditTool,
-        createDirectoryTool,
-        applyFilePatchTool,
-      ];
-
       // Wrap callbacks with telemetry if enabled
       // This adds automatic OpenTelemetry spans for agent, LLM, and tool operations
       const providerName = currentState.config.providers.default;
@@ -927,7 +905,7 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
         agentRef.current = new Agent({
           config: currentState.config,
           callbacks: tracedCallbacks,
-          tools: filesystemTools,
+          useToolRegistry: true,
         });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';

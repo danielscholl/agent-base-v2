@@ -366,9 +366,19 @@ describe('InteractiveShell', () => {
     // Verify configInitHandler was called (the key behavior we're testing)
     expect(mockConfigInitHandler).toHaveBeenCalled();
 
+    // Wait for component to re-render with error state after handler failure
+    // The error state takes time to propagate through React's render cycle
+    elapsed = 0;
+    let frame = lastFrame() ?? '';
+    while (elapsed < maxWait && !frame.includes('Configuration Error')) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, interval);
+      });
+      elapsed += interval;
+      frame = lastFrame() ?? '';
+    }
+
     // After handler completes with failure, should show error state
-    // (the setup messages are visible briefly, then error view takes over)
-    const frame = lastFrame();
     expect(frame).toContain('Configuration Error');
     expect(frame).toContain('Setup cancelled by test');
   });

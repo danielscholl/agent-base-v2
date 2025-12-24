@@ -1,0 +1,7 @@
+Write content to a file.
+
+Usage:
+- Creates new files or overwrites existing ones
+- Creates parent directories if needed
+- Validates paths within workspace bounds
+- Checks write permissions before proceeding

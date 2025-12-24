@@ -18,6 +18,8 @@ import type { AgentOptions, Message, SpanContext } from './types.js';
 import type { AgentCallbacks } from './callbacks.js';
 import type { AgentErrorCode, AgentErrorResponse, ProviderErrorMetadata } from '../errors/index.js';
 import type { DiscoveredSkill, SkillLoaderOptions } from '../skills/types.js';
+import type { ToolPermission, ToolExecutionResult } from '../tools/index.js';
+import { Tool, ToolRegistry } from '../tools/index.js';
 import { LLMClient } from '../model/llm.js';
 import { loadSystemPrompt, loadSkillsContext } from './prompts.js';
 import { generateAvailableSkillsXml } from '../skills/prompt.js';
@@ -63,87 +65,185 @@ interface ToolCall {
 export class Agent {
   private readonly config: AppConfig;
   private readonly callbacks?: AgentCallbacks;
-  private readonly tools: StructuredToolInterface[];
+  private readonly legacyTools: StructuredToolInterface[];
   private readonly llmClient: LLMClient;
   private readonly maxIterations: number;
   private readonly includeSkills: boolean;
   private readonly skillLoaderOptions?: SkillLoaderOptions;
+  private readonly useToolRegistry: boolean;
+  private readonly enabledPermissions: Set<ToolPermission>;
+  private readonly onToolResult?: (result: ToolExecutionResult) => void;
   private systemPrompt: string = '';
   private initialized: boolean = false;
   private discoveredSkills: DiscoveredSkill[] = [];
+  private resolvedTools: StructuredToolInterface[] = [];
+  private sessionId: string = '';
+  private messageId: string = '';
+  private abortController: AbortController | null = null;
 
   constructor(options: AgentOptions) {
     this.config = options.config;
     this.callbacks = options.callbacks;
-    this.tools = options.tools ?? [];
+    this.legacyTools = options.tools ?? [];
     this.maxIterations = options.maxIterations ?? DEFAULT_MAX_ITERATIONS;
     this.includeSkills = options.includeSkills !== false; // Default: true
     this.skillLoaderOptions = options.skillLoaderOptions;
+    this.useToolRegistry = options.useToolRegistry === true; // Default: false for backward compatibility
+    this.enabledPermissions =
+      options.enabledPermissions ??
+      new Set<ToolPermission>(['read', 'write', 'execute', 'network']);
+    this.onToolResult = options.onToolResult;
 
     // Create LLMClient from config
     this.llmClient = new LLMClient({ config: this.config });
 
-    // If system prompt override provided, use it directly (skip skills)
+    // If system prompt override provided, use it directly
+    // Note: initialized remains false to ensure resolveTools() is called
     if (options.systemPrompt !== undefined && options.systemPrompt !== '') {
       this.systemPrompt = options.systemPrompt;
-      this.initialized = true;
     }
+
+    // Note: onToolResult is passed to ToolRegistry.tools() in resolveTools()
+    // for per-agent callback isolation when useToolRegistry is true
   }
 
   /**
-   * Initialize agent (load system prompt and discover skills).
+   * Initialize agent (load system prompt, discover skills, resolve tools).
    * Called automatically on first run() if not already initialized.
    */
   private async initialize(): Promise<void> {
     if (this.initialized) return;
 
-    // Load base system prompt (without skills)
-    const basePrompt = await loadSystemPrompt({
-      config: this.config,
-      model: this.getModelName(),
-      provider: this.getProviderName(),
-    });
+    // Generate session ID (once per agent lifetime)
+    // Message ID is generated per turn in run()/runStream()
+    this.sessionId = `session-${String(Date.now())}-${crypto.randomUUID().slice(0, 8)}`;
 
-    // Discover and filter skills if enabled
-    if (this.includeSkills) {
-      // Prepare skill loader options, merging config.skills with explicit options
-      // Design: Only userDir is exposed in config.skills as it's the directory users typically
-      // customize (for personal skills). bundledDir is internal to the package and projectDir
-      // is auto-detected from cwd. Both can still be overridden via skillLoaderOptions for
-      // testing or advanced use cases.
-      const skillLoaderOptions: SkillLoaderOptions = {
-        userDir: this.config.skills.userDir ?? this.skillLoaderOptions?.userDir,
-        bundledDir: this.skillLoaderOptions?.bundledDir,
-        projectDir: this.skillLoaderOptions?.projectDir,
-        onDebug: this.skillLoaderOptions?.onDebug ?? this.callbacks?.onDebug,
-      };
-
-      // Discover all skills
-      const { skills } = await loadSkillsContext(skillLoaderOptions);
-
-      // Apply config.skills filtering (disabledBundled/enabledBundled)
-      const filteredSkills = this.filterSkillsByConfig(skills);
-
-      // Generate XML from filtered skills only
-      const skillsXml = generateAvailableSkillsXml(filteredSkills);
-
-      // Combine base prompt with filtered skills XML
-      this.systemPrompt = skillsXml ? `${basePrompt}\n\n${skillsXml}` : basePrompt;
-      this.discoveredSkills = filteredSkills;
-
-      this.callbacks?.onDebug?.('Agent initialized with skills', {
-        discoveredCount: skills.length,
-        filteredCount: filteredSkills.length,
-        skillNames: filteredSkills.map((s) => s.manifest.name),
+    // Load system prompt if not already provided via constructor
+    if (this.systemPrompt === '') {
+      // Load base system prompt (without skills)
+      const basePrompt = await loadSystemPrompt({
+        config: this.config,
+        model: this.getModelName(),
+        provider: this.getProviderName(),
       });
-    } else {
-      this.systemPrompt = basePrompt;
-      this.discoveredSkills = [];
 
-      this.callbacks?.onDebug?.('Agent initialized without skills');
+      // Discover and filter skills if enabled
+      if (this.includeSkills) {
+        // Prepare skill loader options, merging config.skills with explicit options
+        // Design: Only userDir is exposed in config.skills as it's the directory users typically
+        // customize (for personal skills). bundledDir is internal to the package and projectDir
+        // is auto-detected from cwd. Both can still be overridden via skillLoaderOptions for
+        // testing or advanced use cases.
+        const skillLoaderOptions: SkillLoaderOptions = {
+          userDir: this.config.skills.userDir ?? this.skillLoaderOptions?.userDir,
+          bundledDir: this.skillLoaderOptions?.bundledDir,
+          projectDir: this.skillLoaderOptions?.projectDir,
+          onDebug: this.skillLoaderOptions?.onDebug ?? this.callbacks?.onDebug,
+        };
+
+        // Discover all skills
+        const { skills } = await loadSkillsContext(skillLoaderOptions);
+
+        // Apply config.skills filtering (disabledBundled/enabledBundled)
+        const filteredSkills = this.filterSkillsByConfig(skills);
+
+        // Generate XML from filtered skills only
+        const skillsXml = generateAvailableSkillsXml(filteredSkills);
+
+        // Combine base prompt with filtered skills XML
+        this.systemPrompt = skillsXml ? `${basePrompt}\n\n${skillsXml}` : basePrompt;
+        this.discoveredSkills = filteredSkills;
+
+        this.callbacks?.onDebug?.('Agent initialized with skills', {
+          discoveredCount: skills.length,
+          filteredCount: filteredSkills.length,
+          skillNames: filteredSkills.map((s) => s.manifest.name),
+        });
+      } else {
+        this.systemPrompt = basePrompt;
+        this.discoveredSkills = [];
+
+        this.callbacks?.onDebug?.('Agent initialized without skills');
+      }
+    } else {
+      // System prompt was provided in constructor, skip skills
+      this.discoveredSkills = [];
+      this.callbacks?.onDebug?.('Agent initialized with custom system prompt');
     }
 
+    // Resolve tools from registry and/or legacy tools
+    await this.resolveTools();
+
     this.initialized = true;
+  }
+
+  /**
+   * Resolve tools from ToolRegistry and combine with legacy tools.
+   */
+  private async resolveTools(): Promise<void> {
+    if (this.useToolRegistry) {
+      // Get tools from registry with proper context creation and per-agent callback
+      const registryTools = await ToolRegistry.tools({
+        enabledPermissions: this.enabledPermissions,
+        initCtx: {
+          workingDir: process.cwd(),
+          onDebug: this.callbacks?.onDebug,
+        },
+        createContext: (toolId, callId) => this.createToolContext(toolId, callId),
+        onToolResult: this.onToolResult,
+      });
+
+      // Combine registry tools with any legacy tools
+      this.resolvedTools = [...registryTools, ...this.legacyTools];
+
+      this.callbacks?.onDebug?.('Resolved tools from registry', {
+        registryCount: registryTools.length,
+        legacyCount: this.legacyTools.length,
+        totalCount: this.resolvedTools.length,
+        toolNames: this.resolvedTools.map((t) => t.name),
+      });
+    } else {
+      // Legacy mode: only use injected tools
+      this.resolvedTools = this.legacyTools;
+
+      this.callbacks?.onDebug?.('Using legacy tools only', {
+        count: this.resolvedTools.length,
+        toolNames: this.resolvedTools.map((t) => t.name),
+      });
+    }
+  }
+
+  /**
+   * Create a Tool.Context for tool execution.
+   * Uses the shared abort controller from the current run.
+   */
+  private createToolContext(toolId: string, callId: string): Tool.Context {
+    // Ensure we have an abort controller (should be created by run())
+    if (!this.abortController) {
+      this.abortController = new AbortController();
+    }
+
+    return {
+      sessionID: this.sessionId,
+      messageID: this.messageId,
+      agent: 'agent',
+      abort: this.abortController.signal,
+      callID: callId,
+      metadata: (update) => {
+        // Stream metadata updates via callback
+        this.callbacks?.onDebug?.(`Tool metadata update: ${toolId}`, update);
+      },
+    };
+  }
+
+  /**
+   * Abort the current run.
+   * This will signal all running tools to stop.
+   */
+  abort(): void {
+    if (this.abortController) {
+      this.abortController.abort();
+    }
   }
 
   /**
@@ -256,7 +356,7 @@ export class Agent {
    * Returns the LangChain model with tools bound if tools are available.
    */
   private async getModelWithTools(): Promise<Runnable<BaseMessage[], AIMessage> | null> {
-    if (this.tools.length === 0) {
+    if (this.resolvedTools.length === 0) {
       return null;
     }
 
@@ -281,30 +381,32 @@ export class Agent {
       model as BaseChatModel & {
         bindTools: (tools: StructuredToolInterface[]) => Runnable<BaseMessage[], AIMessage>;
       }
-    ).bindTools(this.tools);
+    ).bindTools(this.resolvedTools);
   }
 
   /**
    * Execute a tool by name with given arguments.
+   * Returns the tool output as a string (for ToolMessage content).
    */
   private async executeTool(
     toolCall: ToolCall,
     ctx: SpanContext
-  ): Promise<{ name: string; result: ToolResponse; id: string }> {
-    const tool = this.tools.find((t) => t.name === toolCall.name);
+  ): Promise<{ name: string; content: string; id: string }> {
+    const tool = this.resolvedTools.find((t) => t.name === toolCall.name);
 
     if (!tool) {
       // Log debug event for missing tool (don't emit onToolStart/End for tools that won't run)
       this.callbacks?.onDebug?.(`Tool '${toolCall.name}' not found`, { toolCall });
 
+      const errorResult: ToolResponse = {
+        success: false,
+        error: 'NOT_FOUND',
+        message: `Tool '${toolCall.name}' not found`,
+      };
       return {
         name: toolCall.name,
         id: toolCall.id,
-        result: {
-          success: false,
-          error: 'NOT_FOUND',
-          message: `Tool '${toolCall.name}' not found`,
-        },
+        content: JSON.stringify(errorResult),
       };
     }
 
@@ -312,13 +414,33 @@ export class Agent {
     this.callbacks?.onToolStart?.(ctx, toolCall.name, toolCall.args);
 
     try {
-      // Execute tool
-      const result = (await tool.invoke(toolCall.args)) as ToolResponse;
+      // Execute tool - result may be string (new tools) or ToolResponse (legacy tools)
+      const rawResult: unknown = await tool.invoke(toolCall.args);
+
+      // Normalize result to string content for ToolMessage
+      let content: string;
+      let callbackResult: ToolResponse;
+
+      if (typeof rawResult === 'string') {
+        // New tool format: plain string output
+        content = rawResult;
+        // Create a synthetic ToolResponse for callback compatibility
+        callbackResult = {
+          success: true,
+          result: rawResult,
+          message: 'Tool executed successfully',
+        };
+      } else {
+        // Legacy tool format: ToolResponse object
+        const toolResponse = rawResult as ToolResponse;
+        content = JSON.stringify(toolResponse);
+        callbackResult = toolResponse;
+      }
 
       // Emit tool end callback
-      this.callbacks?.onToolEnd?.(ctx, toolCall.name, result);
+      this.callbacks?.onToolEnd?.(ctx, toolCall.name, callbackResult);
 
-      return { name: toolCall.name, id: toolCall.id, result };
+      return { name: toolCall.name, id: toolCall.id, content };
     } catch (error) {
       const errorResult: ToolResponse = {
         success: false,
@@ -328,7 +450,7 @@ export class Agent {
 
       this.callbacks?.onToolEnd?.(ctx, toolCall.name, errorResult);
 
-      return { name: toolCall.name, id: toolCall.id, result: errorResult };
+      return { name: toolCall.name, id: toolCall.id, content: JSON.stringify(errorResult) };
     }
   }
 
@@ -358,6 +480,12 @@ export class Agent {
   async run(query: string, history?: Message[]): Promise<string> {
     // Ensure initialized
     await this.initialize();
+
+    // Create fresh abort controller for this run
+    this.abortController = new AbortController();
+
+    // Generate new message ID per turn (session ID is stable)
+    this.messageId = `msg-${String(Date.now())}-${crypto.randomUUID().slice(0, 8)}`;
 
     // Create root span context
     const rootCtx = createSpanContext();
@@ -472,9 +600,9 @@ export class Agent {
           const toolCtx = createChildSpanContext(rootCtx);
           const toolResult = await this.executeTool(toolCall, toolCtx);
 
-          // Add tool result message
+          // Add tool result message (content is already properly formatted)
           const toolMessage = new ToolMessage({
-            content: JSON.stringify(toolResult.result),
+            content: toolResult.content,
             tool_call_id: toolResult.id,
             name: toolResult.name,
           });
@@ -517,6 +645,12 @@ export class Agent {
   async *runStream(query: string, history?: Message[]): AsyncGenerator<string> {
     // Ensure initialized
     await this.initialize();
+
+    // Create fresh abort controller for this run
+    this.abortController = new AbortController();
+
+    // Generate new message ID per turn (session ID is stable)
+    this.messageId = `msg-${String(Date.now())}-${crypto.randomUUID().slice(0, 8)}`;
 
     // Create root span context
     const rootCtx = createSpanContext();

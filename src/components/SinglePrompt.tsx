@@ -11,16 +11,6 @@ import { loadConfig, configFileExists } from '../config/manager.js';
 import { validateProviderCredentials } from '../config/schema.js';
 import { createCallbacks, wrapWithTelemetry } from '../cli/callbacks.js';
 import { initializeTelemetry, shutdown as shutdownTelemetry } from '../telemetry/index.js';
-import {
-  getPathInfoTool,
-  listDirectoryTool,
-  readFileTool,
-  searchTextTool,
-  writeFileTool,
-  applyTextEditTool,
-  createDirectoryTool,
-  applyFilePatchTool,
-} from '../tools/index.js';
 import { Spinner } from './Spinner.js';
 import { getUserFriendlyMessage } from '../errors/index.js';
 import type { SinglePromptProps } from '../cli/types.js';
@@ -209,22 +199,11 @@ export function SinglePrompt({
         enableSensitiveData: config.telemetry.enableSensitiveData,
       });
 
-      // Create filesystem tools array
-      const filesystemTools = [
-        getPathInfoTool,
-        listDirectoryTool,
-        readFileTool,
-        searchTextTool,
-        writeFileTool,
-        applyTextEditTool,
-        createDirectoryTool,
-        applyFilePatchTool,
-      ];
-
+      // Create agent with ToolRegistry
       const agent = new Agent({
         config,
         callbacks,
-        tools: filesystemTools,
+        useToolRegistry: true,
       });
 
       try {

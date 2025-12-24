@@ -1,0 +1,7 @@
+List directory contents with tree-style output.
+
+Usage:
+- Lists files and directories in a path
+- Supports recursive listing
+- Filters hidden files by default
+- Limits entries to prevent overwhelming output

@@ -1,0 +1,7 @@
+Find files matching glob patterns.
+
+Usage:
+- Supports patterns like "**/*.ts", "src/**/*.js"
+- Results sorted by modification time (newest first)
+- Limited to 100 files by default
+- Respects workspace boundaries

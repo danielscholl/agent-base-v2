@@ -1,0 +1,3 @@
+Say hello to someone by name. Returns a greeting message.
+
+Supports multiple languages (en, es, fr) with the greet variant.

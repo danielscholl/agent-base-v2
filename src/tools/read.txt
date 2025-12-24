@@ -1,0 +1,8 @@
+Read file contents with line numbers.
+
+Usage:
+- Reads text files with optional offset and limit
+- Returns line-numbered output format
+- Default limit: 2000 lines
+- Detects binary files and rejects them
+- Validates paths within workspace bounds

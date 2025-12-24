@@ -1,49 +1,43 @@
 /**
  * ToolsInfo component.
- * Displays available tools grouped by toolset with descriptions and token counts.
- * Follows osdu-agent CLI style.
+ * Displays available tools from ToolRegistry with descriptions and token counts.
  */
 
 import React, { useEffect, useState } from 'react';
 import { Box, Text, useApp } from 'ink';
-import type { StructuredToolInterface } from '@langchain/core/tools';
 import { Tiktoken } from 'js-tiktoken/lite';
 import cl100k_base from 'js-tiktoken/ranks/cl100k_base';
 import { loadConfig } from '../config/manager.js';
 import { Spinner } from './Spinner.js';
-
-// Import tools
 import {
-  getPathInfoTool,
-  listDirectoryTool,
-  readFileTool,
-  searchTextTool,
-  writeFileTool,
-  applyTextEditTool,
-  createDirectoryTool,
-  applyFilePatchTool,
+  ToolRegistry,
+  type ToolPermission,
   getWorkspaceRoot,
   isFilesystemWritesEnabled,
   DEFAULT_MAX_READ_BYTES,
   DEFAULT_MAX_WRITE_BYTES,
 } from '../tools/index.js';
-import { helloWorldTool, greetUserTool } from '../tools/hello.js';
 
 /**
- * Toolset metadata for display.
+ * Tool info for display.
  */
-interface ToolsetMeta {
+interface ToolDisplayInfo {
   name: string;
-  tools: StructuredToolInterface[];
+  description: string;
+  permissions: ToolPermission[];
+}
+
+/**
+ * Tool group for display.
+ */
+interface ToolGroup {
+  name: string;
+  tools: ToolDisplayInfo[];
   metadata?: string[];
 }
 
 /**
  * Shared tiktoken encoder instance.
- * Intentionally a module-level singleton for performance - tiktoken encoding is
- * stateless, so a single encoder instance can safely be reused across all tool
- * descriptions. Lazy initialization is unnecessary as the cost is minimal and
- * this component is only loaded when explicitly displaying tool information.
  */
 const tokenEncoder = new Tiktoken(cl100k_base);
 
@@ -69,57 +63,101 @@ function formatBytes(bytes: number): string {
 }
 
 /**
- * Build toolsets with metadata.
+ * Permission display names.
  */
-function buildToolsets(): ToolsetMeta[] {
+const permissionNames: Record<ToolPermission, string> = {
+  read: 'Read Tools',
+  write: 'Write Tools',
+  execute: 'Execute Tools',
+  network: 'Network Tools',
+};
+
+/**
+ * Build tool groups from registry, grouped by primary permission.
+ */
+async function buildToolGroups(): Promise<ToolGroup[]> {
   const workspaceRoot = getWorkspaceRoot();
   const writesEnabled = isFilesystemWritesEnabled();
 
-  const toolsets: ToolsetMeta[] = [
-    {
-      name: 'FileSystemTools',
-      tools: [
-        getPathInfoTool,
-        listDirectoryTool,
-        readFileTool,
-        searchTextTool,
-        writeFileTool,
-        applyTextEditTool,
-        createDirectoryTool,
-        applyFilePatchTool,
-      ],
-      metadata: [
-        `Workspace: ${workspaceRoot} (cwd)`,
-        `Writes: ${writesEnabled ? 'Enabled' : 'Disabled'} · Read: ${formatBytes(DEFAULT_MAX_READ_BYTES)} · Write: ${formatBytes(DEFAULT_MAX_WRITE_BYTES)}`,
-      ],
-    },
-    {
-      name: 'HelloTools',
-      tools: [helloWorldTool, greetUserTool],
-      metadata: ['Reference implementation for tool development'],
-    },
-  ];
+  // Initialize all tools to get their descriptions
+  const toolIds = ToolRegistry.ids();
+  const toolInfos: ToolDisplayInfo[] = [];
 
-  return toolsets;
+  for (const id of toolIds) {
+    const initialized = await ToolRegistry.initialize(id, {
+      workingDir: process.cwd(),
+    });
+    const permissions = ToolRegistry.permissions(id);
+
+    if (initialized && permissions) {
+      toolInfos.push({
+        name: id,
+        description: initialized.description,
+        permissions: permissions.required,
+      });
+    }
+  }
+
+  // Group by primary permission
+  const groupMap = new Map<ToolPermission, ToolDisplayInfo[]>();
+
+  for (const tool of toolInfos) {
+    const primaryPermission = tool.permissions[0] ?? 'read';
+    const group = groupMap.get(primaryPermission) ?? [];
+    group.push(tool);
+    groupMap.set(primaryPermission, group);
+  }
+
+  // Build groups with metadata
+  const groups: ToolGroup[] = [];
+
+  // Order: read, write, execute, network
+  const order: ToolPermission[] = ['read', 'write', 'execute', 'network'];
+
+  for (const permission of order) {
+    const tools = groupMap.get(permission);
+    if (tools && tools.length > 0) {
+      const group: ToolGroup = {
+        name: permissionNames[permission],
+        tools: tools.sort((a, b) => a.name.localeCompare(b.name)),
+      };
+
+      // Add metadata for read tools (workspace info)
+      if (permission === 'read') {
+        group.metadata = [`Workspace: ${workspaceRoot} (cwd)`];
+      }
+
+      // Add metadata for write tools
+      if (permission === 'write') {
+        group.metadata = [
+          `Writes: ${writesEnabled ? 'Enabled' : 'Disabled'} · Read: ${formatBytes(DEFAULT_MAX_READ_BYTES)} · Write: ${formatBytes(DEFAULT_MAX_WRITE_BYTES)}`,
+        ];
+      }
+
+      groups.push(group);
+    }
+  }
+
+  return groups;
 }
 
 /**
  * ToolsInfo component.
- * Lists registered tools grouped by toolset with descriptions and token counts.
+ * Lists registered tools from ToolRegistry with descriptions and token counts.
  */
 export function ToolsInfo(): React.ReactElement {
   const { exit } = useApp();
   const [loading, setLoading] = useState(true);
-  const [toolsets, setToolsets] = useState<ToolsetMeta[]>([]);
+  const [groups, setGroups] = useState<ToolGroup[]>([]);
 
   useEffect(() => {
     async function loadTools(): Promise<void> {
       // Load config to ensure environment is initialized
       await loadConfig();
 
-      // Build toolsets
-      const allToolsets = buildToolsets();
-      setToolsets(allToolsets);
+      // Build tool groups from registry
+      const toolGroups = await buildToolGroups();
+      setGroups(toolGroups);
       setLoading(false);
 
       // Exit after displaying tools
@@ -135,24 +173,32 @@ export function ToolsInfo(): React.ReactElement {
     return <Spinner message="Loading tools..." />;
   }
 
+  const totalTools = groups.reduce((sum, g) => sum + g.tools.length, 0);
+
   return (
     <Box flexDirection="column" paddingTop={1}>
-      {toolsets.map((toolset, tsIndex) => (
+      <Text>
+        <Text bold>Tool Registry</Text>
+        <Text dimColor> · {String(totalTools)} tools registered</Text>
+      </Text>
+      <Text> </Text>
+
+      {groups.map((group, gIndex) => (
         <Box
-          key={toolset.name}
+          key={group.name}
           flexDirection="column"
-          marginBottom={tsIndex < toolsets.length - 1 ? 1 : 0}
+          marginBottom={gIndex < groups.length - 1 ? 1 : 0}
         >
-          {/* Toolset header */}
+          {/* Group header */}
           <Text>
             <Text color="green">●</Text>
-            <Text bold> {toolset.name}</Text>
-            <Text dimColor> · {toolset.tools.length} tools</Text>
+            <Text bold> {group.name}</Text>
+            <Text dimColor> · {String(group.tools.length)} tools</Text>
           </Text>
 
-          {/* Toolset metadata */}
-          {toolset.metadata !== undefined &&
-            toolset.metadata.map((meta, metaIndex) => (
+          {/* Group metadata */}
+          {group.metadata !== undefined &&
+            group.metadata.map((meta, metaIndex) => (
               <Text key={metaIndex}>
                 <Text dimColor>└─ </Text>
                 <Text color="green">◉</Text>
@@ -161,14 +207,14 @@ export function ToolsInfo(): React.ReactElement {
             ))}
 
           {/* Individual tools */}
-          {toolset.tools.map((tool) => {
+          {group.tools.map((tool) => {
             const tokenCount = countTokens(tool.description);
             return (
               <Text key={tool.name}>
                 <Text> </Text>
                 <Text dimColor>• </Text>
                 <Text color="cyan">{tool.name}</Text>
-                <Text dimColor> · {tokenCount} tokens</Text>
+                <Text dimColor> · {String(tokenCount)} tokens</Text>
               </Text>
             );
           })}
