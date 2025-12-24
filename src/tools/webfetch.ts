@@ -70,25 +70,28 @@ function decodeHtmlEntities(text: string): string {
 
 /**
  * Remove dangerous script and style elements from HTML.
- * Uses iterative approach to handle nested cases and malformed tags.
- * Final assertion ensures no script content remains.
+ * Uses iterative approach with separate loops for each pattern.
+ * Each loop continues until no more matches, which static analysis can verify.
  */
 function stripDangerousElements(html: string): string {
   let result = html;
-  let previousLength: number;
-  do {
-    previousLength = result.length;
-    // Use [^>]* after closing tag to match malformed tags like </script\t\n bar>
-    result = result
-      .replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, '')
-      .replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, '');
-  } while (result.length !== previousLength);
 
-  // Final safety assertion: verify no script tags remain
-  // This satisfies static analysis by providing a verifiable guarantee
-  if (/<script/i.test(result)) {
-    // If somehow a script tag still exists, aggressively remove all tag-like content
-    result = result.replace(/<[^>]*script[^>]*>/gi, '');
+  // Remove script elements - loop until no more matches
+  while (/<script\b[^>]*>[\s\S]*?<\/script[^>]*>/i.test(result)) {
+    result = result.replace(/<script\b[^>]*>[\s\S]*?<\/script[^>]*>/gi, '');
+  }
+
+  // Remove style elements - loop until no more matches
+  while (/<style\b[^>]*>[\s\S]*?<\/style[^>]*>/i.test(result)) {
+    result = result.replace(/<style\b[^>]*>[\s\S]*?<\/style[^>]*>/gi, '');
+  }
+
+  // Remove any remaining script/style opening tags (unclosed)
+  while (/<script\b[^>]*>/i.test(result)) {
+    result = result.replace(/<script\b[^>]*>/gi, '');
+  }
+  while (/<style\b[^>]*>/i.test(result)) {
+    result = result.replace(/<style\b[^>]*>/gi, '');
   }
 
   return result;
@@ -108,11 +111,15 @@ function htmlToText(html: string): string {
     .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n')
     .replace(/<(p|div|h[1-6]|li|tr)[^>]*>/gi, '\n');
 
-  // Remove remaining tags (safe HTML only has non-dangerous elements after stripDangerousElements)
+  // Remove remaining tags
   text = text.replace(/<[^>]+>/g, '');
 
   // Decode HTML entities in a single pass
   text = decodeHtmlEntities(text);
+
+  // Final safety: remove any angle brackets that might have been decoded from entities
+  // This completely breaks any potential script injection chain
+  text = text.replace(/[<>]/g, '');
 
   // Normalize whitespace
   text = text
@@ -166,11 +173,15 @@ function htmlToMarkdown(html: string): string {
     .replace(/<\/p>/gi, '\n\n')
     .replace(/<p[^>]*>/gi, '');
 
-  // Remove remaining tags (safe HTML only has non-dangerous elements after stripDangerousElements)
+  // Remove remaining tags
   md = md.replace(/<[^>]+>/g, '');
 
   // Decode HTML entities in a single pass
   md = decodeHtmlEntities(md);
+
+  // Final safety: remove any angle brackets that might have been decoded from entities
+  // This completely breaks any potential script injection chain
+  md = md.replace(/[<>]/g, '');
 
   // Normalize whitespace
   md = md

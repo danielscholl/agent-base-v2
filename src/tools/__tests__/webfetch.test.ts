@@ -149,7 +149,7 @@ describe('WebFetch Tool', () => {
 
     it('should decode HTML entities', async () => {
       mockFetch.mockResolvedValue(
-        createMockResponse('<p>&lt;tag&gt; &amp; &quot;quoted&quot;</p>')
+        createMockResponse('<p>text &amp; &quot;quoted&quot; with &mdash; dash</p>')
       );
 
       const initialized = await webfetchTool.init();
@@ -157,9 +157,10 @@ describe('WebFetch Tool', () => {
 
       const result = await initialized.execute({ url: 'https://example.com' }, ctx);
 
-      expect(result.output).toContain('<tag>');
+      // Angle brackets are stripped for security, but other entities are decoded
       expect(result.output).toContain('&');
       expect(result.output).toContain('"quoted"');
+      expect(result.output).toContain('—'); // mdash
     });
 
     it('should throw error for HTTP error status', async () => {
