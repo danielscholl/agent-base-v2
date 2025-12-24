@@ -40,15 +40,32 @@ export {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 export { createSpanContext, createChildSpanContext } from './callbacks.js';
 export {
+  // Core functions
   loadSystemPrompt,
   loadSystemPromptWithSkills,
   loadSkillsContext,
   replacePlaceholders,
   stripYamlFrontMatter,
+  // Compositional functions
+  assembleSystemPrompt,
+  loadBasePrompt,
+  loadProviderLayer,
+  generateEnvironmentSectionForPrompt,
+  buildPlaceholderValues,
+  // Types
   type PromptOptions,
   type PromptOptionsWithSkills,
+  type PromptAssemblyOptions,
   type PlaceholderValues,
 } from './prompts.js';
+
+// ─── Environment ─────────────────────────────────────────────────────────────
+export {
+  detectEnvironment,
+  formatEnvironmentSection,
+  generateEnvironmentSection,
+  type EnvironmentContext,
+} from './environment.js';
 
 // ─── Skills (re-exported for convenience) ───────────────────────────────────
 export type { DiscoveredSkill, SkillLoaderOptions } from '../skills/types.js';

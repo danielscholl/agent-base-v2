@@ -32,9 +32,25 @@ jest.unstable_mockModule('node:os', () => ({
   homedir: () => '/home/testuser',
 }));
 
+// Create mock functions for environment module
+const mockDetectEnvironment = jest.fn();
+const mockFormatEnvironmentSection = jest.fn();
+
+// Mock environment module to avoid git commands in tests
+jest.unstable_mockModule('../environment.js', () => ({
+  detectEnvironment: mockDetectEnvironment,
+  formatEnvironmentSection: mockFormatEnvironmentSection,
+}));
+
 // Import after mocks are set up
-const { loadSystemPrompt, replacePlaceholders, stripYamlFrontMatter } =
-  await import('../prompts.js');
+const {
+  loadSystemPrompt,
+  replacePlaceholders,
+  stripYamlFrontMatter,
+  loadBasePrompt,
+  loadProviderLayer,
+  assembleSystemPrompt,
+} = await import('../prompts.js');
 
 describe('prompts', () => {
   let config: AppConfig;
@@ -44,6 +60,20 @@ describe('prompts', () => {
     config.providers.openai = { apiKey: 'test-key', model: 'gpt-4o' };
     config.providers.default = 'openai';
     jest.clearAllMocks();
+
+    // Reset environment mocks with default values
+    mockDetectEnvironment.mockResolvedValue({
+      workingDir: '/test/working/dir',
+      gitRepo: true,
+      gitBranch: 'main',
+      gitClean: true,
+      platform: 'macOS',
+      osVersion: 'Darwin 24.1.0',
+      date: '2025-12-24',
+    });
+    mockFormatEnvironmentSection.mockReturnValue(
+      '# Environment\n\nWorking directory: /test/working/dir\nGit repository: Yes (branch: main, clean)\nPlatform: macOS (Darwin 24.1.0)\nDate: 2025-12-24'
+    );
   });
 
   describe('stripYamlFrontMatter', () => {
@@ -281,6 +311,171 @@ Hello {{MODEL}}!`);
       expect(result).toBe('Hello gpt-4o!');
       expect(result).not.toContain('name:');
       expect(result).not.toContain('version:');
+    });
+  });
+
+  describe('loadBasePrompt', () => {
+    it('loads base prompt and replaces placeholders', async () => {
+      // base.md exists
+      mockAccess.mockResolvedValueOnce(undefined);
+      mockReadFile.mockResolvedValue('---\nname: base\n---\nYou are {{MODEL}} via {{PROVIDER}}.');
+
+      const result = await loadBasePrompt({
+        config,
+        model: 'gpt-4o',
+        provider: 'openai',
+      });
+
+      expect(result).toBe('You are gpt-4o via openai.');
+    });
+
+    it('falls back to inline default when no files exist', async () => {
+      mockAccess.mockRejectedValue(new Error('ENOENT'));
+
+      const result = await loadBasePrompt({
+        config,
+        model: 'claude-3-opus',
+        provider: 'anthropic',
+      });
+
+      expect(result).toContain('claude-3-opus');
+      expect(result).toContain('anthropic');
+    });
+  });
+
+  describe('loadProviderLayer', () => {
+    it('loads provider layer when file exists', async () => {
+      mockAccess.mockResolvedValueOnce(undefined);
+      mockReadFile.mockResolvedValue(
+        '---\nprovider: anthropic\n---\n# Claude Guidelines\nUse XML.'
+      );
+
+      const result = await loadProviderLayer('anthropic');
+
+      expect(result).toBe('# Claude Guidelines\nUse XML.');
+    });
+
+    it('returns empty string when provider layer not found', async () => {
+      mockAccess.mockRejectedValue(new Error('ENOENT'));
+
+      const result = await loadProviderLayer('unknown-provider');
+
+      expect(result).toBe('');
+    });
+  });
+
+  describe('assembleSystemPrompt', () => {
+    it('assembles prompt with all layers', async () => {
+      // base.md exists
+      mockAccess.mockImplementation((path) => {
+        if (path.includes('base.md') || path.includes('anthropic.md')) {
+          return Promise.resolve(undefined);
+        }
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      mockReadFile.mockImplementation((path) => {
+        if (path.includes('base.md')) {
+          return Promise.resolve('Base prompt for {{MODEL}}.');
+        }
+        if (path.includes('anthropic.md')) {
+          return Promise.resolve('---\nprovider: anthropic\n---\nClaude specific.');
+        }
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      const result = await assembleSystemPrompt({
+        config,
+        model: 'claude-3-opus',
+        provider: 'anthropic',
+        includeEnvironment: true,
+        includeProviderLayer: true,
+      });
+
+      expect(result).toContain('Base prompt for claude-3-opus.');
+      expect(result).toContain('Claude specific.');
+      expect(result).toContain('# Environment');
+    });
+
+    it('skips provider layer when includeProviderLayer is false', async () => {
+      mockAccess.mockImplementation((path) => {
+        if (path.includes('base.md')) {
+          return Promise.resolve(undefined);
+        }
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      mockReadFile.mockResolvedValue('Base only.');
+
+      const result = await assembleSystemPrompt({
+        config,
+        model: 'gpt-4o',
+        provider: 'openai',
+        includeEnvironment: false,
+        includeProviderLayer: false,
+      });
+
+      expect(result).toBe('Base only.');
+      expect(result).not.toContain('# Environment');
+    });
+
+    it('skips environment when includeEnvironment is false', async () => {
+      mockAccess.mockImplementation((path) => {
+        if (path.includes('base.md')) {
+          return Promise.resolve(undefined);
+        }
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      mockReadFile.mockResolvedValue('Base prompt.');
+
+      const result = await assembleSystemPrompt({
+        config,
+        model: 'gpt-4o',
+        provider: 'openai',
+        includeEnvironment: false,
+        includeProviderLayer: false,
+      });
+
+      expect(result).not.toContain('Environment');
+      expect(result).not.toContain('Working directory');
+    });
+
+    it('adds user override when provided', async () => {
+      mockAccess.mockRejectedValue(new Error('ENOENT'));
+
+      const result = await assembleSystemPrompt({
+        config,
+        model: 'gpt-4o',
+        provider: 'openai',
+        includeEnvironment: false,
+        includeProviderLayer: false,
+        userOverride: 'My custom instructions.',
+      });
+
+      expect(result).toContain('# User Instructions');
+      expect(result).toContain('My custom instructions.');
+    });
+
+    it('calls onDebug callback during assembly', async () => {
+      mockAccess.mockRejectedValue(new Error('ENOENT'));
+
+      const debugMessages: string[] = [];
+      const onDebug = (msg: string): void => {
+        debugMessages.push(msg);
+      };
+
+      await assembleSystemPrompt({
+        config,
+        model: 'gpt-4o',
+        provider: 'openai',
+        includeEnvironment: true,
+        includeProviderLayer: true,
+        onDebug,
+      });
+
+      expect(debugMessages).toContain('Loaded base prompt');
+      expect(debugMessages.some((m) => m.includes('environment'))).toBe(true);
     });
   });
 });
