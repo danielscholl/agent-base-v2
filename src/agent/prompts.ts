@@ -1,19 +1,23 @@
 /**
- * System prompt loading utilities.
- * Implements three-tier fallback and placeholder replacement.
+ * System prompt loading and composition utilities.
  *
  * ## Overview
  *
- * The system prompt loader provides a flexible way to customize the agent's behavior
- * through prompt files. It supports a three-tier fallback system:
+ * The prompt system uses a compositional architecture that assembles prompts from:
+ * 1. **Base prompt**: Core agent instructions (model-agnostic)
+ * 2. **Provider layer**: Optional provider-specific guidance
+ * 3. **Environment section**: Runtime context (working dir, git status, etc.)
+ * 4. **Skills section**: Progressive skill disclosure XML
+ * 5. **User override**: Custom instructions from config or user files
  *
- * 1. **Explicit override**: Set via `config.agent.systemPromptFile`
- * 2. **User default**: Located at `~/.agent/system.md`
- * 3. **Package default**: Bundled with the package at `src/prompts/system.md`
+ * ## Backward Compatibility
+ *
+ * The legacy `loadSystemPrompt()` function is maintained for backward compatibility.
+ * New code should prefer `assembleSystemPrompt()` for full composition features.
  *
  * ## Placeholder Substitution
  *
- * Prompts can include placeholders using `{{NAME}}` syntax that are replaced at load time:
+ * Prompts support `{{NAME}}` placeholder syntax:
  *
  * | Placeholder | Description | Example Value |
  * |-------------|-------------|---------------|
@@ -21,63 +25,36 @@
  * | `{{PROVIDER}}` | Current provider | `openai` |
  * | `{{DATA_DIR}}` | Data directory path | `~/.agent-data` |
  * | `{{MEMORY_ENABLED}}` | Memory status | `enabled` or `disabled` |
- *
- * ## YAML Front Matter
- *
- * Prompt files may include YAML front matter (delimited by `---`) which is automatically
- * stripped before processing. This allows prompts to include metadata:
- *
- * ```markdown
- * ---
- * title: My Custom Prompt
- * version: 1.0
- * ---
- * You are a helpful assistant using {{MODEL}}.
- * ```
- *
- * ## Skills Integration
- *
- * When `includeSkills` is enabled, the loader discovers available skills and appends
- * their context as XML to the system prompt. This enables progressive skill disclosure.
+ * | `{{WORKING_DIR}}` | Working directory | `/Users/dev/project` |
+ * | `{{GIT_STATUS}}` | Git repo status | `Yes (branch: main, clean)` |
+ * | `{{PLATFORM}}` | Platform name | `macOS` |
+ * | `{{OS_VERSION}}` | OS version | `Darwin 24.1.0` |
+ * | `{{DATE}}` | Current date | `2025-12-24` |
  *
  * @module agent/prompts
  *
- * @example Basic Usage
+ * @example Compositional Assembly
+ * ```typescript
+ * import { assembleSystemPrompt } from './prompts.js';
+ *
+ * const prompt = await assembleSystemPrompt({
+ *   config,
+ *   model: 'claude-3-opus',
+ *   provider: 'anthropic',
+ *   includeEnvironment: true,
+ *   includeProviderLayer: true,
+ * });
+ * ```
+ *
+ * @example Legacy Usage (backward compatible)
  * ```typescript
  * import { loadSystemPrompt } from './prompts.js';
- * import { getDefaultConfig } from '../config/schema.js';
  *
- * const config = getDefaultConfig();
  * const prompt = await loadSystemPrompt({
  *   config,
  *   model: 'gpt-4o',
  *   provider: 'openai',
  * });
- * ```
- *
- * @example With Skills
- * ```typescript
- * import { loadSystemPromptWithSkills } from './prompts.js';
- *
- * const { prompt, skills } = await loadSystemPromptWithSkills({
- *   config,
- *   model: 'gpt-4o',
- *   provider: 'openai',
- *   includeSkills: true,
- * });
- *
- * console.log(`Loaded ${skills.length} skills`);
- * ```
- *
- * @example Custom Placeholder Replacement
- * ```typescript
- * import { replacePlaceholders } from './prompts.js';
- *
- * const result = replacePlaceholders(
- *   'Hello, {{USER}}! Using {{MODEL}}.',
- *   { USER: 'Alice', MODEL: 'gpt-4o' }
- * );
- * // Result: 'Hello, Alice! Using gpt-4o.'
  * ```
  */
 
@@ -92,6 +69,15 @@ import {
   type DiscoveredSkill,
   type SkillLoaderOptions,
 } from '../skills/index.js';
+import {
+  detectEnvironment,
+  formatEnvironmentSection,
+  type EnvironmentContext,
+} from './environment.js';
+
+// =============================================================================
+// Types
+// =============================================================================
 
 /**
  * Options for loading system prompt.
@@ -103,6 +89,32 @@ export interface PromptOptions {
   model: string;
   /** Current provider name (for {{PROVIDER}} placeholder) */
   provider: string;
+}
+
+/**
+ * Extended options for compositional prompt assembly.
+ */
+export interface PromptAssemblyOptions extends PromptOptions {
+  /** Include environment context section (default: true) */
+  includeEnvironment?: boolean;
+  /** Include provider-specific layer (default: true) */
+  includeProviderLayer?: boolean;
+  /** Working directory for environment context (default: process.cwd()) */
+  workingDir?: string;
+  /** User override content (appended at end) */
+  userOverride?: string;
+  /** Debug callback for logging */
+  onDebug?: (message: string, data?: Record<string, unknown>) => void;
+}
+
+/**
+ * Extended options for loading system prompt with skills.
+ */
+export interface PromptOptionsWithSkills extends PromptAssemblyOptions {
+  /** Include discovered skills in system prompt */
+  includeSkills?: boolean;
+  /** Skills loader options */
+  skillLoaderOptions?: SkillLoaderOptions;
 }
 
 /**
@@ -119,9 +131,23 @@ export interface PlaceholderValues {
   SESSION_DIR?: string;
   /** Whether memory is enabled */
   MEMORY_ENABLED: string;
+  /** Working directory */
+  WORKING_DIR?: string;
+  /** Git status string */
+  GIT_STATUS?: string;
+  /** Platform name */
+  PLATFORM?: string;
+  /** OS version */
+  OS_VERSION?: string;
+  /** Current date */
+  DATE?: string;
   /** Additional custom placeholders */
   [key: string]: string | undefined;
 }
+
+// =============================================================================
+// Internal Helpers
+// =============================================================================
 
 /**
  * Check if a file exists and is readable.
@@ -136,26 +162,19 @@ async function fileExists(path: string): Promise<boolean> {
 }
 
 /**
- * Get the path to the package default system prompt.
- * Resolves relative to this module's location.
- * Uses fileURLToPath for cross-platform compatibility (Windows safe).
- *
- * Handles both:
- * - Bundled: dist/index.js -> dist/prompts/system.md (same dir)
- * - Source: src/agent/prompts.ts -> src/prompts/system.md (parent dir)
+ * Get the prompts directory path.
+ * Handles both source and bundled execution.
  */
-function getPackagePromptPath(): string {
+function getPromptsDir(): string {
   const currentFile = fileURLToPath(import.meta.url);
   const moduleDir = dirname(currentFile);
 
-  // In bundled dist, prompts are at dist/prompts/system.md (same dir as index.js)
-  // In source, prompts are at src/prompts/system.md (sibling to agent/)
-  // Check if the module directory itself is named 'dist' to detect bundled execution
-  // This avoids false positives when 'dist' appears elsewhere in the path
+  // In bundled dist, prompts are at dist/prompts/ (same dir as index.js)
+  // In source, prompts are at src/prompts/ (sibling to agent/)
   const isBundled = basename(moduleDir) === 'dist';
-  const promptsDir = isBundled ? moduleDir : join(moduleDir, '..');
+  const baseDir = isBundled ? moduleDir : join(moduleDir, '..');
 
-  return join(promptsDir, 'prompts', 'system.md');
+  return join(baseDir, 'prompts');
 }
 
 /**
@@ -167,9 +186,31 @@ function getUserPromptPath(): string {
 }
 
 /**
+ * Get the inline default prompt.
+ * Used as ultimate fallback if no file is found.
+ */
+function getDefaultPrompt(): string {
+  return `You are a helpful AI assistant.
+
+Model: {{MODEL}}
+Provider: {{PROVIDER}}
+
+You have access to various tools to help accomplish tasks. Use them when appropriate.
+
+Guidelines:
+- Be concise and direct in responses
+- Use tools when they can help answer questions
+- Explain your reasoning when helpful
+- Ask for clarification if a request is ambiguous`;
+}
+
+// =============================================================================
+// Core Functions
+// =============================================================================
+
+/**
  * Strip YAML front matter from markdown content.
  * Front matter is delimited by --- on its own line at start of file.
- * The closing --- must also be on its own line (not inside YAML values).
  *
  * @param content - Markdown content with optional YAML front matter
  * @returns Content with front matter removed
@@ -177,7 +218,7 @@ function getUserPromptPath(): string {
 export function stripYamlFrontMatter(content: string): string {
   const trimmed = content.trimStart();
 
-  // Check for YAML front matter opening delimiter (--- followed by newline)
+  // Check for YAML front matter opening delimiter
   if (!trimmed.startsWith('---')) {
     return content;
   }
@@ -185,19 +226,16 @@ export function stripYamlFrontMatter(content: string): string {
   // Ensure opening delimiter is on its own line
   const afterOpening = trimmed.substring(3);
   if (afterOpening.length > 0 && afterOpening[0] !== '\n' && afterOpening[0] !== '\r') {
-    // Not a valid front matter opening (e.g., "---something")
     return content;
   }
 
   // Find the closing delimiter on its own line
-  // Look for newline followed by --- followed by newline or end of string
   const closingMatch = afterOpening.match(/\r?\n---(?:\r?\n|$)/);
   if (!closingMatch || closingMatch.index === undefined) {
-    // No closing delimiter on its own line, return original
     return content;
   }
 
-  // Skip past the closing delimiter and any following whitespace
+  // Skip past the closing delimiter
   const endIndex = closingMatch.index + closingMatch[0].length;
   const afterFrontMatter = afterOpening.substring(endIndex).trimStart();
   return afterFrontMatter;
@@ -216,7 +254,6 @@ export function replacePlaceholders(content: string, values: PlaceholderValues):
 
   for (const [key, value] of Object.entries(values)) {
     if (value !== undefined) {
-      // Replace all instances of {{KEY}}
       const placeholder = `{{${key}}}`;
       result = result.split(placeholder).join(value);
     }
@@ -225,15 +262,225 @@ export function replacePlaceholders(content: string, values: PlaceholderValues):
   return result;
 }
 
+// =============================================================================
+// Compositional Prompt Loading
+// =============================================================================
+
+/**
+ * Load the base prompt from src/prompts/base.md.
+ * Falls back to legacy system.md then inline default.
+ *
+ * @param options - Prompt options
+ * @returns Base prompt content with placeholders replaced
+ */
+export async function loadBasePrompt(options: PromptOptions): Promise<string> {
+  const { config, model, provider } = options;
+  const promptsDir = getPromptsDir();
+
+  let promptContent: string | null = null;
+
+  // Try base.md first (new compositional system)
+  const basePath = join(promptsDir, 'base.md');
+  if (await fileExists(basePath)) {
+    promptContent = await readFile(basePath, 'utf-8');
+  }
+
+  // Fall back to legacy system.md
+  if (promptContent === null) {
+    const legacyPath = join(promptsDir, 'system.md');
+    if (await fileExists(legacyPath)) {
+      promptContent = await readFile(legacyPath, 'utf-8');
+    }
+  }
+
+  // Ultimate fallback to inline default
+  if (promptContent === null) {
+    promptContent = getDefaultPrompt();
+  }
+
+  // Strip YAML front matter
+  const stripped = stripYamlFrontMatter(promptContent);
+
+  // Build placeholder values
+  const values: PlaceholderValues = {
+    MODEL: model,
+    PROVIDER: provider,
+    DATA_DIR: config.agent.dataDir,
+    MEMORY_ENABLED: config.memory.enabled ? 'enabled' : 'disabled',
+  };
+
+  return replacePlaceholders(stripped, values);
+}
+
+/**
+ * Load provider-specific layer if it exists.
+ * Returns empty string if no layer exists for the provider.
+ *
+ * @param provider - Provider name (e.g., 'anthropic', 'openai')
+ * @returns Provider layer content, or empty string
+ */
+export async function loadProviderLayer(provider: string): Promise<string> {
+  const promptsDir = getPromptsDir();
+  const providerPath = join(promptsDir, 'providers', `${provider}.md`);
+
+  if (!(await fileExists(providerPath))) {
+    return '';
+  }
+
+  const content = await readFile(providerPath, 'utf-8');
+  return stripYamlFrontMatter(content);
+}
+
+/**
+ * Generate environment section with runtime context.
+ *
+ * @param workingDir - Working directory (default: process.cwd())
+ * @param onDebug - Optional debug callback for diagnostic logging
+ * @returns Markdown-formatted environment section
+ */
+export async function generateEnvironmentSectionForPrompt(
+  workingDir?: string,
+  onDebug?: (message: string, data?: unknown) => void
+): Promise<{ section: string; context: EnvironmentContext }> {
+  const context = await detectEnvironment(workingDir, onDebug);
+  const section = formatEnvironmentSection(context);
+  return { section, context };
+}
+
+/**
+ * Build placeholder values including environment context.
+ *
+ * Internal helper exported primarily for testing and tooling.
+ *
+ * @internal
+ */
+function buildPlaceholderValues(
+  config: AppConfig,
+  model: string,
+  provider: string,
+  envContext?: EnvironmentContext
+): PlaceholderValues {
+  const values: PlaceholderValues = {
+    MODEL: model,
+    PROVIDER: provider,
+    DATA_DIR: config.agent.dataDir,
+    MEMORY_ENABLED: config.memory.enabled ? 'enabled' : 'disabled',
+  };
+
+  if (envContext) {
+    values.WORKING_DIR = envContext.workingDir;
+    values.PLATFORM = envContext.platform;
+    values.OS_VERSION = envContext.osVersion;
+    values.DATE = envContext.date;
+
+    // Format git status
+    if (envContext.gitRepo) {
+      const branch = envContext.gitBranch ?? 'unknown';
+      const clean =
+        envContext.gitClean === true ? 'clean' : envContext.gitClean === false ? 'dirty' : '';
+      values.GIT_STATUS = clean ? `Yes (branch: ${branch}, ${clean})` : `Yes (branch: ${branch})`;
+    } else {
+      values.GIT_STATUS = 'No';
+    }
+  }
+
+  return values;
+}
+
+/**
+ * Assemble a complete system prompt from all layers.
+ *
+ * Assembly order:
+ * 1. Base prompt (core instructions)
+ * 2. Provider layer (if exists and enabled)
+ * 3. Environment section (if enabled)
+ * 4. User override (if provided)
+ *
+ * Note: Skills are added separately via loadSystemPromptWithSkills()
+ *
+ * @param options - Assembly options
+ * @returns Assembled system prompt
+ *
+ * @example
+ * ```typescript
+ * const prompt = await assembleSystemPrompt({
+ *   config,
+ *   model: 'claude-3-opus',
+ *   provider: 'anthropic',
+ *   includeEnvironment: true,
+ *   includeProviderLayer: true,
+ * });
+ * ```
+ */
+export async function assembleSystemPrompt(options: PromptAssemblyOptions): Promise<string> {
+  const {
+    config,
+    model,
+    provider,
+    includeEnvironment = true,
+    includeProviderLayer = true,
+    workingDir,
+    userOverride,
+    onDebug,
+  } = options;
+
+  const sections: string[] = [];
+
+  // 1. Load base prompt
+  const basePrompt = await loadBasePrompt({ config, model, provider });
+  sections.push(basePrompt);
+  onDebug?.('Loaded base prompt', { length: basePrompt.length });
+
+  // 2. Load provider layer (if enabled and exists)
+  if (includeProviderLayer) {
+    const providerLayer = await loadProviderLayer(provider);
+    if (providerLayer) {
+      sections.push(providerLayer);
+      onDebug?.('Loaded provider layer', { provider, length: providerLayer.length });
+    } else {
+      onDebug?.('No provider layer found', { provider });
+    }
+  }
+
+  // 3. Generate environment section (if enabled)
+  if (includeEnvironment) {
+    const { section: envSection, context: envContext } = await generateEnvironmentSectionForPrompt(
+      workingDir,
+      onDebug as ((message: string, data?: unknown) => void) | undefined
+    );
+    sections.push(envSection);
+    onDebug?.('Generated environment section', {
+      workingDir: envContext.workingDir,
+      gitRepo: envContext.gitRepo,
+      gitBranch: envContext.gitBranch,
+    });
+  }
+
+  // 4. Add user override (if provided)
+  if (userOverride !== undefined && userOverride !== '') {
+    const userSection = `# User Instructions\n\n${userOverride}`;
+    sections.push(userSection);
+    onDebug?.('Added user override', { length: userOverride.length });
+  }
+
+  // Join sections with double newlines
+  return sections.join('\n\n');
+}
+
+// =============================================================================
+// Legacy Functions (Backward Compatible)
+// =============================================================================
+
 /**
  * Load system prompt with three-tier fallback.
  *
- * Priority order:
- * 1. config.agent.systemPromptFile (explicit env override)
- * 2. ~/.agent/system.md (user's default)
- * 3. Package default (src/prompts/system.md)
+ * This is the legacy function maintained for backward compatibility.
+ * New code should prefer `assembleSystemPrompt()` for full composition features.
  *
- * Strips YAML front matter and replaces placeholders.
+ * Priority order:
+ * 1. config.agent.systemPromptFile (explicit override)
+ * 2. ~/.agent/system.md (user's default)
+ * 3. Package default (src/prompts/base.md or src/prompts/system.md)
  *
  * @param options - Prompt options including config, model, and provider
  * @returns Processed system prompt string
@@ -259,13 +506,26 @@ export async function loadSystemPrompt(options: PromptOptions): Promise<string> 
     }
   }
 
-  // Tier 3: Package default
+  // Tier 3: Package default (try base.md first, then system.md)
   if (promptContent === null) {
-    const packagePath = getPackagePromptPath();
-    if (await fileExists(packagePath)) {
-      promptContent = await readFile(packagePath, 'utf-8');
-    } else {
-      // Fallback to inline default if file not found
+    const promptsDir = getPromptsDir();
+
+    // Try base.md first
+    const basePath = join(promptsDir, 'base.md');
+    if (await fileExists(basePath)) {
+      promptContent = await readFile(basePath, 'utf-8');
+    }
+
+    // Fall back to legacy system.md
+    if (promptContent === null) {
+      const legacyPath = join(promptsDir, 'system.md');
+      if (await fileExists(legacyPath)) {
+        promptContent = await readFile(legacyPath, 'utf-8');
+      }
+    }
+
+    // Ultimate fallback
+    if (promptContent === null) {
       promptContent = getDefaultPrompt();
     }
   }
@@ -281,53 +541,18 @@ export async function loadSystemPrompt(options: PromptOptions): Promise<string> 
     MEMORY_ENABLED: config.memory.enabled ? 'enabled' : 'disabled',
   };
 
-  // Replace placeholders
-  const processed = replacePlaceholders(stripped, values);
-
-  return processed;
+  return replacePlaceholders(stripped, values);
 }
 
-/**
- * Get the inline default prompt.
- * Used as ultimate fallback if no file is found.
- */
-function getDefaultPrompt(): string {
-  return `You are a helpful AI assistant.
-
-Model: {{MODEL}}
-Provider: {{PROVIDER}}
-
-You have access to various tools to help accomplish tasks. Use them when appropriate.
-
-Guidelines:
-- Be concise and direct in responses
-- Use tools when they can help answer questions
-- Explain your reasoning when helpful
-- Ask for clarification if a request is ambiguous`;
-}
-
-// -----------------------------------------------------------------------------
+// =============================================================================
 // Skills Integration
-// -----------------------------------------------------------------------------
-
-/**
- * Extended options for loading system prompt with skills.
- */
-export interface PromptOptionsWithSkills extends PromptOptions {
-  /** Include discovered skills in system prompt */
-  includeSkills?: boolean;
-  /** Skills loader options */
-  skillLoaderOptions?: SkillLoaderOptions;
-}
+// =============================================================================
 
 /**
  * Load skills and generate context for system prompt.
  *
- * Design note: Skill loading errors are non-fatal - we continue with whatever
- * skills loaded successfully. Errors are logged via onDebug callback to allow
- * callers to observe issues without breaking the flow. The errors are also
- * collected in SkillDiscoveryResult.errors and returned to callers who need
- * structured error information.
+ * Skill loading errors are non-fatal - we continue with whatever
+ * skills loaded successfully.
  *
  * @param options - Skill loader options
  * @returns Skills context with XML and discovered skills
@@ -339,7 +564,6 @@ export async function loadSkillsContext(
   const result = await loader.discover();
 
   if (result.errors.length > 0) {
-    // Log errors but continue with valid skills
     for (const error of result.errors) {
       options?.onDebug?.(`Skill load error: ${error.path}: ${error.message}`, { error });
     }
@@ -354,25 +578,60 @@ export async function loadSkillsContext(
 }
 
 /**
- * Load system prompt with skills integration.
- * Combines base prompt loading with skill discovery.
+ * Load system prompt with full composition and skills integration.
+ *
+ * This is the recommended function for new code. It combines:
+ * - Base prompt
+ * - Provider layer
+ * - Environment section
+ * - Skills XML
  *
  * @param options - Prompt options including skills configuration
  * @returns System prompt with skills and list of discovered skills
+ *
+ * @example
+ * ```typescript
+ * const { prompt, skills } = await loadSystemPromptWithSkills({
+ *   config,
+ *   model: 'claude-3-opus',
+ *   provider: 'anthropic',
+ *   includeSkills: true,
+ *   includeEnvironment: true,
+ *   includeProviderLayer: true,
+ * });
+ * ```
  */
 export async function loadSystemPromptWithSkills(
   options: PromptOptionsWithSkills
 ): Promise<{ prompt: string; skills: DiscoveredSkill[] }> {
-  const basePrompt = await loadSystemPrompt(options);
+  const {
+    includeSkills = false,
+    includeEnvironment = true,
+    includeProviderLayer = true,
+    skillLoaderOptions,
+    ...assemblyOptions
+  } = options;
 
-  if (options.includeSkills !== true) {
+  // Use compositional assembly
+  const basePrompt = await assembleSystemPrompt({
+    ...assemblyOptions,
+    includeEnvironment,
+    includeProviderLayer,
+  });
+
+  if (!includeSkills) {
     return { prompt: basePrompt, skills: [] };
   }
 
-  const { xml, skills } = await loadSkillsContext(options.skillLoaderOptions);
-
-  // Append skills XML after base prompt
+  // Load and append skills
+  const { xml, skills } = await loadSkillsContext(skillLoaderOptions);
   const prompt = xml ? `${basePrompt}\n\n${xml}` : basePrompt;
 
   return { prompt, skills };
 }
+
+// =============================================================================
+// Exports for buildPlaceholderValues (internal use)
+// =============================================================================
+
+export { buildPlaceholderValues };

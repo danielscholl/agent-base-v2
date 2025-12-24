@@ -32,9 +32,11 @@ jest.unstable_mockModule('node:fs/promises', () => ({
   constants: { R_OK: 4 },
 }));
 
-// Mock os for homedir
+// Mock os for homedir and environment detection
 jest.unstable_mockModule('node:os', () => ({
   homedir: () => '/home/testuser',
+  platform: () => 'darwin',
+  release: () => '24.1.0',
 }));
 
 // Mock LLMClient module

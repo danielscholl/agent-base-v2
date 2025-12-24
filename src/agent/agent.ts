@@ -21,7 +21,7 @@ import type { DiscoveredSkill, SkillLoaderOptions } from '../skills/types.js';
 import type { ToolPermission, ToolExecutionResult } from '../tools/index.js';
 import { Tool, ToolRegistry } from '../tools/index.js';
 import { LLMClient } from '../model/llm.js';
-import { loadSystemPrompt, loadSkillsContext } from './prompts.js';
+import { assembleSystemPrompt, loadSkillsContext } from './prompts.js';
 import { generateAvailableSkillsXml } from '../skills/prompt.js';
 import { createSpanContext, createChildSpanContext } from './callbacks.js';
 import { extractTokenUsage } from '../model/base.js';
@@ -120,11 +120,15 @@ export class Agent {
 
     // Load system prompt if not already provided via constructor
     if (this.systemPrompt === '') {
-      // Load base system prompt (without skills)
-      const basePrompt = await loadSystemPrompt({
+      // Use compositional prompt assembly with provider layer and environment
+      const basePrompt = await assembleSystemPrompt({
         config: this.config,
         model: this.getModelName(),
         provider: this.getProviderName(),
+        includeEnvironment: true,
+        includeProviderLayer: true,
+        workingDir: process.cwd(),
+        onDebug: this.callbacks?.onDebug,
       });
 
       // Discover and filter skills if enabled
