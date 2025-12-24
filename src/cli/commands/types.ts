@@ -4,6 +4,7 @@
 
 import type { AppConfig } from '../../config/schema.js';
 import type { StoredMessage } from '../../utils/message-history.js';
+import type { SessionMetadata } from '../../utils/session.js';
 
 /** Result of a command execution */
 export interface CommandResult {
@@ -31,6 +32,10 @@ export interface CommandResult {
   sessionContextSummary?: string;
   /** Whether to list saved sessions */
   shouldListSessions?: boolean;
+  /** Whether to show interactive session selector */
+  shouldShowSessionSelector?: boolean;
+  /** Available sessions for interactive selection */
+  availableSessions?: SessionMetadata[];
   /** Additional data from command */
   data?: unknown;
 }

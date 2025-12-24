@@ -13,7 +13,6 @@ import {
   COMMAND_SESSIONS,
   COMMAND_RESUME,
   COMMAND_PURGE,
-  COMMAND_CONTINUE,
   matchesCommand,
   isShellCommand,
   isSlashCommand,
@@ -26,13 +25,7 @@ import { exitHandler } from './exit.js';
 import { historyHandler } from './history.js';
 import { telemetryHandler } from './telemetry.js';
 import { shellHandler } from './shell.js';
-import {
-  saveHandler,
-  sessionsHandler,
-  resumeHandler,
-  purgeHandler,
-  continueHandler,
-} from './session.js';
+import { saveHandler, sessionsHandler, resumeHandler, purgeHandler } from './session.js';
 
 // Note: configHandler and skillHandler are exported for CLI subcommand use,
 // but are no longer registered as interactive commands (use `agent config` / `agent skill` instead)
@@ -51,7 +44,6 @@ export {
   sessionsHandler,
   resumeHandler,
   purgeHandler,
-  continueHandler,
 };
 
 /** All registered commands */
@@ -97,18 +89,13 @@ export const COMMANDS: CommandDefinition[] = [
     aliases: COMMAND_RESUME,
     description: 'Resume a saved session',
     handler: resumeHandler,
-    usage: '/resume <session-id>',
+    usage: '/resume [session-id]',
   },
   {
     aliases: COMMAND_PURGE,
     description: 'Delete old or specific sessions',
     handler: purgeHandler,
     usage: '/purge [count|session-id]',
-  },
-  {
-    aliases: COMMAND_CONTINUE,
-    description: 'Continue the last session',
-    handler: continueHandler,
   },
 ];
 

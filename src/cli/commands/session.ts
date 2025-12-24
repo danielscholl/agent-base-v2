@@ -101,18 +101,29 @@ export const resumeHandler: CommandHandler = async (args, context): Promise<Comm
   const sessionId = args.trim();
 
   if (!sessionId) {
-    // If no ID provided, show available sessions and prompt
-    context.onOutput('Usage: /resume <session-id>', 'info');
-    context.onOutput('', 'info');
-
+    // If no ID provided and we're in interactive mode, show session selector
     const manager = getSessionManager();
     const sessions = await manager.listSessions();
 
     if (sessions.length === 0) {
       context.onOutput('No saved sessions to resume.', 'warning');
-      return { success: false, message: 'No session ID provided' };
+      context.onOutput('Use /save to save the current session first.', 'info');
+      return { success: false, message: 'No sessions available' };
     }
 
+    // In interactive mode, trigger the session selector UI
+    if (context.isInteractive === true) {
+      return {
+        success: true,
+        shouldShowSessionSelector: true,
+        availableSessions: sessions,
+        message: 'Showing session selector',
+      };
+    }
+
+    // Non-interactive mode: show text list
+    context.onOutput('Usage: /resume <session-id>', 'info');
+    context.onOutput('', 'info');
     context.onOutput('Available sessions:', 'info');
     for (const session of sessions.slice(0, 5)) {
       const date = new Date(session.lastActivityAt).toLocaleString();
@@ -205,32 +216,6 @@ export const purgeHandler: CommandHandler = async (args, context): Promise<Comma
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     context.onOutput(`Failed to purge sessions: ${message}`, 'error');
-    return { success: false, message };
-  }
-};
-
-/**
- * Handler for /continue command.
- * Quick resume of the last session.
- * Usage: /continue
- */
-export const continueHandler: CommandHandler = async (_args, context): Promise<CommandResult> => {
-  const manager = getSessionManager();
-
-  try {
-    const lastSessionId = await manager.getLastSession();
-
-    if (lastSessionId === null) {
-      context.onOutput('No previous session to continue.', 'warning');
-      context.onOutput('Use /sessions to see available sessions.', 'info');
-      return { success: false, message: 'No last session' };
-    }
-
-    // Delegate to resumeHandler
-    return await resumeHandler(lastSessionId, context);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    context.onOutput(`Failed to get last session: ${message}`, 'error');
     return { success: false, message };
   }
 };

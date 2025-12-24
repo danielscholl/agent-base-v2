@@ -88,7 +88,7 @@ describe('Command Handlers', () => {
       expect(helpText).toContain('Ctrl+D');
       expect(helpText).toContain('Up/Down');
       // Session commands should be present
-      expect(helpText).toContain('/continue');
+      expect(helpText).toContain('/resume');
       expect(helpText).toContain('/purge');
       // CLI subcommands section should be present
       expect(helpText).toContain('CLI SUBCOMMANDS');

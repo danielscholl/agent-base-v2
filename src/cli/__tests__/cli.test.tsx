@@ -63,6 +63,13 @@ describe('CLI', () => {
       expect(element.type).toBe(InteractiveShell);
       expect(element.props).toMatchObject({ resumeSession: true });
     });
+
+    it('passes verbose flag to InteractiveShell', () => {
+      const flags: CLIFlags = { ...defaultFlags, verbose: true };
+      const element = CLI({ flags });
+      expect(element.type).toBe(InteractiveShell);
+      expect(element.props).toMatchObject({ verbose: true });
+    });
   });
 
   describe('flag priority', () => {

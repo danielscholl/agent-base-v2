@@ -54,6 +54,8 @@ export interface SinglePromptProps {
 export interface InteractiveShellProps {
   /** Whether to resume the previous session */
   resumeSession?: boolean;
+  /** Enable verbose output (shows detailed tool history) */
+  verbose?: boolean;
 }
 
 /**

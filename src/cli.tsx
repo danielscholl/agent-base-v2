@@ -42,5 +42,5 @@ export function CLI({ flags }: CLIProps): React.ReactElement {
   }
 
   // Default: Interactive mode
-  return <InteractiveShell resumeSession={flags.continue} />;
+  return <InteractiveShell resumeSession={flags.continue} verbose={flags.verbose} />;
 }

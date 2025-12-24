@@ -18,7 +18,9 @@ import { configInitHandler } from '../cli/commands/config.js';
 import { unescapeSlash } from '../cli/constants.js';
 import { InputHistory } from '../cli/input/index.js';
 import { MessageHistory, SessionManager } from '../utils/index.js';
-import type { StoredMessage, SessionTokenUsage } from '../utils/index.js';
+import type { StoredMessage, SessionTokenUsage, SessionMetadata } from '../utils/index.js';
+import { SessionSelector } from './SessionSelector.js';
+import { resumeHandler } from '../cli/commands/session.js';
 import { Header } from './Header.js';
 import { Spinner } from './Spinner.js';
 import { ErrorDisplay } from './ErrorDisplay.js';
@@ -58,6 +60,57 @@ function formatToolArgs(args: Record<string, unknown>): string {
   const strValue = String(value);
   const truncated = strValue.length > 30 ? strValue.slice(0, 27) + '...' : strValue;
   return `${key}: ${truncated}`;
+}
+
+/**
+ * Helper to restore a session from resumeHandler result.
+ * Centralizes logic for clearing message history, filtering messages,
+ * and updating state with restored session data.
+ */
+function applySessionRestore(
+  result: {
+    sessionToResume?: string;
+    sessionMessages?: StoredMessage[];
+    sessionContextSummary?: string;
+  },
+  messageHistoryRef: React.RefObject<MessageHistory | null>,
+  setState: React.Dispatch<React.SetStateAction<ShellState>>
+): void {
+  if (
+    result.sessionToResume !== undefined &&
+    result.sessionMessages !== undefined &&
+    result.sessionMessages.length > 0
+  ) {
+    // Clear current message history and populate with restored messages
+    messageHistoryRef.current?.clear();
+    for (const msg of result.sessionMessages) {
+      messageHistoryRef.current?.add(msg);
+    }
+
+    // Convert StoredMessage to ShellMessage for UI (filter out 'tool' roles)
+    const shellMessages: ShellMessage[] = result.sessionMessages
+      .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
+      .map((m) => ({
+        role: m.role as 'user' | 'assistant' | 'system',
+        content: m.content,
+        timestamp: new Date(m.timestamp),
+      }));
+
+    // If there's a context summary, add it as a system message
+    if (result.sessionContextSummary !== undefined && result.sessionContextSummary !== '') {
+      shellMessages.unshift({
+        role: 'system' as const,
+        content: `Session context: ${result.sessionContextSummary}`,
+        timestamp: new Date(),
+      });
+    }
+
+    setState((s) => ({
+      ...s,
+      messages: shellMessages,
+      resumedSessionId: result.sessionToResume ?? null,
+    }));
+  }
 }
 
 /**
@@ -103,13 +156,24 @@ interface ShellState {
   executionStartTime: number | null;
   /** Last execution duration in seconds (calculated when execution completes) */
   lastExecutionDuration: number | null;
+  /** Session selection state for interactive /resume */
+  sessionSelection: {
+    active: boolean;
+    sessions: SessionMetadata[];
+    selectedIndex: number;
+  } | null;
+  /** Tool nodes from the last completed execution (for verbose mode) */
+  lastExecutionToolNodes: ToolNode[];
 }
 
 /**
  * InteractiveShell component.
  * Provides a chat interface for conversing with the agent.
  */
-export function InteractiveShell({ resumeSession }: InteractiveShellProps): React.ReactElement {
+export function InteractiveShell({
+  resumeSession,
+  verbose = false,
+}: InteractiveShellProps): React.ReactElement {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const agentRef = useRef<Agent | null>(null);
@@ -146,6 +210,8 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
     messageCount: 0,
     executionStartTime: null,
     lastExecutionDuration: null,
+    sessionSelection: null,
+    lastExecutionToolNodes: [],
   });
 
   // Load config on mount and handle session resume
@@ -666,35 +732,7 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
 
         // Handle /resume command - restore session messages
         if (result.sessionToResume !== undefined && result.sessionMessages !== undefined) {
-          // Clear current message history and populate with restored messages
-          messageHistoryRef.current?.clear();
-          for (const msg of result.sessionMessages) {
-            messageHistoryRef.current?.add(msg);
-          }
-
-          // Convert StoredMessage to ShellMessage for UI (filter out 'tool' roles)
-          const shellMessages: ShellMessage[] = result.sessionMessages
-            .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
-            .map((m) => ({
-              role: m.role as 'user' | 'assistant' | 'system',
-              content: m.content,
-              timestamp: new Date(m.timestamp),
-            }));
-
-          // If there's a context summary, add it as a system message
-          if (result.sessionContextSummary !== undefined) {
-            shellMessages.unshift({
-              role: 'system' as const,
-              content: `Session context: ${result.sessionContextSummary}`,
-              timestamp: new Date(),
-            });
-          }
-
-          setState((s) => ({
-            ...s,
-            messages: shellMessages,
-            resumedSessionId: result.sessionToResume ?? null,
-          }));
+          applySessionRestore(result, messageHistoryRef, setState);
           return;
         }
 
@@ -752,6 +790,28 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
           }
           return;
         }
+
+        // Handle /resume command - show interactive session selector
+        if (result.shouldShowSessionSelector === true && result.availableSessions !== undefined) {
+          // Remove the placeholder system message and enter session selection mode
+          setState((s) => {
+            // Remove the last empty system message that was added
+            const messagesWithoutPlaceholder =
+              s.messages.length > 0 && s.messages[s.messages.length - 1]?.role === 'system'
+                ? s.messages.slice(0, -1)
+                : s.messages;
+            return {
+              ...s,
+              messages: messagesWithoutPlaceholder,
+              sessionSelection: {
+                active: true,
+                sessions: result.availableSessions ?? [],
+                selectedIndex: 0,
+              },
+            };
+          });
+          return;
+        }
       }
       return;
     }
@@ -772,6 +832,7 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
       completedTasks: [],
       messageCount: 0,
       executionStartTime: Date.now(),
+      lastExecutionToolNodes: [], // Clear previous execution history
     }));
 
     // Synchronize filesystem writes config to env var before each run
@@ -801,6 +862,15 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
             const duration =
               s.executionStartTime !== null ? (Date.now() - s.executionStartTime) / 1000 : null;
 
+            // Save tool nodes for verbose mode display
+            const toolNodes: ToolNode[] = s.completedTasks.map((task) => ({
+              id: task.id,
+              name: task.name,
+              status: task.success ? ('complete' as const) : ('error' as const),
+              duration: task.duration >= 0 ? task.duration / 1000 : undefined,
+              error: task.error,
+            }));
+
             if (s.error !== null || answer.startsWith('Error:')) {
               // Error already displayed via ErrorDisplay, don't duplicate
               return {
@@ -808,6 +878,7 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
                 streamingOutput: '',
                 isProcessing: false,
                 lastExecutionDuration: duration,
+                lastExecutionToolNodes: toolNodes,
               };
             }
             // State management design:
@@ -829,6 +900,7 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
               streamingOutput: '',
               isProcessing: false,
               lastExecutionDuration: duration,
+              lastExecutionToolNodes: toolNodes,
             };
           });
         },
@@ -1013,8 +1085,102 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
       return;
     }
 
-    // Don't process other input while agent is working
-    if (state.isProcessing) return;
+    // Handle session selection mode input
+    if (state.sessionSelection !== null && state.sessionSelection.active) {
+      const { sessions, selectedIndex } = state.sessionSelection;
+
+      if (key.escape) {
+        // Cancel session selection
+        setState((s) => ({ ...s, sessionSelection: null }));
+        addSystemMessage('Session selection cancelled');
+        return;
+      }
+
+      if (key.upArrow) {
+        // Navigate up (clamped at top)
+        setState((s) => ({
+          ...s,
+          sessionSelection: s.sessionSelection
+            ? {
+                ...s.sessionSelection,
+                selectedIndex: Math.max(0, selectedIndex - 1),
+              }
+            : null,
+        }));
+        return;
+      }
+
+      if (key.downArrow) {
+        // Navigate down (clamped at bottom)
+        setState((s) => ({
+          ...s,
+          sessionSelection: s.sessionSelection
+            ? {
+                ...s.sessionSelection,
+                selectedIndex: Math.min(sessions.length - 1, selectedIndex + 1),
+              }
+            : null,
+        }));
+        return;
+      }
+
+      if (key.return) {
+        // Select the session
+        const selectedSession = sessions[selectedIndex];
+        if (selectedSession) {
+          // Close selector and trigger resume
+          setState((s) => ({ ...s, sessionSelection: null }));
+
+          // Resume the selected session by calling the handler directly
+          const context: CommandContext = {
+            config: state.config,
+            onOutput: (content: string) => {
+              if (content.trim() !== '') {
+                addSystemMessage(content);
+              }
+            },
+            exit,
+            isInteractive: true,
+          };
+
+          resumeHandler(selectedSession.id, context)
+            .then((result) => {
+              applySessionRestore(result, messageHistoryRef, setState);
+            })
+            .catch((error: unknown) => {
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+              addSystemMessage(`Failed to resume session: ${errorMessage}`);
+            });
+        }
+        return;
+      }
+
+      // Ignore other input during session selection
+      return;
+    }
+
+    // Handle escape key during processing - abort the current operation
+    if (state.isProcessing) {
+      if (key.escape) {
+        // Abort the agent and reset state
+        agentRef.current?.abort();
+        setState((s) => {
+          // Calculate duration if we had a start time
+          const duration =
+            s.executionStartTime !== null ? (Date.now() - s.executionStartTime) / 1000 : null;
+          return {
+            ...s,
+            isProcessing: false,
+            spinnerMessage: '',
+            streamingOutput: '',
+            lastExecutionDuration: duration,
+          };
+        });
+        // Add a system message indicating the operation was cancelled
+        addSystemMessage('Operation cancelled');
+      }
+      return;
+    }
 
     // Check if autocomplete should be active
     // Active when input starts with '/' but not '//' (escape sequence)
@@ -1194,8 +1360,10 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
                 <ExecutionStatus
                   status="complete"
                   messageCount={state.messageCount}
-                  toolCount={state.completedTasks.length}
+                  toolCount={state.lastExecutionToolNodes.length}
                   duration={state.lastExecutionDuration}
+                  toolNodes={state.lastExecutionToolNodes}
+                  showToolHistory={verbose}
                 />
               )}
             <Box marginBottom={hasBottomMargin ? 1 : 0}>
@@ -1266,31 +1434,42 @@ export function InteractiveShell({ resumeSession }: InteractiveShellProps): Reac
         </Box>
       )}
 
-      {/* Prompt divider with path+branch and horizontal rule (only after messages exist) */}
-      {!state.isProcessing && state.promptState === null && state.messages.length > 0 && (
-        <PromptDivider cwd={process.cwd()} />
+      {/* Session selector for /resume command */}
+      {state.sessionSelection !== null && state.sessionSelection.active && (
+        <SessionSelector
+          sessions={state.sessionSelection.sessions}
+          selectedIndex={state.sessionSelection.selectedIndex}
+        />
       )}
 
+      {/* Prompt divider with path+branch and horizontal rule (only after messages exist) */}
+      {!state.isProcessing &&
+        state.promptState === null &&
+        (state.sessionSelection === null || !state.sessionSelection.active) &&
+        state.messages.length > 0 && <PromptDivider cwd={process.cwd()} />}
+
       {/* Input prompt with autocomplete */}
-      {!state.isProcessing && state.promptState === null && (
-        <>
-          <Box>
-            <Text color="cyan">{'> '}</Text>
-            <Text>{state.input}</Text>
-            <Text color="cyan">{'█'}</Text>
-          </Box>
-          {/* Command autocomplete - show when typing slash commands */}
-          {state.input.startsWith('/') &&
-            !state.input.startsWith('//') &&
-            state.input.indexOf(' ') === -1 && (
-              <CommandAutocomplete
-                commands={autocompleteCommandsRef.current}
-                filter={state.input.slice(1)}
-                selectedIndex={state.autocompleteIndex}
-              />
-            )}
-        </>
-      )}
+      {!state.isProcessing &&
+        state.promptState === null &&
+        (state.sessionSelection === null || !state.sessionSelection.active) && (
+          <>
+            <Box>
+              <Text color="cyan">{'> '}</Text>
+              <Text>{state.input}</Text>
+              <Text color="cyan">{'█'}</Text>
+            </Box>
+            {/* Command autocomplete - show when typing slash commands */}
+            {state.input.startsWith('/') &&
+              !state.input.startsWith('//') &&
+              state.input.indexOf(' ') === -1 && (
+                <CommandAutocomplete
+                  commands={autocompleteCommandsRef.current}
+                  filter={state.input.slice(1)}
+                  selectedIndex={state.autocompleteIndex}
+                />
+              )}
+          </>
+        )}
     </Box>
   );
 }

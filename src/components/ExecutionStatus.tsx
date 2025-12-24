@@ -57,6 +57,8 @@ export interface ExecutionStatusProps {
   toolNodes?: ToolNode[];
   /** Error message (if status is error) */
   errorMessage?: string;
+  /** Whether to show detailed tool history (verbose mode) */
+  showToolHistory?: boolean;
 }
 
 /**
@@ -126,17 +128,61 @@ export function ExecutionStatus({
   thinkingState,
   toolNodes = [],
   errorMessage,
+  showToolHistory = false,
 }: ExecutionStatusProps): React.ReactElement {
   // Completion state
   if (status === 'complete') {
+    // Simple completion (non-verbose or no tools)
+    if (!showToolHistory || toolNodes.length === 0) {
+      return (
+        <Box marginBottom={1}>
+          <Text color="green">{SYMBOL_SUCCESS} Complete</Text>
+          {duration !== undefined && <Text dimColor> ({formatDuration(duration)})</Text>}
+          <Text dimColor>
+            {' '}
+            - msg:{messageCount} tool:{toolCount}
+          </Text>
+        </Box>
+      );
+    }
+
+    // Verbose completion with tool history
     return (
-      <Box marginBottom={1}>
-        <Text color="green">{SYMBOL_SUCCESS} Complete</Text>
-        {duration !== undefined && <Text dimColor> ({formatDuration(duration)})</Text>}
-        <Text dimColor>
-          {' '}
-          - msg:{messageCount} tool:{toolCount}
-        </Text>
+      <Box flexDirection="column" marginBottom={1}>
+        {/* Phase header with duration */}
+        <Box>
+          <Text dimColor>{SYMBOL_COMPLETE} Phase</Text>
+          {duration !== undefined && <Text dimColor> ({formatDuration(duration)})</Text>}
+        </Box>
+
+        {/* Thinking summary */}
+        <Box>
+          <Text dimColor>
+            {toolNodes.length > 0 ? TREE_BRANCH : TREE_LAST} {SYMBOL_COMPLETE} Thinking (
+            {messageCount} messages) - Response received
+          </Text>
+        </Box>
+
+        {/* Tool nodes (all dimmed since complete) */}
+        {toolNodes.map((node, index) => {
+          const isLast = index === toolNodes.length - 1;
+          const prefix = isLast ? TREE_LAST : TREE_BRANCH;
+
+          return (
+            <Box key={node.id}>
+              <Text dimColor>
+                {prefix} {node.status === 'error' ? SYMBOL_ERROR : SYMBOL_COMPLETE} {node.name}
+              </Text>
+              {node.args !== undefined && node.args !== '' && <Text dimColor> ({node.args})</Text>}
+              {node.duration !== undefined && (
+                <Text dimColor> ({formatDuration(node.duration)})</Text>
+              )}
+              {node.status === 'error' && node.error !== undefined && (
+                <Text color="red"> - {node.error}</Text>
+              )}
+            </Box>
+          );
+        })}
       </Box>
     );
   }

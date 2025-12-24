@@ -13,8 +13,7 @@ export const helpHandler: CommandHandler = (_args, context): Promise<CommandResu
 SESSION MANAGEMENT
   /save [name]         Save current session
   /sessions            List all saved sessions
-  /resume <id>         Resume a saved session
-  /continue            Resume the last session
+  /resume [id]         Resume a session (interactive selector if no id)
   /purge [count]       Delete old sessions (keep N most recent)
 
 TELEMETRY
