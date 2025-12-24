@@ -37,18 +37,51 @@ interface WebFetchMetadata extends Tool.Metadata {
 }
 
 /**
+ * HTML entity map for decoding.
+ */
+const HTML_ENTITIES: Record<string, string> = {
+  amp: '&',
+  nbsp: ' ',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  mdash: '—',
+  ndash: '–',
+  bull: '•',
+};
+
+/**
+ * Decode HTML entities in a single pass to avoid double-unescaping.
+ * Uses a unified regex to match all entity types at once.
+ */
+function decodeHtmlEntities(text: string): string {
+  return text.replace(/&(#?[a-zA-Z0-9]+);/g, (match, entity: string) => {
+    // Numeric entities (decimal or hex)
+    if (entity.startsWith('#')) {
+      const isHex = entity[1] === 'x' || entity[1] === 'X';
+      const code = isHex ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10);
+      return isNaN(code) ? match : String.fromCharCode(code);
+    }
+    // Named entities
+    return HTML_ENTITIES[entity.toLowerCase()] ?? match;
+  });
+}
+
+/**
  * Simple HTML to text conversion.
  * Strips HTML tags and decodes common entities.
  */
 function htmlToText(html: string): string {
   // Remove script and style elements with loop to handle nested cases
+  // Use [^>]* after closing tag name to match malformed tags like </script\t\n bar>
   let text = html;
   let previousLength: number;
   do {
     previousLength = text.length;
     text = text
-      .replace(/<script[^>]*>[\s\S]*?<\/script\s*>/gi, '')
-      .replace(/<style[^>]*>[\s\S]*?<\/style\s*>/gi, '');
+      .replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, '');
   } while (text.length !== previousLength);
 
   // Replace block elements with newlines
@@ -60,18 +93,8 @@ function htmlToText(html: string): string {
   // Remove remaining tags
   text = text.replace(/<[^>]+>/g, '');
 
-  // Decode HTML entities (decode &amp; first to avoid double-unescaping)
-  text = text
-    .replace(/&amp;/g, '&')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&mdash;/g, '—')
-    .replace(/&ndash;/g, '–')
-    .replace(/&bull;/g, '•')
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(parseInt(code, 10)));
+  // Decode HTML entities in a single pass
+  text = decodeHtmlEntities(text);
 
   // Normalize whitespace
   text = text
@@ -89,13 +112,14 @@ function htmlToText(html: string): string {
  */
 function htmlToMarkdown(html: string): string {
   // Remove script and style elements with loop to handle nested cases
+  // Use [^>]* after closing tag name to match malformed tags like </script\t\n bar>
   let md = html;
   let previousLength: number;
   do {
     previousLength = md.length;
     md = md
-      .replace(/<script[^>]*>[\s\S]*?<\/script\s*>/gi, '')
-      .replace(/<style[^>]*>[\s\S]*?<\/style\s*>/gi, '');
+      .replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, '');
   } while (md.length !== previousLength);
 
   // Convert headings
@@ -132,15 +156,8 @@ function htmlToMarkdown(html: string): string {
   // Remove remaining tags
   md = md.replace(/<[^>]+>/g, '');
 
-  // Decode HTML entities (decode &amp; first to avoid double-unescaping)
-  md = md
-    .replace(/&amp;/g, '&')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(parseInt(code, 10)));
+  // Decode HTML entities in a single pass
+  md = decodeHtmlEntities(md);
 
   // Normalize whitespace
   md = md
