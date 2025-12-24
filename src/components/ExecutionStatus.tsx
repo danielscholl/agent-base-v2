@@ -178,10 +178,7 @@ export function ExecutionStatus({
                 <Text dimColor> ({formatDuration(node.duration)})</Text>
               )}
               {node.status === 'error' && node.error !== undefined && (
-                <Text dimColor color="red">
-                  {' '}
-                  - {node.error}
-                </Text>
+                <Text color="red"> - {node.error}</Text>
               )}
             </Box>
           );

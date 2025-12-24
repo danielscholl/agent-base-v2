@@ -63,6 +63,57 @@ function formatToolArgs(args: Record<string, unknown>): string {
 }
 
 /**
+ * Helper to restore a session from resumeHandler result.
+ * Centralizes logic for clearing message history, filtering messages,
+ * and updating state with restored session data.
+ */
+function applySessionRestore(
+  result: {
+    sessionToResume?: string;
+    sessionMessages?: StoredMessage[];
+    sessionContextSummary?: string;
+  },
+  messageHistoryRef: React.RefObject<MessageHistory | null>,
+  setState: React.Dispatch<React.SetStateAction<ShellState>>
+): void {
+  if (
+    result.sessionToResume !== undefined &&
+    result.sessionMessages !== undefined &&
+    result.sessionMessages.length > 0
+  ) {
+    // Clear current message history and populate with restored messages
+    messageHistoryRef.current?.clear();
+    for (const msg of result.sessionMessages) {
+      messageHistoryRef.current?.add(msg);
+    }
+
+    // Convert StoredMessage to ShellMessage for UI (filter out 'tool' roles)
+    const shellMessages: ShellMessage[] = result.sessionMessages
+      .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
+      .map((m) => ({
+        role: m.role as 'user' | 'assistant' | 'system',
+        content: m.content,
+        timestamp: new Date(m.timestamp),
+      }));
+
+    // If there's a context summary, add it as a system message
+    if (result.sessionContextSummary !== undefined && result.sessionContextSummary !== '') {
+      shellMessages.unshift({
+        role: 'system' as const,
+        content: `Session context: ${result.sessionContextSummary}`,
+        timestamp: new Date(),
+      });
+    }
+
+    setState((s) => ({
+      ...s,
+      messages: shellMessages,
+      resumedSessionId: result.sessionToResume ?? null,
+    }));
+  }
+}
+
+/**
  * Prompt state for interactive command prompts.
  */
 interface PromptState {
@@ -681,35 +732,7 @@ export function InteractiveShell({
 
         // Handle /resume command - restore session messages
         if (result.sessionToResume !== undefined && result.sessionMessages !== undefined) {
-          // Clear current message history and populate with restored messages
-          messageHistoryRef.current?.clear();
-          for (const msg of result.sessionMessages) {
-            messageHistoryRef.current?.add(msg);
-          }
-
-          // Convert StoredMessage to ShellMessage for UI (filter out 'tool' roles)
-          const shellMessages: ShellMessage[] = result.sessionMessages
-            .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
-            .map((m) => ({
-              role: m.role as 'user' | 'assistant' | 'system',
-              content: m.content,
-              timestamp: new Date(m.timestamp),
-            }));
-
-          // If there's a context summary, add it as a system message
-          if (result.sessionContextSummary !== undefined) {
-            shellMessages.unshift({
-              role: 'system' as const,
-              content: `Session context: ${result.sessionContextSummary}`,
-              timestamp: new Date(),
-            });
-          }
-
-          setState((s) => ({
-            ...s,
-            messages: shellMessages,
-            resumedSessionId: result.sessionToResume ?? null,
-          }));
+          applySessionRestore(result, messageHistoryRef, setState);
           return;
         }
 
@@ -1074,13 +1097,13 @@ export function InteractiveShell({
       }
 
       if (key.upArrow) {
-        // Navigate up
+        // Navigate up (clamped at top)
         setState((s) => ({
           ...s,
           sessionSelection: s.sessionSelection
             ? {
                 ...s.sessionSelection,
-                selectedIndex: selectedIndex > 0 ? selectedIndex - 1 : sessions.length - 1,
+                selectedIndex: Math.max(0, selectedIndex - 1),
               }
             : null,
         }));
@@ -1088,13 +1111,13 @@ export function InteractiveShell({
       }
 
       if (key.downArrow) {
-        // Navigate down
+        // Navigate down (clamped at bottom)
         setState((s) => ({
           ...s,
           sessionSelection: s.sessionSelection
             ? {
                 ...s.sessionSelection,
-                selectedIndex: selectedIndex < sessions.length - 1 ? selectedIndex + 1 : 0,
+                selectedIndex: Math.min(sessions.length - 1, selectedIndex + 1),
               }
             : null,
         }));
@@ -1120,46 +1143,14 @@ export function InteractiveShell({
             isInteractive: true,
           };
 
-          void resumeHandler(selectedSession.id, context).then((result) => {
-            if (
-              result.sessionToResume !== undefined &&
-              result.sessionMessages !== undefined &&
-              result.sessionMessages.length > 0
-            ) {
-              // Clear current message history and populate with restored messages
-              messageHistoryRef.current?.clear();
-              for (const msg of result.sessionMessages) {
-                messageHistoryRef.current?.add(msg);
-              }
-
-              // Convert StoredMessage to ShellMessage for UI (filter out 'tool' roles)
-              const shellMessages: ShellMessage[] = result.sessionMessages
-                .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
-                .map((m) => ({
-                  role: m.role as 'user' | 'assistant' | 'system',
-                  content: m.content,
-                  timestamp: new Date(m.timestamp),
-                }));
-
-              // If there's a context summary, add it as a system message
-              if (
-                result.sessionContextSummary !== undefined &&
-                result.sessionContextSummary !== ''
-              ) {
-                shellMessages.unshift({
-                  role: 'system' as const,
-                  content: `Session context: ${result.sessionContextSummary}`,
-                  timestamp: new Date(),
-                });
-              }
-
-              setState((s) => ({
-                ...s,
-                messages: shellMessages,
-                resumedSessionId: result.sessionToResume ?? null,
-              }));
-            }
-          });
+          resumeHandler(selectedSession.id, context)
+            .then((result) => {
+              applySessionRestore(result, messageHistoryRef, setState);
+            })
+            .catch((error: unknown) => {
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+              addSystemMessage(`Failed to resume session: ${errorMessage}`);
+            });
         }
         return;
       }
