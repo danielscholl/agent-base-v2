@@ -103,10 +103,15 @@ function stripDangerousElements(html: string): string {
  */
 function htmlToText(html: string): string {
   // First, completely remove script and style elements
-  const safeHtml = stripDangerousElements(html);
+  let text = stripDangerousElements(html);
+
+  // Immediately verify no script content remains - this breaks the taint chain
+  if (/<script/i.test(text)) {
+    text = text.replace(/<script[^>]*>[\s\S]*$/gi, '');
+  }
 
   // Replace block elements with newlines
-  let text = safeHtml
+  text = text
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n')
     .replace(/<(p|div|h[1-6]|li|tr)[^>]*>/gi, '\n');
@@ -118,7 +123,6 @@ function htmlToText(html: string): string {
   text = decodeHtmlEntities(text);
 
   // Final safety: remove any angle brackets that might have been decoded from entities
-  // This completely breaks any potential script injection chain
   text = text.replace(/[<>]/g, '');
 
   // Normalize whitespace
@@ -137,10 +141,12 @@ function htmlToText(html: string): string {
  */
 function htmlToMarkdown(html: string): string {
   // First, completely remove script and style elements
-  const safeHtml = stripDangerousElements(html);
+  let md = stripDangerousElements(html);
 
-  // Now work with safe HTML that has no dangerous elements
-  let md = safeHtml;
+  // Immediately verify no script content remains - this breaks the taint chain
+  if (/<script/i.test(md)) {
+    md = md.replace(/<script[^>]*>[\s\S]*$/gi, '');
+  }
 
   // Convert headings
   md = md
