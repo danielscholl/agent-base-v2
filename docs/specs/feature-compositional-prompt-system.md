@@ -169,12 +169,13 @@ models: [gpt-4o, gpt-4o-mini, gpt-4-turbo, o1, o1-mini, o3]
 - Prefer markdown formatting for responses
 - Be direct and concise
 
-## O1/O3 Model Notes
+## O1 Model Notes
 
-When using reasoning models (o1, o3):
-- These models have limited or no system prompt support
-- Focus on clear, direct instructions
-- Avoid complex multi-step instructions in system prompt
+When using reasoning models (o1, o1-mini):
+- O1 models support system prompts but process them differently than chat models
+- System prompts influence the internal reasoning chain rather than direct output
+- Keep instructions clear and focused on task objectives
+- Avoid overly prescriptive formatting instructions
 ```
 
 #### `providers/gemini.md` (Google)
@@ -463,7 +464,7 @@ export async function detectEnvironment(
 
 ## Open Questions
 
-1. **O1/O3 handling**: Should we skip system prompt entirely for these models?
+1. **O1 handling**: Should we customize system prompts for reasoning models differently?
 2. **Provider detection**: Should we auto-detect provider from model name?
 3. **File tree inclusion**: OpenCode includes file tree (200 files max)—do we want this?
 

@@ -52,7 +52,7 @@ src/prompts/
 ├── base.md                    # Core agent instructions (all providers)
 ├── providers/                 # Provider-specific layers
 │   ├── anthropic.md          # Claude models
-│   ├── openai.md             # GPT/O1/O3 models
+│   ├── openai.md             # GPT and O1 models
 │   ├── gemini.md             # Google Gemini
 │   ├── azure.md              # Azure OpenAI
 │   ├── github.md             # GitHub Models
@@ -135,7 +135,7 @@ Provider layers are small, focused files that address provider-specific characte
 - **Format preferences**: Claude handles XML well; GPT prefers JSON
 - **Tool calling quirks**: Different providers handle function calling differently
 - **Capability hints**: Some models need simpler instructions
-- **Model-specific notes**: O1/O3 have limited system prompt support
+- **Model-specific notes**: O1 models process system prompts differently than chat models
 
 ### Example Provider Layer (anthropic.md)
 

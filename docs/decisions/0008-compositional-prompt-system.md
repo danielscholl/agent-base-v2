@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2025-12-24
 deciders: [Daniel Scholl]
 ---
@@ -13,7 +13,7 @@ Our current system uses a single `system.md` file for all LLM providers. Analysi
 Different LLM providers have distinct characteristics:
 - **Claude** excels with XML-structured content and explicit reasoning
 - **GPT models** prefer JSON and direct formatting
-- **O1/O3 models** have limited system prompt support
+- **O1 models** process system prompts differently than chat models (reasoning models use internal chain-of-thought)
 - **Local models** need simpler, more explicit instructions
 
 Additionally, OpenCode injects environment context (working directory, git status, platform) into prompts, which provides useful grounding for the model.
