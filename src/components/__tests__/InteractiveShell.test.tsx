@@ -73,6 +73,18 @@ jest.unstable_mockModule('../../cli/input/index.js', () => ({
   },
 }));
 
+// Mock resolveModelName function - must be defined before mock module
+const mockResolveModelName = (
+  providerName: string,
+  providerConfig?: Record<string, unknown>
+): string => {
+  if (providerConfig === undefined) return 'unknown';
+  if (providerName === 'azure') return 'test-deployment';
+  if (providerName === 'foundry') return 'test-model-deployment';
+  const model = providerConfig.model as string | undefined;
+  return model !== undefined ? model : 'gpt-4o';
+};
+
 // Mock utils module for SessionManager
 jest.unstable_mockModule('../../utils/index.js', () => ({
   SessionManager: class MockSessionManager {
@@ -101,11 +113,8 @@ jest.unstable_mockModule('../../utils/index.js', () => ({
     isEmpty = true;
     clear(): void {}
   },
-  resolveModelName: jest.fn((providerName: string) => {
-    if (providerName === 'azure') return 'test-deployment';
-    if (providerName === 'foundry') return 'test-model-deployment';
-    return 'gpt-4o';
-  }),
+  resolveModelName: mockResolveModelName,
+  isProviderConfigured: () => true,
 }));
 
 // Mock Agent that invokes callbacks properly
@@ -220,7 +229,7 @@ describe('InteractiveShell', () => {
   it('renders header with model info after config loads', async () => {
     const { lastFrame } = render(<InteractiveShell />);
 
-    // Wait for config load with polling
+    // Wait for config load with polling - look for OpenAI (capitalized display name)
     const maxWait = 1000;
     const interval = 20;
     let elapsed = 0;
@@ -230,7 +239,7 @@ describe('InteractiveShell', () => {
       });
       elapsed += interval;
       const frame = lastFrame();
-      if (frame !== undefined && frame.includes('openai')) break;
+      if (frame !== undefined && frame.includes('OpenAI')) break;
     }
 
     // Should show model info (provider display name is capitalized)
