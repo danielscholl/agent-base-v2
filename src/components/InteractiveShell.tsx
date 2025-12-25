@@ -17,7 +17,7 @@ import type { AutocompleteCommand } from './CommandAutocomplete.js';
 import { configInitHandler } from '../cli/commands/config.js';
 import { unescapeSlash } from '../cli/constants.js';
 import { InputHistory } from '../cli/input/index.js';
-import { MessageHistory, SessionManager } from '../utils/index.js';
+import { MessageHistory, SessionManager, resolveModelName } from '../utils/index.js';
 import type { StoredMessage, SessionTokenUsage, SessionMetadata } from '../utils/index.js';
 import { SessionSelector } from './SessionSelector.js';
 import { resumeHandler } from '../cli/commands/session.js';
@@ -48,31 +48,6 @@ const INITIAL_TOKEN_USAGE: SessionTokenUsage = {
   tokens: 0,
   queryCount: 0,
 };
-
-/**
- * Resolve model name from provider configuration.
- * Handles different providers with different config fields.
- */
-function resolveModelName(
-  providerName: string,
-  providerConfig: Record<string, unknown> | undefined
-): string {
-  if (providerConfig === undefined) return 'unknown';
-
-  if (providerName === 'azure') {
-    return (providerConfig.deployment as string | undefined) ?? 'unknown';
-  }
-
-  if (providerName === 'foundry') {
-    const mode = providerConfig.mode as string | undefined;
-    if (mode === 'local') {
-      return (providerConfig.modelAlias as string | undefined) ?? 'unknown';
-    }
-    return (providerConfig.modelDeployment as string | undefined) ?? 'unknown';
-  }
-
-  return (providerConfig.model as string | undefined) ?? 'unknown';
-}
 
 /**
  * Format tool arguments for display.

@@ -19,6 +19,15 @@ jest.unstable_mockModule('../../config/manager.js', () => ({
   configFileExists: mockConfigFileExists,
 }));
 
+// Mock utils module
+jest.unstable_mockModule('../../utils/index.js', () => ({
+  resolveModelName: jest.fn((providerName: string) => {
+    if (providerName === 'azure') return 'test-deployment';
+    if (providerName === 'foundry') return 'test-model-deployment';
+    return 'gpt-4o';
+  }),
+}));
+
 // Mock telemetry module - include all exports used by cli/callbacks.js
 // Create mock functions that return proper Promises
 const mockInitializeTelemetry = (): Promise<{

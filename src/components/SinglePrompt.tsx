@@ -13,34 +13,10 @@ import { createCallbacks, wrapWithTelemetry } from '../cli/callbacks.js';
 import { initializeTelemetry, shutdown as shutdownTelemetry } from '../telemetry/index.js';
 import { Spinner } from './Spinner.js';
 import { getUserFriendlyMessage } from '../errors/index.js';
+import { resolveModelName } from '../utils/index.js';
 import type { SinglePromptProps } from '../cli/types.js';
 import type { AgentErrorResponse } from '../errors/index.js';
 import type { AppConfig } from '../config/schema.js';
-
-/**
- * Resolve model name from provider configuration.
- * Handles different providers with different config fields.
- */
-function resolveModelName(
-  providerName: string,
-  providerConfig: Record<string, unknown> | undefined
-): string {
-  if (providerConfig === undefined) return 'unknown';
-
-  if (providerName === 'azure') {
-    return (providerConfig.deployment as string | undefined) ?? 'unknown';
-  }
-
-  if (providerName === 'foundry') {
-    const mode = providerConfig.mode as string | undefined;
-    if (mode === 'local') {
-      return (providerConfig.modelAlias as string | undefined) ?? 'unknown';
-    }
-    return (providerConfig.modelDeployment as string | undefined) ?? 'unknown';
-  }
-
-  return (providerConfig.model as string | undefined) ?? 'unknown';
-}
 
 /**
  * SinglePrompt mode component.

@@ -101,6 +101,11 @@ jest.unstable_mockModule('../../utils/index.js', () => ({
     isEmpty = true;
     clear(): void {}
   },
+  resolveModelName: jest.fn((providerName: string) => {
+    if (providerName === 'azure') return 'test-deployment';
+    if (providerName === 'foundry') return 'test-model-deployment';
+    return 'gpt-4o';
+  }),
 }));
 
 // Mock Agent that invokes callbacks properly
