@@ -204,6 +204,1174 @@ On-disk JSON matches in-memory TypeScript objects without transformation.
 | `github` | GitHub token | Supports org-scoped enterprise rate limits |
 | `local` | None | Docker Desktop Model Runner (OpenAI-compatible) |
 
+### Model Layer Deep Dive
+
+*Contributed with GitHub Copilot*
+
+This section provides comprehensive documentation for the entire Model Layer (`src/model/`), explaining how providers, registry, LLMClient, retry logic, and response contracts work together to create a robust multi-provider LLM abstraction.
+
+#### Model Directory Structure
+
+```
+src/model/
+├── types.ts           # Core type definitions and interfaces
+├── base.ts            # Response factories and error mapping utilities
+├── llm.ts             # LLMClient - main orchestrator
+├── registry.ts        # Provider registry and lookup functions
+├── retry.ts           # Exponential backoff retry logic
+├── index.ts           # Public module exports
+└── providers/         # Provider-specific factory implementations
+    ├── openai.ts
+    ├── anthropic.ts
+    ├── azure-openai.ts
+    ├── gemini.ts
+    ├── github.ts
+    ├── local.ts
+    └── foundry.ts
+```
+
+#### Module Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Model Module                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  types.ts                                                        │
+│  ├─ ModelResponse<T> (discriminated union)                      │
+│  ├─ ModelErrorCode (10 error types)                             │
+│  ├─ InvokeResult, TokenUsage                                    │
+│  ├─ LLMCallbacks (streaming + retry events)                     │
+│  └─ ProviderFactory (factory function type)                     │
+│                                                                  │
+│  base.ts                                                         │
+│  ├─ successResponse<T>()                                         │
+│  ├─ errorResponse()                                              │
+│  ├─ mapErrorToCode() (keyword-based error mapping)              │
+│  └─ extractTokenUsage() (multi-provider format support)         │
+│                                                                  │
+│  registry.ts                                                     │
+│  ├─ PROVIDER_REGISTRY (7 providers)                             │
+│  ├─ getProviderFactory()                                         │
+│  ├─ isProviderSupported()                                        │
+│  └─ getSupportedProviders()                                      │
+│                                                                  │
+│  retry.ts                                                        │
+│  ├─ withRetry() (exponential backoff wrapper)                   │
+│  ├─ isRetryableError() (3 transient error types)                │
+│  ├─ calculateDelay() (exponential + jitter)                     │
+│  └─ extractRetryAfter() (provider Retry-After headers)          │
+│                                                                  │
+│  llm.ts                                                          │
+│  ├─ LLMClient (main orchestrator)                               │
+│  │   ├─ invoke() (complete response with retry)                 │
+│  │   ├─ stream() (async iterator with retry)                    │
+│  │   ├─ getClient() (lazy client initialization + caching)      │
+│  │   └─ wrapStreamWithCallbacks() (chunk + usage callbacks)     │
+│  │                                                               │
+│  providers/                                                      │
+│  ├─ createOpenAIClient()                                         │
+│  ├─ createAnthropicClient()                                      │
+│  ├─ createAzureOpenAIClient()                                    │
+│  ├─ createGeminiClient()                                         │
+│  ├─ createGitHubClient()                                         │
+│  ├─ createLocalClient()                                          │
+│  └─ createFoundryClient()                                        │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Core Types and Response Contract (`types.ts`)
+
+**ModelResponse Discriminated Union**:
+```typescript
+type ModelResponse<T> = ModelSuccessResponse<T> | ModelErrorResponse
+
+interface ModelSuccessResponse<T> {
+  success: true;
+  result: T;
+  message: string;
+}
+
+interface ModelErrorResponse {
+  success: false;
+  error: ModelErrorCode;
+  message: string;
+  retryAfterMs?: number;  // Provider-specified retry delay
+}
+```
+
+**Design Principles**:
+- **Never throw at boundaries**: All public functions return `ModelResponse<T>`
+- **Type-safe discrimination**: Use `success` boolean to narrow types
+- **Retry metadata**: `retryAfterMs` field carries provider-specified delays
+- **Human-readable messages**: Both success and error include descriptive messages
+
+**ModelErrorCode Types** (10 codes):
+```typescript
+type ModelErrorCode =
+  | 'PROVIDER_NOT_CONFIGURED'    // Config missing/invalid
+  | 'PROVIDER_NOT_SUPPORTED'     // Unknown provider name
+  | 'AUTHENTICATION_ERROR'       // Invalid API key
+  | 'RATE_LIMITED'               // Rate limit exceeded (RETRYABLE)
+  | 'MODEL_NOT_FOUND'            // Invalid model name
+  | 'CONTEXT_LENGTH_EXCEEDED'    // Prompt too long
+  | 'NETWORK_ERROR'              // Connection issues (RETRYABLE)
+  | 'TIMEOUT'                    // Request timeout (RETRYABLE)
+  | 'INVALID_RESPONSE'           // Malformed API response
+  | 'UNKNOWN';                   // Unexpected errors
+```
+
+**Retryable vs Non-Retryable**:
+- **Retryable** (3): `RATE_LIMITED`, `NETWORK_ERROR`, `TIMEOUT` → transient failures
+- **Non-Retryable** (7): All others → permanent failures (don't waste time retrying)
+
+**Other Key Types**:
+```typescript
+interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+interface InvokeResult {
+  content: string;
+  usage?: TokenUsage;
+}
+
+interface LLMCallbacks {
+  onStreamStart?: () => void;
+  onStreamChunk?: (chunk: string) => void;
+  onStreamEnd?: (usage?: TokenUsage) => void;
+  onError?: (error: ModelErrorCode, message: string) => void;
+  onRetry?: (context: RetryContext) => void;
+}
+
+type ProviderFactory = (
+  config: Record<string, unknown>
+) => Promise<ModelResponse<BaseChatModel>>;
+```
+
+#### Response Helpers (`base.ts`)
+
+**Factory Functions**:
+```typescript
+// Create success response
+successResponse<T>(result: T, message: string): ModelSuccessResponse<T>
+
+// Create error response (with optional retry delay)
+errorResponse(
+  error: ModelErrorCode, 
+  message: string, 
+  retryAfterMs?: number
+): ModelErrorResponse
+```
+
+**Error Mapping**:
+```typescript
+function mapErrorToCode(error: unknown): ModelErrorCode
+```
+
+Uses keyword matching on error messages to categorize errors:
+- `"api key"`, `"authentication"`, `"unauthorized"` → `AUTHENTICATION_ERROR`
+- `"rate limit"`, `"429"` → `RATE_LIMITED`
+- `"model"` + `"not found"` → `MODEL_NOT_FOUND`
+- `"context length"`, `"too long"`, `"token limit"` → `CONTEXT_LENGTH_EXCEEDED`
+- `"timeout"`, `"timed out"` → `TIMEOUT`
+- `"network"`, `"econnrefused"`, `"fetch failed"`, `"500"`, `"502"`, `"503"` → `NETWORK_ERROR`
+- Everything else → `UNKNOWN`
+
+**Token Usage Extraction**:
+```typescript
+function extractTokenUsage(
+  metadata: Record<string, unknown> | undefined
+): TokenUsage | undefined
+```
+
+Handles multiple provider formats:
+- **OpenAI**: `{ usage: { prompt_tokens, completion_tokens, total_tokens } }`
+- **Anthropic**: `{ usage: { input_tokens, output_tokens } }` (no total, calculated)
+- **Generic**: `{ token_usage: { prompt_tokens, completion_tokens, total_tokens } }`
+- Falls back to camelCase variants (`promptTokens`, `completionTokens`)
+
+#### Provider Registry (`registry.ts`)
+
+**Registry Constant**:
+```typescript
+export const PROVIDER_REGISTRY: Partial<Record<ProviderName, ProviderFactory>> = {
+  openai: createOpenAIClient,
+  anthropic: createAnthropicClient,
+  gemini: createGeminiClient,
+  azure: createAzureOpenAIClient,
+  local: createLocalClient,
+  foundry: createFoundryClient,
+  github: createGitHubClient,
+};
+```
+
+**Registry Functions**:
+```typescript
+// Get factory for a provider (returns undefined if not registered)
+getProviderFactory(providerName: ProviderName): ProviderFactory | undefined
+
+// Check if provider has a registered factory
+isProviderSupported(providerName: ProviderName): boolean
+
+// Get array of supported provider names
+getSupportedProviders(): ProviderName[]
+```
+
+**Usage Pattern**:
+1. User sets `config.providers.default = "anthropic"`
+2. LLMClient calls `isProviderSupported("anthropic")` → `true`
+3. LLMClient calls `getProviderFactory("anthropic")` → `createAnthropicClient`
+4. LLMClient invokes factory: `await createAnthropicClient(config.providers.anthropic)`
+5. Factory returns `ModelResponse<BaseChatModel>`
+
+#### Retry Logic (`retry.ts`)
+
+**Retry Strategy**:
+- **Exponential backoff**: `delay = baseDelay * 2^attempt` (capped at maxDelay)
+- **Jitter**: Random variation to avoid thundering herd (±25% by default)
+- **Provider-aware**: Respects `Retry-After` headers from providers
+- **Selective**: Only retries transient errors (rate limits, network, timeout)
+
+**Configuration** (from `config.retry`):
+```typescript
+{
+  enabled: boolean,          // Default: true
+  maxRetries: number,        // Default: 3
+  baseDelayMs: number,       // Default: 1000 (1 second)
+  maxDelayMs: number,        // Default: 10000 (10 seconds)
+  enableJitter: boolean      // Default: true
+}
+```
+
+**Core Functions**:
+
+```typescript
+// Wrap operation with retry logic
+async function withRetry<T>(
+  operation: () => Promise<ModelResponse<T>>,
+  options: RetryOptions
+): Promise<ModelResponse<T>>
+```
+
+**Retry Flow**:
+```
+attempt = 0
+  ↓
+Execute operation()
+  ↓
+┌─────────────┐
+│ Success?    │ Yes → Return result
+└──────┬──────┘
+       │ No
+       ↓
+┌─────────────────┐
+│ Retryable error?│ No → Return error immediately
+└──────┬──────────┘
+       │ Yes
+       ↓
+┌─────────────────┐
+│ Retries left?   │ No → Return error
+└──────┬──────────┘
+       │ Yes
+       ↓
+Calculate delay (use Retry-After or exponential backoff)
+       ↓
+Fire onRetry callback
+       ↓
+Sleep(delay)
+       ↓
+attempt++
+       ↓
+(loop back to Execute operation)
+```
+
+**Helper Functions**:
+```typescript
+// Check if error code is retryable
+isRetryableError(code: ModelErrorCode): boolean
+
+// Calculate exponential backoff delay with jitter
+calculateDelay(
+  attempt: number,
+  baseDelayMs: number,
+  maxDelayMs: number,
+  enableJitter: boolean
+): number
+
+// Extract Retry-After from provider error metadata
+extractRetryAfter(error: unknown): number | undefined
+```
+
+**Retry-After Parsing**:
+- Numeric string (seconds): `"60"` → 60000ms
+- HTTP-date: `"Wed, 21 Oct 2015 07:28:00 GMT"` → delay until that time
+- Number field: `{ retryAfter: 30 }` → 30000ms
+
+#### LLMClient Orchestrator (`llm.ts`)
+
+**Primary Class**:
+```typescript
+class LLMClient {
+  constructor(options: LLMClientOptions)
+  
+  // Public methods
+  async invoke(input: string | BaseMessage[]): Promise<ModelResponse<InvokeResult>>
+  async stream(input: string | BaseMessage[]): Promise<ModelResponse<StreamResult>>
+  getProviderName(): ProviderName
+  getModelName(): string
+  
+  // Private methods
+  private async getClient(): Promise<ModelResponse<BaseChatModel>>
+  private async invokeOnce(input: string | BaseMessage[]): Promise<ModelResponse<InvokeResult>>
+  private async streamOnce(input: string | BaseMessage[]): Promise<ModelResponse<StreamResult>>
+  private wrapStreamWithCallbacks(stream): AsyncIterable<AIMessageChunk>
+}
+```
+
+**Constructor Options**:
+```typescript
+interface LLMClientOptions {
+  config: AppConfig;              // Full app configuration
+  callbacks?: LLMCallbacks;       // Streaming + error callbacks
+  retryConfig?: RetryConfig;      // Override config.retry
+}
+```
+
+**Client Lifecycle**:
+
+```
+new LLMClient({ config, callbacks })
+        ↓
+Store config + callbacks
+        ↓
+client = null (lazy initialization)
+        ↓
+First invoke() or stream() call
+        ↓
+    getClient()
+        ↓
+┌───────────────────┐
+│ Client cached?    │ Yes → Return cached client
+└────────┬──────────┘
+         │ No
+         ↓
+Extract providerName from config.providers.default
+         ↓
+Check isProviderSupported(providerName)
+         ↓
+Get providerConfig from config.providers[providerName]
+         ↓
+Get factory from getProviderFactory(providerName)
+         ↓
+await factory(providerConfig)
+         ↓
+Cache client + providerName
+         ↓
+Return client
+```
+
+**Invoke Flow** (with retry):
+```
+invoke(input)
+    ↓
+┌────────────────────┐
+│ Retry enabled?     │ No → invokeOnce() → return
+└─────────┬──────────┘
+          │ Yes
+          ↓
+withRetry(() => invokeOnce(input))
+    ↓
+Loop: attempt 0 to maxRetries
+    ↓
+invokeOnce(input)
+    ├─ getClient()
+    ├─ toMessages(input)
+    ├─ client.invoke(messages)
+    ├─ Extract content + usage
+    └─ Return ModelResponse
+    ↓
+If error && retryable && retries left:
+    ├─ Calculate delay
+    ├─ Fire onRetry callback
+    ├─ Sleep(delay)
+    └─ Loop
+    ↓
+Return final result
+    ↓
+If error: Fire onError callback
+```
+
+**Stream Flow** (with retry on stream start only):
+```
+stream(input)
+    ↓
+Fire onStreamStart callback (ONCE)
+    ↓
+┌────────────────────┐
+│ Retry enabled?     │ No → streamOnce() → return
+└─────────┬──────────┘
+          │ Yes
+          ↓
+withRetry(() => streamOnce(input))
+    ↓
+Loop: attempt 0 to maxRetries (on stream START errors only)
+    ↓
+streamOnce(input)
+    ├─ getClient()
+    ├─ toMessages(input)
+    ├─ await client.stream(messages)
+    ├─ wrapStreamWithCallbacks(stream)
+    └─ Return ModelResponse<StreamResult>
+    ↓
+If success: Return stream
+    ↓
+Consumer iterates stream:
+    for await (chunk of stream) {
+        onStreamChunk(chunk.content)
+    }
+    ↓
+    onStreamEnd(usage)
+```
+
+**Key Design Decisions**:
+
+1. **Lazy Client Initialization**: Client is created on first use, not in constructor
+2. **Client Caching**: Client is cached and reused until provider changes
+3. **Async Factories**: All factories return `Promise` for consistency (e.g., Foundry local mode needs async init)
+4. **Callback Semantics**:
+   - `onStreamStart`: Fires ONCE before retry loop
+   - `onRetry`: Fires for each retry attempt
+   - `onStreamChunk`: Fires for successful stream only
+   - `onStreamEnd`: Fires once at successful stream completion
+   - `onError`: Fires ONCE after all retries exhausted
+5. **Stream Retry Limitation**: Only the `stream()` call is retried, not iteration errors
+6. **No Runtime Options**: LangChain 1.x removed `bind()` support for temperature/maxTokens at runtime
+
+**Public Utility Methods**:
+```typescript
+// Get current provider name from config
+getProviderName(): ProviderName
+
+// Get current model/deployment name (handles Azure deployment field)
+getModelName(): string
+```
+
+#### Complete Invocation Flow
+
+From user code to LLM response:
+
+```
+USER CODE
+    ↓
+const client = new LLMClient({ config, callbacks })
+const result = await client.invoke('Hello')
+    ↓
+─────────────────────────────────────
+LLMCLIENT
+    ↓
+invoke('Hello')
+    ↓
+withRetry(() => invokeOnce('Hello'))
+    ↓
+invokeOnce('Hello')
+    ↓
+getClient()
+    ↓
+─────────────────────────────────────
+REGISTRY
+    ↓
+isProviderSupported('anthropic') → true
+    ↓
+getProviderFactory('anthropic') → createAnthropicClient
+    ↓
+─────────────────────────────────────
+PROVIDER FACTORY
+    ↓
+await createAnthropicClient(config.providers.anthropic)
+    ↓
+Extract: apiKey, model with defaults
+    ↓
+new ChatAnthropic({ model, anthropicApiKey })
+    ↓
+return successResponse(client, message)
+    ↓
+─────────────────────────────────────
+LLMCLIENT (continued)
+    ↓
+Cache client + provider name
+    ↓
+Convert 'Hello' to [HumanMessage('Hello')]
+    ↓
+─────────────────────────────────────
+LANGCHAIN
+    ↓
+await client.invoke(messages)
+    ↓
+HTTP POST to api.anthropic.com
+    ↓
+Response: { content: 'Hi there!', usage: {...} }
+    ↓
+─────────────────────────────────────
+LLMCLIENT (continued)
+    ↓
+Extract content: 'Hi there!'
+    ↓
+extractTokenUsage(response.response_metadata)
+    ↓
+return successResponse({ content, usage }, message)
+    ↓
+─────────────────────────────────────
+USER CODE
+    ↓
+if (result.success) {
+  console.log(result.result.content)  // 'Hi there!'
+  console.log(result.result.usage)    // { promptTokens: 8, ... }
+}
+```
+
+#### Error Handling Flow
+
+```
+Provider throws error (e.g., rate limit)
+    ↓
+catch (error) in invokeOnce()
+    ↓
+mapErrorToCode(error) → 'RATE_LIMITED'
+    ↓
+extractRetryAfter(error) → 30000ms (if provider specifies)
+    ↓
+return errorResponse('RATE_LIMITED', message, 30000)
+    ↓
+withRetry checks: isRetryableError('RATE_LIMITED') → true
+    ↓
+Calculate delay: use 30000ms (Retry-After) or exponential backoff
+    ↓
+Fire onRetry({ attempt: 1, maxRetries: 3, delayMs: 30000, ... })
+    ↓
+Sleep 30 seconds
+    ↓
+Retry invokeOnce() (attempt 2)
+    ↓
+If still fails: repeat up to maxRetries times
+    ↓
+Final failure: return error response
+    ↓
+invoke() fires onError('RATE_LIMITED', message)
+    ↓
+Return error to user
+```
+
+#### Module Exports (`index.ts`)
+
+The `src/model/index.ts` file provides a clean public API:
+
+**Types**:
+```typescript
+ModelResponse, ModelSuccessResponse, ModelErrorResponse
+ModelErrorCode, TokenUsage, InvokeResult
+LLMCallbacks, LLMCallOptions, ProviderFactory, StreamResult
+RetryableErrorCode, NonRetryableErrorCode, RetryContext, RetryOptions
+```
+
+**Type Guards**:
+```typescript
+isModelSuccess<T>(response): response is ModelSuccessResponse<T>
+isModelError(response): response is ModelErrorResponse
+```
+
+**Helpers**:
+```typescript
+successResponse<T>(result, message)
+errorResponse(error, message, retryAfterMs?)
+mapErrorToCode(error)
+extractTokenUsage(metadata)
+```
+
+**Registry**:
+```typescript
+PROVIDER_REGISTRY
+getProviderFactory(providerName)
+isProviderSupported(providerName)
+getSupportedProviders()
+```
+
+**Client**:
+```typescript
+LLMClient, LLMClientOptions
+```
+
+**Retry**:
+```typescript
+withRetry(operation, options)
+isRetryableError(code)
+calculateDelay(attempt, baseDelayMs, maxDelayMs, enableJitter)
+extractRetryAfter(error)
+```
+
+**Provider Factories**:
+```typescript
+createOpenAIClient(config)
+createAnthropicClient(config)
+createGeminiClient(config)
+createAzureOpenAIClient(config)
+// Note: Other providers exported but not listed in index.ts
+```
+
+### Provider System Deep Dive
+
+*Continued from Model Layer Deep Dive above*
+
+This section provides detailed documentation for the Provider architecture implementation in `src/model/providers/`.
+
+#### Provider Factory Pattern
+
+All providers implement a unified factory pattern that creates LangChain `BaseChatModel` instances from configuration:
+
+```typescript
+export function create<Provider>Client(
+  config: <Provider>Config | Record<string, unknown>
+): Promise<ModelResponse<BaseChatModel>>
+```
+
+**Key Characteristics:**
+- **Async Factory Functions**: All factories return `Promise<ModelResponse<BaseChatModel>>` to support providers requiring async initialization (e.g., Foundry local mode)
+- **Type-Safe Configuration**: Accepts typed config from Zod schemas OR generic `Record<string, unknown>` for flexibility
+- **Structured Responses**: Returns `ModelResponse<T>` discriminated union (never throws at public boundaries)
+- **Environment Fallback**: All providers support environment variable fallback for API keys
+- **Validation First**: Required fields are validated before attempting client creation
+
+#### Provider Implementation Details
+
+##### OpenAI Provider (`src/model/providers/openai.ts`)
+
+**Package**: `@langchain/openai` (ChatOpenAI)
+
+**Configuration**:
+```typescript
+{
+  apiKey?: string,      // Falls back to OPENAI_API_KEY env var
+  model?: string,       // Default: gpt-5-mini
+  baseUrl?: string      // Optional custom endpoint
+}
+```
+
+**Features**:
+- Simplest provider implementation (reference pattern for others)
+- Supports custom base URLs for OpenAI-compatible APIs
+- Empty string `baseUrl` treated as unset
+
+**Authentication Flow**:
+```
+config.apiKey → OPENAI_API_KEY env var → LangChain default
+```
+
+##### Anthropic Provider (`src/model/providers/anthropic.ts`)
+
+**Package**: `@langchain/anthropic` (ChatAnthropic)
+
+**Configuration**:
+```typescript
+{
+  apiKey?: string,      // Falls back to ANTHROPIC_API_KEY env var
+  model?: string        // Default: claude-sonnet-4-20250514
+}
+```
+
+**Features**:
+- Similar to OpenAI but uses `anthropicApiKey` parameter
+- Supports all Claude model families (Haiku, Sonnet, Opus)
+- Long context windows (200K+ tokens for Claude 3.5+)
+
+**Authentication Flow**:
+```
+config.apiKey → ANTHROPIC_API_KEY env var → LangChain default
+```
+
+##### Azure OpenAI Provider (`src/model/providers/azure-openai.ts`)
+
+**Package**: `@langchain/openai` (AzureChatOpenAI)
+
+**Configuration**:
+```typescript
+{
+  endpoint: string,         // Required: Azure OpenAI endpoint URL
+  deployment: string,       // Required: Deployment name (not model)
+  apiVersion?: string,      // Default: '2024-06-01'
+  apiKey?: string          // Falls back to AZURE_OPENAI_API_KEY env var
+}
+```
+
+**Features**:
+- Uses Azure-specific endpoints and deployments
+- Deployment name replaces model name in configuration
+- Supports multiple API versions
+- `LLMClient.getModelName()` returns deployment for Azure
+
+**Validation**:
+- Both `endpoint` and `deployment` are required
+- Returns `PROVIDER_NOT_CONFIGURED` error if either is missing
+- Empty strings treated as missing values
+
+**Authentication Flow**:
+```
+config.apiKey → AZURE_OPENAI_API_KEY env var → Azure CLI credentials
+```
+
+##### Gemini Provider (`src/model/providers/gemini.ts`)
+
+**Package**: `@langchain/google-genai` (ChatGoogleGenerativeAI)
+
+**Configuration**:
+```typescript
+{
+  apiKey?: string,          // Falls back to GOOGLE_API_KEY env var
+  model?: string,           // Default: gemini-2.0-flash-exp
+  useVertexai?: boolean     // Default: false (Gemini API mode)
+}
+```
+
+**Features**:
+- Uses Gemini Developer API (direct Google AI API)
+- Vertex AI mode is NOT supported (requires separate `@langchain/google-vertexai` package)
+- Setting `useVertexai: true` returns `PROVIDER_NOT_CONFIGURED` error with guidance
+
+**Authentication Flow (Gemini API)**:
+```
+config.apiKey → GOOGLE_API_KEY env var → LangChain default
+```
+
+**Vertex AI Note**: If Vertex AI support is needed, users must install `@langchain/google-vertexai` and use a custom provider setup.
+
+##### GitHub Models Provider (`src/model/providers/github.ts`)
+
+**Package**: `@langchain/openai` (ChatOpenAI with custom endpoint)
+
+**Configuration**:
+```typescript
+{
+  token?: string,           // Falls back to GITHUB_TOKEN env var or gh CLI
+  model?: string,           // Default: gpt-4o-mini
+  endpoint?: string,        // Default: https://models.github.ai/inference
+  org?: string             // Optional: Organization name for enterprise
+}
+```
+
+**Features**:
+- Uses OpenAI-compatible GitHub Models API
+- Three-tier authentication fallback: config → env var → GitHub CLI
+- Supports personal and organization-scoped access
+- Automatic endpoint modification for org mode
+
+**Authentication Flow**:
+```
+config.token → GITHUB_TOKEN env var → gh auth token → ERROR
+```
+
+**GitHub CLI Integration** (`src/config/providers/github.ts`):
+```typescript
+function getGitHubCLIToken(): string | undefined {
+  // Executes: gh auth token --secure-storage
+  // Returns token if authenticated, undefined otherwise
+}
+```
+
+**Endpoint Construction**:
+- **Personal**: `https://models.github.ai/inference`
+- **Organization**: `https://models.github.ai/orgs/{org}/inference`
+
+**Validation**:
+- Token is required (no anonymous access)
+- Returns `PROVIDER_NOT_CONFIGURED` with multi-option guidance if token unavailable
+
+##### Local Provider (`src/model/providers/local.ts`)
+
+**Package**: `@langchain/openai` (ChatOpenAI with custom endpoint)
+
+**Configuration**:
+```typescript
+{
+  baseUrl?: string,         // Default: http://localhost:11434/v1 (Ollama)
+  model?: string           // Default: llama3.3:latest
+}
+```
+
+**Features**:
+- Supports any OpenAI-compatible local server
+- Defaults to Ollama endpoint
+- No authentication required (uses placeholder key)
+
+**Supported Backends**:
+1. **Ollama** (default): `http://localhost:11434/v1`
+2. **Docker Model Runner**: `http://model-runner.docker.internal/engines/llama.cpp/v1` (Docker-only)
+3. **LM Studio**: `http://localhost:1234/v1`
+4. **Any OpenAI-compatible server**
+
+**Authentication**:
+- Uses placeholder: `openAIApiKey: 'not-needed'`
+- Local servers typically don't require authentication
+
+##### Azure AI Foundry Provider (`src/model/providers/foundry.ts`)
+
+**Package**: `@langchain/openai` (ChatOpenAI) + optional `foundry-local-sdk`
+
+**Configuration**:
+```typescript
+{
+  mode?: 'local' | 'cloud',    // Default: 'local'
+  
+  // Local mode fields:
+  modelAlias?: string,          // Default: 'phi-4'
+  temperature?: number,
+  
+  // Cloud mode fields:
+  projectEndpoint?: string,     // Required for cloud mode
+  modelDeployment?: string,     // Default: 'gpt-4o'
+  apiKey?: string              // Falls back to AZURE_FOUNDRY_API_KEY env var
+}
+```
+
+**Features**:
+- **Dual-mode provider**: local (on-device) or cloud (Azure-hosted)
+- Local mode uses `foundry-local-sdk` for model management
+- Cloud mode uses Azure AI Foundry OpenAI v1-compatible API
+- Async initialization for local mode (service startup + model loading)
+
+**Local Mode** (`createLocalFoundryClient`):
+1. Dynamic import of `foundry-local-sdk` to avoid dependency when unused
+2. Initialize `FoundryLocalManager`
+3. Check if service is running, start if needed
+4. Initialize model by alias (e.g., "phi-4" → actual model ID)
+5. Extract endpoint and API key from manager
+6. Create ChatOpenAI with local endpoint
+
+**Local Mode Flow**:
+```
+FoundryLocalManager.init(modelAlias)
+        ↓
+Service running check → Start service if needed
+        ↓
+Model initialization (may download model)
+        ↓
+Extract endpoint + apiKey
+        ↓
+ChatOpenAI with local config
+```
+
+**Cloud Mode** (`createCloudFoundryClient`):
+1. Validate `projectEndpoint` and `apiKey` are provided
+2. Construct OpenAI v1-compatible endpoint: `{projectEndpoint}/openai/v1`
+3. Configure `api-key` header (Azure uses header auth, not Bearer tokens)
+4. Create ChatOpenAI with Azure AI Foundry endpoint
+
+**Cloud Mode Authentication**:
+- Uses `api-key` header instead of Bearer token
+- `openAIApiKey` parameter set to placeholder value
+- Actual authentication via `defaultHeaders: { 'api-key': apiKey }`
+
+**Error Handling**:
+- Local mode: `MODEL_NOT_FOUND` if model fails to initialize
+- Cloud mode: `PROVIDER_NOT_CONFIGURED` if endpoint or apiKey missing
+
+#### Provider Registry Architecture
+
+**File**: `src/model/registry.ts`
+
+**Registry Structure**:
+```typescript
+export const PROVIDER_REGISTRY: Partial<Record<ProviderName, ProviderFactory>> = {
+  openai: createOpenAIClient,
+  anthropic: createAnthropicClient,
+  gemini: createGeminiClient,
+  azure: createAzureOpenAIClient,
+  local: createLocalClient,
+  foundry: createFoundryClient,
+  github: createGitHubClient,
+};
+```
+
+**Registry Functions**:
+
+```typescript
+// Get factory for a provider
+getProviderFactory(providerName: ProviderName): ProviderFactory | undefined
+
+// Check if provider is supported
+isProviderSupported(providerName: ProviderName): boolean
+
+// Get list of supported providers
+getSupportedProviders(): ProviderName[]
+```
+
+**Usage in LLMClient**:
+1. Extract `config.providers.default` (e.g., "anthropic")
+2. Call `isProviderSupported(providerName)` → returns true/false
+3. Call `getProviderFactory(providerName)` → returns factory function
+4. Invoke factory with `config.providers[providerName]` → returns `ModelResponse<BaseChatModel>`
+5. Cache client for reuse across invocations
+
+#### Provider Lifecycle in LLMClient
+
+**File**: `src/model/llm.ts`
+
+**Initialization Flow**:
+```
+User creates LLMClient({ config })
+        ↓
+First invoke/stream call
+        ↓
+getClient() (private async method)
+        ↓
+┌──────────────────────────────┐
+│ Is client cached?            │
+│ And provider unchanged?      │
+└──────┬───────────────────────┘
+       │
+   ┌───┴──┐
+   │ Yes  │ → Return cached client
+   └──────┘
+       │
+   ┌───┴──┐
+   │ No   │
+   └───┬──┘
+       ↓
+Check if provider supported
+       ↓
+Get provider config
+       ↓
+Get provider factory from registry
+       ↓
+await factory(providerConfig)
+       ↓
+Cache client + provider name
+       ↓
+Return client
+```
+
+**Caching Strategy**:
+- Client is cached after first successful creation
+- Cache is invalidated if `config.providers.default` changes
+- No TTL or max-age (client lives for LLMClient instance lifetime)
+
+**Error Propagation**:
+- Factory errors (e.g., invalid API key) return `ModelResponse` with `success: false`
+- LLMClient propagates error responses without throwing
+- Callbacks receive error notifications via `onError(errorCode, message)`
+
+#### Provider Flow Diagram
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                      User Configuration                          │
+│                                                                  │
+│  providers: {                                                    │
+│    default: "anthropic"                                          │
+│    anthropic: { apiKey: "...", model: "claude-sonnet-4-5" }     │
+│  }                                                               │
+└───────────────────────────┬──────────────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                         LLMClient                                │
+│                                                                  │
+│  constructor({ config }) ────► Store config + callbacks          │
+│                                                                  │
+│  invoke(prompt) ──────────────┐                                 │
+│  stream(prompt) ──────────────┤                                 │
+└───────────────────────────────┼──────────────────────────────────┘
+                                │
+                                ▼
+                        getClient() (private)
+                                │
+                ┌───────────────┼───────────────┐
+                │               │               │
+                ▼               ▼               ▼
+        Check cached    Get provider    Call factory
+            client          name           function
+                │               │               │
+                └───────────────┴───────────────┘
+                                │
+                                ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                      Provider Registry                           │
+│                                                                  │
+│  PROVIDER_REGISTRY['anthropic'] ──► createAnthropicClient        │
+└───────────────────────────┬──────────────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────────────┐
+│              createAnthropicClient(config)                       │
+│                                                                  │
+│  1. Extract config fields with defaults                          │
+│  2. new ChatAnthropic({ model, anthropicApiKey })               │
+│  3. Return successResponse(client, message)                      │
+└───────────────────────────┬──────────────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                   LangChain BaseChatModel                        │
+│                                                                  │
+│  invoke(messages) ───► API call ───► Response                    │
+│  stream(messages) ───► API call ───► Async Iterator             │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+#### Error Handling by Provider
+
+All providers follow the same error handling pattern:
+
+```typescript
+try {
+  // Validate config
+  // Create LangChain client
+  return successResponse(client, message);
+} catch (error) {
+  const errorCode = mapErrorToCode(error);
+  const message = error instanceof Error ? error.message : 'Failed to create <Provider> client';
+  return errorResponse(errorCode, message);
+}
+```
+
+**Error Mapping** (`src/model/base.ts`):
+
+```typescript
+function mapErrorToCode(error: unknown): ModelErrorCode {
+  // Keyword matching on error messages
+  // Returns one of: AUTHENTICATION_ERROR, RATE_LIMITED, MODEL_NOT_FOUND,
+  //                 CONTEXT_LENGTH_EXCEEDED, TIMEOUT, NETWORK_ERROR, UNKNOWN
+}
+```
+
+**Common Error Patterns by Provider**:
+
+| Provider | Error Type | Trigger | ErrorCode |
+|----------|-----------|---------|-----------|
+| OpenAI | Invalid API key | Bad `apiKey` | `AUTHENTICATION_ERROR` |
+| Anthropic | Rate limit | Too many requests | `RATE_LIMITED` |
+| Azure | Deployment not found | Invalid `deployment` | `MODEL_NOT_FOUND` |
+| Foundry Local | Model initialization fails | Missing model files | `MODEL_NOT_FOUND` |
+| Foundry Cloud | Missing projectEndpoint | Config validation | `PROVIDER_NOT_CONFIGURED` |
+| Gemini | Vertex AI mode | `useVertexai: true` | `PROVIDER_NOT_CONFIGURED` |
+| GitHub | No authentication | Missing token sources | `PROVIDER_NOT_CONFIGURED` |
+| Local | Connection refused | Server not running | `NETWORK_ERROR` |
+
+#### Adding a New Provider
+
+To add a new provider to the framework:
+
+**1. Create Provider Factory** (`src/model/providers/<provider>.ts`):
+```typescript
+import { Chat<Provider> } from '@langchain/<package>';
+import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import type { <Provider>Config } from '../../config/schema.js';
+import type { ModelResponse } from '../types.js';
+import { successResponse, errorResponse, mapErrorToCode } from '../base.js';
+
+export function create<Provider>Client(
+  config: <Provider>Config | Record<string, unknown>
+): Promise<ModelResponse<BaseChatModel>> {
+  try {
+    // Extract config with defaults
+    // Validate required fields
+    // Create LangChain client
+    // Return success response
+  } catch (error) {
+    // Map error and return error response
+  }
+}
+```
+
+**2. Add to Registry** (`src/model/registry.ts`):
+```typescript
+import { create<Provider>Client } from './providers/<provider>.js';
+
+export const PROVIDER_REGISTRY = {
+  // ... existing providers
+  <provider>: create<Provider>Client,
+};
+```
+
+**3. Export from Module** (`src/model/index.ts`):
+```typescript
+export { create<Provider>Client } from './providers/<provider>.js';
+```
+
+**4. Define Config Schema** (`src/config/schema.ts`):
+```typescript
+export const <Provider>ProviderConfigSchema = z.object({
+  // Provider-specific fields
+});
+
+export type <Provider>ProviderConfig = z.infer<typeof <Provider>ProviderConfigSchema>;
+```
+
+**5. Add Constants** (`src/config/constants.ts`):
+```typescript
+export const DEFAULT_<PROVIDER>_MODEL = 'model-name';
+// Other provider-specific constants
+```
+
+**6. Write Tests** (`src/model/__tests__/<provider>.test.ts`):
+- Mock the LangChain provider class
+- Test factory with various configs
+- Test error handling
+- Test environment variable fallback
+
+**7. Update Documentation**:
+- Add provider to supported providers table
+- Document authentication methods
+- Add provider-specific notes
+
+#### Provider Testing Patterns
+
+All provider tests follow a consistent pattern using Jest mocks:
+
+```typescript
+// 1. Define mock config interface
+interface Mock<Provider>Config { /* ... */ }
+
+// 2. Create mock constructor
+const mockChat<Provider> = jest
+  .fn<(config: Mock<Provider>Config) => { model: string; _type: string }>()
+  .mockImplementation((config) => ({
+    model: config.model,
+    _type: 'chat_model',
+  }));
+
+// 3. Mock module before import
+jest.unstable_mockModule('@langchain/<package>', () => ({
+  Chat<Provider>: mockChat<Provider>,
+}));
+
+// 4. Dynamic import after mocking
+const { create<Provider>Client } = await import('../providers/<provider>.js');
+
+// 5. Test success cases
+it('creates client with valid config', () => {
+  const result = create<Provider>Client({ /* ... */ });
+  expect(result.success).toBe(true);
+});
+
+// 6. Test error cases
+it('returns error when field missing', () => {
+  const result = create<Provider>Client({ /* incomplete config */ });
+  expect(result.success).toBe(false);
+  expect(result.error).toBe('PROVIDER_NOT_CONFIGURED');
+});
+```
+
+**Test Coverage Requirements**:
+- ✅ Valid config creates client successfully
+- ✅ Missing optional fields use defaults
+- ✅ Missing required fields return errors
+- ✅ Environment variable fallback works
+- ✅ Constructor errors are caught and mapped
+- ✅ Non-Error throws are handled
+- ✅ `Record<string, unknown>` config type works
+
 ---
 
 ## Configuration Architecture
