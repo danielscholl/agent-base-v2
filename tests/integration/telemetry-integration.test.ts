@@ -6,13 +6,15 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { AIMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import type { StructuredToolInterface } from '@langchain/core/tools';
+import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { SpanStatusCode } from '@opentelemetry/api';
 import { getDefaultConfig } from '../../src/config/schema.js';
 import type { AppConfig } from '../../src/config/schema.js';
 import type { SpanContext as _SpanContext } from '../../src/agent/types.js';
 import type { AgentCallbacks } from '../../src/agent/callbacks.js';
-import { createTool } from '../../src/tools/base.js';
+import { Tool } from '../../src/tools/tool.js';
 import {
   initializeTestTelemetry,
   type SpanCapture,
@@ -56,27 +58,38 @@ function assertDefined<T>(value: T | undefined | null, name = 'value'): asserts 
   }
 }
 
+/**
+ * Helper to convert Tool.Info to StructuredToolInterface for testing.
+ */
+function toolToLangChain(info: Tool.Info): StructuredToolInterface {
+  const initialized = info.init();
+  return new DynamicStructuredTool({
+    name: info.id,
+    description: initialized.description,
+    schema: initialized.parameters as z.ZodObject<z.ZodRawShape>,
+    func: async (input) => {
+      const ctx = Tool.createNoopContext();
+      const result = await initialized.execute(input, ctx);
+      return `${String(result.title)}\n\n${String(result.output)}`;
+    },
+  });
+}
+
 describe('Telemetry Integration', () => {
   let config: AppConfig;
   let capture: SpanCapture;
 
-  // Create test tools
-  const greetingSchema = z.object({
-    name: z.string().describe('The name of the person to greet'),
-  });
-
-  const greetingTool = createTool({
-    name: 'greet',
+  // Create test tools using Tool.define
+  const greetingTool = Tool.define('greet', {
     description: 'Greet a person by name',
-    schema: greetingSchema,
-    execute: (input) => {
-      const { name } = input as z.infer<typeof greetingSchema>;
-      return Promise.resolve({
-        success: true as const,
-        result: `Hello, ${name}!`,
-        message: 'Greeting generated',
-      });
-    },
+    parameters: z.object({
+      name: z.string().describe('The name of the person to greet'),
+    }),
+    execute: (args) => ({
+      title: `Greeted ${args.name}`,
+      metadata: { name: args.name },
+      output: `Hello, ${args.name}!`,
+    }),
   });
 
   beforeEach(async () => {
@@ -193,7 +206,7 @@ describe('Telemetry Integration', () => {
       const agent = new Agent({
         config,
         callbacks: callbacks as unknown as AgentCallbacks,
-        tools: [greetingTool],
+        tools: [toolToLangChain(greetingTool)],
         systemPrompt: 'Test',
       });
 
@@ -243,7 +256,7 @@ describe('Telemetry Integration', () => {
       const agent = new Agent({
         config,
         callbacks: callbacks as unknown as AgentCallbacks,
-        tools: [greetingTool],
+        tools: [toolToLangChain(greetingTool)],
         systemPrompt: 'Test',
       });
 
@@ -359,7 +372,7 @@ describe('Telemetry Integration', () => {
       const agent = new Agent({
         config,
         callbacks: callbacks as unknown as AgentCallbacks,
-        tools: [greetingTool],
+        tools: [toolToLangChain(greetingTool)],
         systemPrompt: 'Test',
       });
 
@@ -374,16 +387,12 @@ describe('Telemetry Integration', () => {
     });
 
     it('sets error status on tool failure', async () => {
-      const failingTool = createTool({
-        name: 'failing',
+      const failingTool = Tool.define('failing', {
         description: 'A tool that fails',
-        schema: z.object({}),
-        execute: () =>
-          Promise.resolve({
-            success: false as const,
-            error: 'VALIDATION_ERROR' as const,
-            message: 'Failed',
-          }),
+        parameters: z.object({}),
+        execute: () => {
+          throw new Error('Tool execution failed');
+        },
       });
 
       const mockModelInvoke = jest
@@ -417,7 +426,7 @@ describe('Telemetry Integration', () => {
       const agent = new Agent({
         config,
         callbacks: callbacks as unknown as AgentCallbacks,
-        tools: [failingTool],
+        tools: [toolToLangChain(failingTool)],
         systemPrompt: 'Test',
       });
 
@@ -571,7 +580,7 @@ describe('Telemetry Integration', () => {
       const agent = new Agent({
         config,
         callbacks: callbacks as unknown as AgentCallbacks,
-        tools: [greetingTool],
+        tools: [toolToLangChain(greetingTool)],
         systemPrompt: 'Test',
       });
 

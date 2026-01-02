@@ -50,11 +50,11 @@ interface ToolCall {
  *     onLLMStart: (ctx, model) => console.log(`Calling ${model}...`),
  *     onToolStart: (ctx, name) => console.log(`Running ${name}...`),
  *   },
- *   tools: [helloTool, fileSystemTool],
+ *   tools: [readTool, writeTool],
  * });
  *
- * const answer = await agent.run('Say hello to Alice');
- * console.log(answer); // "Hello, Alice!"
+ * const answer = await agent.run('Read the contents of README.md');
+ * console.log(answer);
  *
  * // Or with streaming:
  * for await (const chunk of agent.runStream('Tell me a story')) {

@@ -12,13 +12,13 @@
  * import { Tool } from './tool.js';
  * import { z } from 'zod';
  *
- * const helloTool = Tool.define('hello', {
- *   description: 'Say hello to someone',
- *   parameters: z.object({ name: z.string() }),
+ * const listTool = Tool.define('list', {
+ *   description: 'List directory contents',
+ *   parameters: z.object({ path: z.string() }),
  *   execute: async (args, ctx) => ({
- *     title: `Greeted ${args.name}`,
- *     metadata: {},
- *     output: `Hello, ${args.name}!`,
+ *     title: `Listed ${args.path}`,
+ *     metadata: { path: args.path },
+ *     output: entries.join('\n'),
  *   }),
  * });
  * ```
@@ -156,13 +156,13 @@ export namespace Tool {
    *
    * @example Static definition (for simple tools):
    * ```typescript
-   * const helloTool = Tool.define('hello', {
-   *   description: 'Say hello',
-   *   parameters: z.object({ name: z.string() }),
+   * const listTool = Tool.define('list', {
+   *   description: 'List directory contents',
+   *   parameters: z.object({ path: z.string() }),
    *   execute: async (args) => ({
-   *     title: `Greeted ${args.name}`,
-   *     metadata: {},
-   *     output: `Hello, ${args.name}!`,
+   *     title: `Listed ${args.path}`,
+   *     metadata: { path: args.path },
+   *     output: entries.join('\n'),
    *   }),
    * });
    * ```
