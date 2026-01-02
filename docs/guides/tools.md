@@ -1,255 +1,211 @@
 # Tool Development Guide
 
-This guide provides detailed patterns and examples for implementing tools in the TypeScript agent framework. For the governing rules, see [CLAUDE.md](../../CLAUDE.md).
+This guide provides patterns and examples for implementing tools using the `Tool.define()` pattern. For governing rules, see [CLAUDE.md](../../CLAUDE.md).
 
 ---
 
-## Tool Response Contract
+## Tool Result Contract
 
-All tools return a structured `ToolResponse` type. This provides uniform error handling and predictable LLM consumption.
+All tools return a structured `Tool.Result` type. This provides uniform output format and enables metadata streaming.
 
 ### Type Definitions
 
 ```typescript
-type ToolErrorCode =
-  | 'VALIDATION_ERROR'
-  | 'IO_ERROR'
-  | 'CONFIG_ERROR'
-  | 'PERMISSION_DENIED'
-  | 'RATE_LIMITED'
-  | 'NOT_FOUND'
-  | 'LLM_ASSIST_REQUIRED'
-  | 'TIMEOUT'
-  | 'UNKNOWN';
-
-interface SuccessResponse<T = unknown> {
-  success: true;
-  result: T;
-  message: string;
+interface Result<M extends Metadata = Metadata> {
+  /** Short title describing what was done */
+  title: string;
+  /** Tool-specific metadata */
+  metadata: M;
+  /** Text output (consumed by LLM) */
+  output: string;
+  /** Optional binary attachments */
+  attachments?: Attachment[];
 }
-
-interface ErrorResponse {
-  success: false;
-  error: ToolErrorCode;
-  message: string;
-}
-
-type ToolResponse<T = unknown> = SuccessResponse<T> | ErrorResponse;
 ```
 
-### Usage Notes
+### Error Handling
 
-- **Public interface**: Tools MUST return `ToolResponse`, never throw
-- **Internal implementation**: MAY throw `ToolError`/`AgentError` - catch at boundary
-- **Type safety**: Prefer `ToolResponse<SpecificType>` over plain `ToolResponse`
-- **LLM assist**: Return `error: 'LLM_ASSIST_REQUIRED'` when tool needs LLM help
+Tools throw errors for failure cases. The registry catches these and formats them appropriately:
+
+```typescript
+execute: async (args, ctx) => {
+  if (!fileExists(args.path)) {
+    throw new Error(`File not found: ${args.path}`);
+  }
+  // ... success path
+}
+```
 
 ---
 
 ## Basic Tool Implementation
 
-Tools use the `createTool` factory from `src/tools` which wraps LangChain's `tool` function with automatic error handling and validation.
+Tools use the `Tool.define()` factory from `src/tools`:
 
 ```typescript
 import { z } from 'zod';
-import { createTool, successResponse } from '../tools/index.js';
+import { Tool } from '../tools/index.js';
 
-// Define input schema with descriptions
-const HelloInputSchema = z.object({
-  name: z.string().describe('Name to greet'),
-});
-
-// Define result type for type safety
-interface HelloResult {
-  greeting: string;
+// Define metadata type for type safety
+interface ReadMetadata extends Tool.Metadata {
+  path: string;
+  bytes: number;
 }
 
-export const helloTool = createTool({
-  name: 'hello',
-  description: 'Greet a user by name',  // Keep under 40 tokens
-  schema: HelloInputSchema,
-  execute: async (input) => {
-    return successResponse<HelloResult>(
-      { greeting: `Hello, ${input.name}!` },
-      `Greeted ${input.name}`
-    );
+// Define the tool
+export const readTool = Tool.define<ReadSchema, ReadMetadata>('read', {
+  description: 'Read file contents with line numbers',
+  parameters: z.object({
+    path: z.string().describe('Absolute file path to read'),
+    offset: z.number().optional().describe('Line offset to start from'),
+    limit: z.number().optional().describe('Maximum lines to read'),
+  }),
+  execute: async (args, ctx) => {
+    // Stream progress updates
+    ctx.metadata({ title: `Reading ${args.path}...` });
+
+    const content = await fs.readFile(args.path, 'utf-8');
+
+    return {
+      title: `Read ${args.path}`,
+      metadata: { path: args.path, bytes: content.length },
+      output: content,
+    };
   },
 });
 ```
 
-The `createTool` factory automatically:
-- Validates input against the Zod schema (returns `VALIDATION_ERROR` on failure)
-- Catches uncaught exceptions at the boundary (returns `UNKNOWN` error)
-- Never throws at public boundaries
+### Key Components
+
+**Tool.define(id, definition)** - Factory that creates a `Tool.Info` object:
+- `id`: Unique tool identifier
+- `definition`: Object with description, parameters, and execute function
+
+**Tool.Context** - Execution context provided to every tool:
+- `sessionID`: Current session identifier
+- `messageID`: Current message turn
+- `agent`: Agent name executing the tool
+- `abort`: AbortSignal for cancellation
+- `metadata()`: Stream progress updates to UI
+
+**Tool.Result** - Standardized return type:
+- `title`: Short summary for UI display
+- `metadata`: Tool-specific structured data
+- `output`: Text content for LLM consumption
 
 ---
 
 ## Error Handling Patterns
 
-### Catching Internal Errors
+### Throwing Errors
 
-With `createTool`, uncaught exceptions are automatically converted to error responses. For explicit error handling with specific error codes:
+For failures, throw an Error with a descriptive message:
 
 ```typescript
 import { z } from 'zod';
-import { createTool, successResponse, errorResponse } from '../tools/index.js';
+import { Tool } from '../tools/index.js';
 
-const ReadFileInputSchema = z.object({
-  path: z.string().describe('File path to read'),
-});
-
-interface FileContent {
-  content: string;
+interface FileMetadata extends Tool.Metadata {
   path: string;
 }
 
-export const readFileTool = createTool({
-  name: 'read_file',
+export const readFileTool = Tool.define<ReadSchema, FileMetadata>('read_file', {
   description: 'Read contents of a file',
-  schema: ReadFileInputSchema,
-  execute: async (input) => {
+  parameters: z.object({
+    path: z.string().describe('File path to read'),
+  }),
+  execute: async (args, ctx) => {
+    ctx.metadata({ title: `Reading ${args.path}...` });
+
     try {
-      const content = await readFileInternal(input.path);
-      return successResponse<FileContent>(
-        { content, path: input.path },
-        `Read ${input.path}`
-      );
+      const content = await readFileInternal(args.path);
+      return {
+        title: `Read ${args.path}`,
+        metadata: { path: args.path },
+        output: content,
+      };
     } catch (e) {
-      // Return specific error codes for known error types
       const message = e instanceof Error ? e.message : 'Failed to read file';
       if (message.includes('ENOENT')) {
-        return errorResponse('NOT_FOUND', `File not found: ${input.path}`);
+        throw new Error(`File not found: ${args.path}`);
       }
       if (message.includes('EACCES')) {
-        return errorResponse('PERMISSION_DENIED', `Cannot read: ${input.path}`);
+        throw new Error(`Permission denied: ${args.path}`);
       }
-      return errorResponse('IO_ERROR', message);
+      throw new Error(`IO error: ${message}`);
     }
   },
 });
 ```
 
-### Requesting LLM Assistance
+### Async Initialization
 
-When a tool needs LLM help to complete its task:
+For tools that need setup before execution:
 
 ```typescript
-import { z } from 'zod';
-import { createTool, successResponse, errorResponse } from '../tools/index.js';
+export const taskTool = Tool.define('task', async (ctx) => {
+  // Async initialization - discover available agents
+  const agents = await discoverAgents(ctx?.workingDir);
 
-const SummarizeInputSchema = z.object({
-  url: z.string().url().describe('URL to fetch and summarize'),
-});
-
-const MAX_PROCESSABLE_LENGTH = 10000;
-
-// Security: Allowlist of domains that can be fetched
-// In production, configure this via environment or config file
-const ALLOWED_DOMAINS = [
-  'docs.example.com',
-  'api.example.com',
-  // Add trusted domains here
-];
-
-export const summarizeTool = createTool({
-  name: 'summarize',
-  description: 'Summarize content from a URL',
-  schema: SummarizeInputSchema,
-  execute: async (input) => {
-    // Security: Validate URL scheme to prevent SSRF attacks
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(input.url);
-    } catch {
-      return errorResponse('VALIDATION_ERROR', 'Invalid URL format');
-    }
-
-    // Security: Only allow HTTPS to prevent credential leakage
-    if (parsedUrl.protocol !== 'https:') {
-      return errorResponse('VALIDATION_ERROR', 'Only HTTPS URLs are allowed');
-    }
-
-    // Security: Check domain allowlist to prevent internal network probing
-    if (!ALLOWED_DOMAINS.includes(parsedUrl.hostname)) {
-      return errorResponse(
-        'PERMISSION_DENIED',
-        `Domain ${parsedUrl.hostname} is not in the allowlist`
-      );
-    }
-
-    let content: string;
-    try {
-      content = await fetchContent(input.url);
-    } catch (e) {
-      // Security: Do not expose raw error details that might leak internal info
-      return errorResponse('IO_ERROR', 'Failed to fetch content from URL');
-    }
-
-    if (content.length > MAX_PROCESSABLE_LENGTH) {
-      // Tool cannot handle this alone - request LLM help
-      // Security: Pass content via structured field, not in error message
-      return errorResponse(
-        'LLM_ASSIST_REQUIRED',
-        `Content too large (${content.length} chars). Requesting summarization.`
-      );
-    }
-
-    return successResponse(
-      { summary: processContent(content) },
-      'Content processed'
-    );
-  },
+  return {
+    description: `Spawn subagent. Available: ${agents.join(', ')}`,
+    parameters: z.object({
+      agent: z.enum(agents as [string, ...string[]]),
+      prompt: z.string(),
+    }),
+    execute: async (args, toolCtx) => {
+      // Execute with initialized resources
+      return {
+        title: `Spawned ${args.agent}`,
+        metadata: { agent: args.agent },
+        output: await runAgent(args.agent, args.prompt),
+      };
+    },
+  };
 });
 ```
-
-The Agent Layer interprets `LLM_ASSIST_REQUIRED` and takes appropriate action.
 
 ---
 
 ## Permission-Aware Tools
 
-Tools with side effects must check permissions via callbacks:
+Tools with side effects use the permission system:
 
 ```typescript
 import { z } from 'zod';
-import { createTool, successResponse, errorResponse } from '../tools/index.js';
-import type { PermissionScope } from '../types/permissions.js';
+import { Tool } from '../tools/index.js';
 
-const WriteFileInputSchema = z.object({
-  path: z.string().describe('File path to write'),
-  content: z.string().describe('Content to write'),
-});
+interface WriteMetadata extends Tool.Metadata {
+  path: string;
+  bytes: number;
+}
 
-export const writeFileTool = createTool({
-  name: 'write_file',
-  description: 'Write content to a file (requires permission)',
-  schema: WriteFileInputSchema,
-  execute: async (input, config) => {
-    const callbacks = config?.callbacks;
+export const writeFileTool = Tool.define<WriteSchema, WriteMetadata>('write_file', {
+  description: 'Write content to a file (requires write permission)',
+  parameters: z.object({
+    path: z.string().describe('File path to write'),
+    content: z.string().describe('Content to write'),
+  }),
+  execute: async (args, ctx) => {
+    ctx.metadata({ title: `Writing ${args.path}...` });
 
-    // Request permission via callback
-    const permitted = await callbacks?.onPermissionRequest?.({
-      scope: 'fs-write' as PermissionScope,
-      resource: input.path,
-      action: 'write file',
-    });
+    await writeFile(args.path, args.content);
 
-    if (!permitted) {
-      return errorResponse('PERMISSION_DENIED', `Write permission denied for ${input.path}`);
-    }
-
-    try {
-      await writeFile(input.path, input.content);
-      return successResponse(
-        { path: input.path, bytes: input.content.length },
-        `Wrote ${input.content.length} bytes to ${input.path}`
-      );
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'Write failed';
-      return errorResponse('IO_ERROR', message);
-    }
+    return {
+      title: `Wrote ${args.path}`,
+      metadata: { path: args.path, bytes: args.content.length },
+      output: `Wrote ${args.content.length} bytes to ${args.path}`,
+    };
   },
 });
+```
+
+Register with permissions in `index.ts`:
+
+```typescript
+const builtinTools = [
+  { tool: writeFileTool, permissions: { required: ['write'] } },
+];
 ```
 
 ---
@@ -269,21 +225,22 @@ Parameter documentation goes in Zod `.describe()`:
 
 ```typescript
 import { z } from 'zod';
-import { createTool, successResponse } from '../tools/index.js';
+import { Tool } from '../tools/index.js';
 
-const SearchInputSchema = z.object({
-  query: z.string().describe('Search query string'),
-  limit: z.number().min(1).max(100).default(10).describe('Max results (1-100)'),
-  caseSensitive: z.boolean().default(false).describe('Case-sensitive matching'),
-});
-
-export const searchTool = createTool({
-  name: 'search',
+export const searchTool = Tool.define('search', {
   description: 'Search codebase for matching content',  // Brief, under 40 tokens
-  schema: SearchInputSchema,
-  execute: async (input) => {
-    const results = await performSearch(input);
-    return successResponse(results, `Found ${results.length} matches`);
+  parameters: z.object({
+    query: z.string().describe('Search query string'),
+    limit: z.number().min(1).max(100).default(10).describe('Max results (1-100)'),
+    caseSensitive: z.boolean().default(false).describe('Case-sensitive matching'),
+  }),
+  execute: async (args, ctx) => {
+    const results = await performSearch(args);
+    return {
+      title: `Search: ${args.query}`,
+      metadata: { query: args.query, count: results.length },
+      output: results.map((r) => r.snippet).join('\n'),
+    };
   },
 });
 ```
@@ -292,53 +249,50 @@ export const searchTool = createTool({
 
 ## Context Storage
 
-Tools producing large outputs should use context storage. Note that context
-storage is typically handled by the Agent Layer via callbacks, not by tools
-directly. However, if a tool needs explicit context management:
+Tools producing large outputs should return summaries with previews:
 
 ```typescript
 import { z } from 'zod';
-import { createTool, successResponse } from '../tools/index.js';
-import { ContextManager } from '../utils/index.js';
+import { Tool } from '../tools/index.js';
 
-const SearchCodeInputSchema = z.object({
-  query: z.string().describe('Regex pattern to search'),
-});
+interface SearchMetadata extends Tool.Metadata {
+  query: string;
+  totalMatches: number;
+}
 
-export const searchCodeTool = createTool({
-  name: 'search_code',
+export const searchCodeTool = Tool.define<SearchSchema, SearchMetadata>('search_code', {
   description: 'Search codebase with regex pattern',
-  schema: SearchCodeInputSchema,
-  execute: async (input, config) => {
-    const results = await performSearch(input.query);
+  parameters: z.object({
+    query: z.string().describe('Regex pattern to search'),
+  }),
+  execute: async (args, ctx) => {
+    ctx.metadata({ title: `Searching for "${args.query}"...` });
 
-    // Small results: return directly (Agent Layer handles context storage)
-    if (JSON.stringify(results).length < 32 * 1024) {
-      return successResponse(results, `Found ${results.length} matches`);
+    const results = await performSearch(args.query);
+
+    // For large results, return summary with preview
+    if (results.length > 50) {
+      return {
+        title: `Found ${results.length} matches`,
+        metadata: { query: args.query, totalMatches: results.length },
+        output: [
+          `Found ${results.length} matches for "${args.query}"`,
+          '',
+          'Top 10 matches:',
+          ...results.slice(0, 10).map((r) => `  ${r.file}:${r.line}: ${r.snippet}`),
+          '',
+          `... and ${results.length - 10} more matches`,
+        ].join('\n'),
+      };
     }
 
-    // Large results: return summary with preview
-    // The Agent Layer will persist the full result via onToolEnd callback
-    return successResponse(
-      {
-        summary: `Found ${results.length} matches`,
-        preview: results.slice(0, 5),
-        fullResultsAvailable: true,
-      },
-      `Found ${results.length} matches (full results stored in context)`
-    );
+    return {
+      title: `Found ${results.length} matches`,
+      metadata: { query: args.query, totalMatches: results.length },
+      output: results.map((r) => `${r.file}:${r.line}: ${r.snippet}`).join('\n'),
+    };
   },
 });
-
-// Agent Layer integration example (not in tools):
-// const queryId = ContextManager.hashQuery(userQuery);
-// const filepath = await contextManager.saveContext(
-//   'search_code',
-//   { query: 'pattern' },
-//   results,
-//   undefined,  // taskId
-//   queryId     // queryId for grouping
-// );
 ```
 
 ---
@@ -348,23 +302,26 @@ export const searchCodeTool = createTool({
 See [testing.md](./testing.md) for complete testing patterns. Quick example:
 
 ```typescript
-import { helloTool } from '../hello.js';
+import { readTool } from '../read.js';
+import { Tool } from '../tool.js';
 
-describe('helloTool', () => {
-  it('returns greeting for valid name', async () => {
-    const result = await helloTool.invoke({ name: 'World' });
+describe('readTool', () => {
+  it('reads file contents', async () => {
+    const ctx = Tool.createNoopContext();
+    const initialized = readTool.init();
+    const result = await initialized.execute({ path: '/tmp/test.txt' }, ctx);
 
-    expect(result).toEqual({
-      success: true,
-      result: { greeting: 'Hello, World!' },
-      message: 'Greeted World',
-    });
+    expect(result.title).toContain('Read');
+    expect(result.output).toBeDefined();
   });
 
-  it('handles empty name gracefully', async () => {
-    const result = await helloTool.invoke({ name: '' });
+  it('handles missing files', async () => {
+    const ctx = Tool.createNoopContext();
+    const initialized = readTool.init();
 
-    expect(result.success).toBe(true);
+    await expect(
+      initialized.execute({ path: '/nonexistent' }, ctx)
+    ).rejects.toThrow('not found');
   });
 });
 ```
@@ -375,12 +332,12 @@ describe('helloTool', () => {
 
 Before submitting a new tool:
 
-- [ ] Uses `createTool()` factory from `src/tools/index.js`
-- [ ] Returns `ToolResponse<SpecificType>` via `successResponse()`/`errorResponse()`
-- [ ] Uses specific error codes (not just `UNKNOWN`) where appropriate
+- [ ] Uses `Tool.define()` factory from `src/tools/index.js`
+- [ ] Returns `Tool.Result` with title, metadata, and output
+- [ ] Uses descriptive error messages for failures
 - [ ] Zod schema with `.describe()` on all parameters
 - [ ] Description under 40 tokens
-- [ ] Permissions requested for side effects
-- [ ] Large outputs use context storage
-- [ ] Unit tests with mocked dependencies
-- [ ] No direct LLM calls (use `LLM_ASSIST_REQUIRED` if needed)
+- [ ] Permissions declared in registration
+- [ ] Large outputs use summary/preview pattern
+- [ ] Unit tests with `Tool.createNoopContext()`
+- [ ] No direct LLM calls (tools never call LLMs directly)

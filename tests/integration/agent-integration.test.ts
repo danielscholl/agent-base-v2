@@ -8,14 +8,34 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { AIMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import type { StructuredToolInterface } from '@langchain/core/tools';
+import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import type { AppConfig } from '../../src/config/schema.js';
 import type { SpanContext } from '../../src/agent/types.js';
 import type { AgentCallbacks } from '../../src/agent/callbacks.js';
-import { createTool } from '../../src/tools/base.js';
+import { Tool } from '../../src/tools/index.js';
 // Use shared fixtures
 import { createTestConfig, createTrackingCallbacks } from '../fixtures/factories.js';
 import { SIMPLE_GREETING_RESPONSE } from '../fixtures/llm-responses.js';
+
+/**
+ * Helper to convert Tool.Info to StructuredToolInterface for testing.
+ * This mimics what ToolRegistry does internally.
+ */
+function toolToLangChain(info: Tool.Info): StructuredToolInterface {
+  const initialized = info.init();
+  return new DynamicStructuredTool({
+    name: info.id,
+    description: initialized.description,
+    schema: initialized.parameters as z.ZodObject<z.ZodRawShape>,
+    func: async (input) => {
+      const ctx = Tool.createNoopContext();
+      const result = await initialized.execute(input, ctx);
+      return `${String(result.title)}\n\n${String(result.output)}`;
+    },
+  });
+}
 
 // Mock the LLMClient module before importing Agent
 const mockInvoke = jest.fn<() => Promise<unknown>>();
@@ -44,24 +64,17 @@ describe('Agent Integration', () => {
   let _spanIds: string[];
   let callbacks: AgentCallbacks;
 
-  // Create a simple greeting tool for testing
-  const greetingSchema = z.object({
-    name: z.string().describe('The name of the person to greet'),
-  });
-
-  const greetingTool = createTool({
-    name: 'greet',
+  // Create a simple greeting tool for testing using Tool.define
+  const greetingTool = Tool.define('greet', {
     description: 'Greet a person by name',
-    schema: greetingSchema,
-    execute: (input) => {
-      // Cast input to schema type for type-safe access
-      const { name } = input as z.infer<typeof greetingSchema>;
-      return Promise.resolve({
-        success: true as const,
-        result: `Hello, ${name}!`,
-        message: 'Greeting generated',
-      });
-    },
+    parameters: z.object({
+      name: z.string().describe('The name of the person to greet'),
+    }),
+    execute: (args) => ({
+      title: `Greeted ${args.name}`,
+      metadata: { name: args.name },
+      output: `Hello, ${args.name}!`,
+    }),
   });
 
   beforeEach(() => {
@@ -176,7 +189,7 @@ describe('Agent Integration', () => {
       const agent = new Agent({
         config,
         callbacks,
-        tools: [greetingTool],
+        tools: [toolToLangChain(greetingTool)],
         systemPrompt: 'You are a helpful assistant.',
       });
 
@@ -189,7 +202,7 @@ describe('Agent Integration', () => {
       const agent = new Agent({
         config,
         callbacks,
-        tools: [greetingTool],
+        tools: [toolToLangChain(greetingTool)],
         systemPrompt: 'You are a helpful assistant.',
       });
 
@@ -233,11 +246,12 @@ describe('Agent Integration', () => {
     });
 
     it('handles tool execution errors', async () => {
-      const failingTool = createTool({
-        name: 'failing',
+      const failingTool = Tool.define('failing', {
         description: 'A tool that fails',
-        schema: z.object({}),
-        execute: () => Promise.reject(new Error('Tool crashed')),
+        parameters: z.object({}),
+        execute: () => {
+          throw new Error('Tool crashed');
+        },
       });
 
       const mockModelInvoke = jest
@@ -265,7 +279,7 @@ describe('Agent Integration', () => {
       const agent = new Agent({
         config,
         callbacks,
-        tools: [failingTool],
+        tools: [toolToLangChain(failingTool)],
         systemPrompt: 'You are a helpful assistant.',
       });
 
@@ -343,42 +357,30 @@ describe('Agent Integration', () => {
 
   describe('multi-tool execution', () => {
     // Create additional tools for multi-tool tests
-    const addSchema = z.object({
-      a: z.number().describe('First number'),
-      b: z.number().describe('Second number'),
-    });
-
-    const addTool = createTool({
-      name: 'add',
+    const addTool = Tool.define('add', {
       description: 'Add two numbers',
-      schema: addSchema,
-      execute: (input) => {
-        const { a, b } = input as z.infer<typeof addSchema>;
-        return Promise.resolve({
-          success: true as const,
-          result: { sum: a + b },
-          message: 'Addition complete',
-        });
-      },
+      parameters: z.object({
+        a: z.number().describe('First number'),
+        b: z.number().describe('Second number'),
+      }),
+      execute: (args) => ({
+        title: `Added ${String(args.a)} + ${String(args.b)}`,
+        metadata: { a: args.a, b: args.b, sum: args.a + args.b },
+        output: `Sum: ${String(args.a + args.b)}`,
+      }),
     });
 
-    const multiplySchema = z.object({
-      a: z.number().describe('First number'),
-      b: z.number().describe('Second number'),
-    });
-
-    const multiplyTool = createTool({
-      name: 'multiply',
+    const multiplyTool = Tool.define('multiply', {
       description: 'Multiply two numbers',
-      schema: multiplySchema,
-      execute: (input) => {
-        const { a, b } = input as z.infer<typeof multiplySchema>;
-        return Promise.resolve({
-          success: true as const,
-          result: { product: a * b },
-          message: 'Multiplication complete',
-        });
-      },
+      parameters: z.object({
+        a: z.number().describe('First number'),
+        b: z.number().describe('Second number'),
+      }),
+      execute: (args) => ({
+        title: `Multiplied ${String(args.a)} * ${String(args.b)}`,
+        metadata: { a: args.a, b: args.b, product: args.a * args.b },
+        output: `Product: ${String(args.a * args.b)}`,
+      }),
     });
 
     it('executes multiple tools in sequence', async () => {
@@ -417,7 +419,7 @@ describe('Agent Integration', () => {
       const agent = new Agent({
         config,
         callbacks,
-        tools: [addTool, multiplyTool],
+        tools: [toolToLangChain(addTool), toolToLangChain(multiplyTool)],
         systemPrompt: 'You are a calculator assistant.',
       });
 
@@ -468,7 +470,7 @@ describe('Agent Integration', () => {
       const agent = new Agent({
         config,
         callbacks,
-        tools: [addTool, multiplyTool],
+        tools: [toolToLangChain(addTool), toolToLangChain(multiplyTool)],
         systemPrompt: 'You are a calculator assistant.',
       });
 
@@ -508,7 +510,7 @@ describe('Agent Integration', () => {
       const agent = new Agent({
         config,
         callbacks,
-        tools: [greetingTool],
+        tools: [toolToLangChain(greetingTool)],
         systemPrompt: 'Test',
         maxIterations: 3, // Limit iterations
       });
@@ -577,16 +579,12 @@ describe('Agent Integration', () => {
 
   describe('tool result handling', () => {
     it('handles tool returning error response', async () => {
-      const errorTool = createTool({
-        name: 'errorTool',
+      const errorTool = Tool.define('errorTool', {
         description: 'A tool that returns an error',
-        schema: z.object({}),
-        execute: () =>
-          Promise.resolve({
-            success: false as const,
-            error: 'VALIDATION_ERROR' as const,
-            message: 'Invalid input provided',
-          }),
+        parameters: z.object({}),
+        execute: () => {
+          throw new Error('Invalid input provided');
+        },
       });
 
       const mockModelInvoke = jest
@@ -617,7 +615,7 @@ describe('Agent Integration', () => {
       const agent = new Agent({
         config,
         callbacks,
-        tools: [errorTool],
+        tools: [toolToLangChain(errorTool)],
         systemPrompt: 'Test',
       });
 
@@ -628,16 +626,14 @@ describe('Agent Integration', () => {
     });
 
     it('handles tool returning large result', async () => {
-      const largeTool = createTool({
-        name: 'largeTool',
+      const largeTool = Tool.define('largeTool', {
         description: 'Returns a large result',
-        schema: z.object({}),
-        execute: () =>
-          Promise.resolve({
-            success: true as const,
-            result: { data: 'x'.repeat(10000) }, // 10KB of data
-            message: 'Large data retrieved',
-          }),
+        parameters: z.object({}),
+        execute: () => ({
+          title: 'Large data retrieved',
+          metadata: {},
+          output: 'x'.repeat(10000), // 10KB of data
+        }),
       });
 
       const mockModelInvoke = jest
@@ -666,7 +662,7 @@ describe('Agent Integration', () => {
       const agent = new Agent({
         config,
         callbacks,
-        tools: [largeTool],
+        tools: [toolToLangChain(largeTool)],
         systemPrompt: 'Test',
       });
 

@@ -1,6 +1,6 @@
 # Tools Architecture
 
-This document describes the tool system architecture, including both the modern `Tool.define()` pattern and the legacy `createTool()` factory.
+This document describes the tool system architecture using the `Tool.define()` pattern.
 
 ---
 
@@ -22,22 +22,20 @@ Tools are LLM-callable functions that extend the agent's capabilities. The frame
 src/tools/
 ├── tool.ts            # Tool namespace (define, Context, Result)
 ├── registry.ts        # ToolRegistry for centralized management
-├── base.ts            # Legacy createTool() factory
-├── types.ts           # Legacy ToolResponse types
+├── types.ts           # ToolResponse types (for backward compatibility)
 ├── index.ts           # Public exports + auto-registration
-├── workspace.ts       # Workspace root detection
+├── workspace.ts       # Workspace root detection and path utilities
 │
-├── hello.ts           # Reference implementation
-├── read.ts            # File reading
-├── write.ts           # File writing
-├── edit.ts            # File editing
+├── read.ts            # File reading with line numbers
+├── write.ts           # File creation/overwriting
+├── edit.ts            # In-place file editing
 ├── glob.ts            # File pattern matching
-├── grep.ts            # Content searching
+├── grep.ts            # Content searching with regex
 ├── list.ts            # Directory listing
 ├── bash.ts            # Shell command execution
 ├── task.ts            # Subagent spawning
-├── todo.ts            # Task tracking
-├── webfetch.ts        # URL fetching
+├── todo.ts            # Task tracking (todowrite, todoread)
+├── webfetch.ts        # URL fetching with HTML sanitization
 │
 └── __tests__/         # Unit tests for each tool
 ```
@@ -310,71 +308,21 @@ src/tools/
 
 ---
 
-## Legacy Pattern: createTool()
-
-The original `createTool()` factory is still supported:
-
-```typescript
-import { z } from 'zod';
-import { createTool, successResponse, errorResponse } from '../tools/index.js';
-
-export const helloTool = createTool({
-  name: 'hello',
-  description: 'Greet a user by name',
-  schema: z.object({
-    name: z.string().describe('Name to greet'),
-  }),
-  execute: async (input) => {
-    return successResponse(
-      { greeting: `Hello, ${input.name}!` },
-      `Greeted ${input.name}`
-    );
-  },
-});
-```
-
-### ToolResponse Type
-
-```typescript
-type ToolResponse<T> = SuccessResponse<T> | ErrorResponse;
-
-interface SuccessResponse<T> {
-  success: true;
-  result: T;
-  message: string;
-}
-
-interface ErrorResponse {
-  success: false;
-  error: ToolErrorCode;
-  message: string;
-}
-```
-
-### When to Use Each Pattern
-
-| Pattern | Use Case |
-|---------|----------|
-| `Tool.define()` | New tools, streaming metadata, rich context |
-| `createTool()` | Simple tools, backwards compatibility |
-
----
-
 ## Built-in Tools
 
 | Tool | Permission | Description |
 |------|------------|-------------|
-| `hello` | read | Reference implementation |
-| `read` | read | Read file contents |
-| `write` | write | Create or overwrite files |
-| `edit` | write | Edit files with search/replace |
-| `glob` | read | Find files by pattern |
-| `grep` | read | Search file contents |
-| `list` | read | List directory contents |
-| `bash` | execute | Run shell commands |
-| `task` | read | Spawn subagent |
-| `todo` | read | Manage task list |
-| `webfetch` | network | Fetch URL contents |
+| `read` | read | Read file contents with line numbers, offset/limit |
+| `write` | write | Create or overwrite files with workspace validation |
+| `edit` | write | In-place file editing with search/replace patterns |
+| `glob` | read | Find files matching glob patterns |
+| `grep` | read | Search file contents with regex, context lines |
+| `list` | read | List directory contents with pagination |
+| `bash` | execute | Execute shell commands with timeout/abort |
+| `task` | execute | Spawn subagent for complex tasks |
+| `todowrite` | read | Write/update task list for tracking |
+| `todoread` | read | Read current task list |
+| `webfetch` | network | Fetch URL contents with HTML sanitization |
 
 ---
 

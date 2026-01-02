@@ -60,7 +60,7 @@ bun run dev
 ```typescript
 import { Agent } from './src/agent/agent.js';
 import { getDefaultConfig } from './src/config/schema.js';
-import { helloTool } from './src/tools/hello.js';
+import { readTool, writeTool } from './src/tools/index.js';
 
 // Load configuration
 const config = getDefaultConfig();
@@ -70,7 +70,7 @@ config.providers.default = 'openai';
 // Create agent with tools
 const agent = new Agent({
   config,
-  tools: [helloTool],
+  tools: [readTool, writeTool],
   callbacks: {
     onAgentStart: (ctx, query) => console.log(`Processing: ${query}`),
     onAgentEnd: (ctx, answer) => console.log(`Answer: ${answer}`),
@@ -78,7 +78,7 @@ const agent = new Agent({
 });
 
 // Run a query
-const answer = await agent.run('Say hello to the world');
+const answer = await agent.run('Read the contents of README.md');
 console.log(answer);
 ```
 
@@ -201,31 +201,39 @@ config.providers.local = {
 
 ## Creating Tools
 
-Tools are the primary way to extend agent capabilities:
+Tools are the primary way to extend agent capabilities. Use `Tool.define()` to create type-safe tools:
 
 ```typescript
 import { z } from 'zod';
-import { createTool } from './src/tools/base.js';
+import { Tool } from './src/tools/index.js';
 
-const weatherSchema = z.object({
-  city: z.string().describe('City name to get weather for'),
-  units: z.enum(['celsius', 'fahrenheit']).default('celsius'),
-});
+// Define metadata type for type safety
+interface WeatherMetadata extends Tool.Metadata {
+  city: string;
+  temperature: number;
+}
 
-const weatherTool = createTool({
-  name: 'get_weather',
+// Define the tool using Tool.define()
+const weatherTool = Tool.define<
+  z.ZodObject<{ city: z.ZodString; units: z.ZodDefault<z.ZodEnum<['celsius', 'fahrenheit']>> }>,
+  WeatherMetadata
+>('get_weather', {
   description: 'Get current weather for a city',
-  schema: weatherSchema,
-  execute: async (input) => {
-    const { city, units } = input as z.infer<typeof weatherSchema>;
+  parameters: z.object({
+    city: z.string().describe('City name to get weather for'),
+    units: z.enum(['celsius', 'fahrenheit']).default('celsius'),
+  }),
+  execute: async (args, ctx) => {
+    // Stream progress updates
+    ctx.metadata({ title: `Fetching weather for ${args.city}...` });
 
     // Your implementation here
     const temperature = 22;
 
     return {
-      success: true,
-      result: { city, temperature, units },
-      message: `Weather retrieved for ${city}`,
+      title: `Weather for ${args.city}`,
+      metadata: { city: args.city, temperature },
+      output: `Temperature in ${args.city}: ${temperature}°${args.units === 'celsius' ? 'C' : 'F'}`,
     };
   },
 });
