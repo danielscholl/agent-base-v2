@@ -133,27 +133,22 @@ execute: async (input, config) => {
 
 ## Permission Configuration
 
-### Project Settings (`./.agent/settings.json`)
+### Project Settings (`./.agent/config.yaml`)
 
-```json
-{
-  "permissions": {
-    "fs-read": true,
-    "fs-write": false,
-    "shell-run": false
-  }
-}
+```yaml
+permissions:
+  fs-read: true
+  fs-write: false
+  shell-run: false
 ```
 
-### User Settings (`~/.agent/settings.json`)
+### User Settings (`~/.agent/config.yaml`)
 
-```json
-{
-  "permissions": {
-    "fs-write": true,
-    "trusted-paths": ["/home/user/projects/*"]
-  }
-}
+```yaml
+permissions:
+  fs-write: true
+  trusted-paths:
+    - /home/user/projects/*
 ```
 
 ---

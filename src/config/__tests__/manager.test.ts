@@ -2,10 +2,19 @@
  * Tests for ConfigManager.
  */
 
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import * as fs from 'node:fs/promises';
 import os from 'node:os';
+import * as path from 'node:path';
+import { stringify as stringifyYaml, parse as parseYaml } from 'yaml';
 
-import { ConfigManager, deepMerge, loadConfig, NodeFileSystem } from '../manager.js';
+import {
+  ConfigManager,
+  deepMerge,
+  loadConfig,
+  loadConfigFromFiles,
+  NodeFileSystem,
+} from '../manager.js';
 import { getDefaultConfig } from '../schema.js';
 import type { IFileSystem, ConfigCallbacks } from '../types.js';
 import type { IEnvReader } from '../env.js';
@@ -201,19 +210,19 @@ describe('ConfigManager', () => {
   describe('getUserConfigPath', () => {
     it('should return resolved user config path', () => {
       const path = manager.getUserConfigPath();
-      expect(path).toBe('/home/user/.agent/settings.json');
+      expect(path).toBe('/home/user/.agent/config.yaml');
     });
   });
 
   describe('getProjectConfigPath', () => {
     it('should return project config path in cwd', () => {
       const path = manager.getProjectConfigPath();
-      expect(path).toBe('/project/.agent/settings.json');
+      expect(path).toBe('/project/.agent/config.yaml');
     });
 
     it('should return project config path for specified path', () => {
       const path = manager.getProjectConfigPath('/custom/project');
-      expect(path).toBe('/custom/project/.agent/settings.json');
+      expect(path).toBe('/custom/project/.agent/config.yaml');
     });
   });
 
@@ -226,8 +235,8 @@ describe('ConfigManager', () => {
 
     it('should load and merge user config', async () => {
       mockFs.setFile(
-        '/home/user/.agent/settings.json',
-        JSON.stringify({
+        '/home/user/.agent/config.yaml',
+        stringifyYaml({
           providers: {
             default: 'anthropic',
             anthropic: { apiKey: 'user-key' },
@@ -243,8 +252,8 @@ describe('ConfigManager', () => {
 
     it('should merge project config over user config', async () => {
       mockFs.setFile(
-        '/home/user/.agent/settings.json',
-        JSON.stringify({
+        '/home/user/.agent/config.yaml',
+        stringifyYaml({
           providers: {
             default: 'anthropic',
             anthropic: { apiKey: 'user-key' },
@@ -253,8 +262,8 @@ describe('ConfigManager', () => {
       );
 
       mockFs.setFile(
-        '/project/.agent/settings.json',
-        JSON.stringify({
+        '/project/.agent/config.yaml',
+        stringifyYaml({
           providers: {
             default: 'openai',
             openai: { apiKey: 'project-key' },
@@ -273,8 +282,8 @@ describe('ConfigManager', () => {
 
     it('should apply environment variable overrides', async () => {
       mockFs.setFile(
-        '/home/user/.agent/settings.json',
-        JSON.stringify({
+        '/home/user/.agent/config.yaml',
+        stringifyYaml({
           providers: {
             default: 'openai',
             openai: { apiKey: 'file-key' },
@@ -292,18 +301,18 @@ describe('ConfigManager', () => {
       expect(result.result?.providers.default).toBe('anthropic');
     });
 
-    it('should return error for invalid JSON', async () => {
-      mockFs.setFile('/home/user/.agent/settings.json', 'not valid json');
+    it('should return error for invalid YAML', async () => {
+      mockFs.setFile('/home/user/.agent/config.yaml', 'not: valid: yaml: [');
 
       const result = await manager.load();
       expect(result.success).toBe(false);
       expect(result.error).toBe('PARSE_ERROR');
     });
 
-    it('should return validation error for valid JSON with invalid schema', async () => {
+    it('should return validation error for valid YAML with invalid schema', async () => {
       mockFs.setFile(
-        '/home/user/.agent/settings.json',
-        JSON.stringify({
+        '/home/user/.agent/config.yaml',
+        stringifyYaml({
           providers: { default: 'invalid-provider-name' },
         })
       );
@@ -326,8 +335,8 @@ describe('ConfigManager', () => {
       });
 
       mockFs.setFile(
-        '/home/user/.agent/settings.json',
-        JSON.stringify({
+        '/home/user/.agent/config.yaml',
+        stringifyYaml({
           providers: { default: 'not-a-valid-provider' },
         })
       );
@@ -378,8 +387,8 @@ describe('ConfigManager', () => {
       });
 
       mockFs.setFile(
-        '/home/user/.agent/settings.json',
-        JSON.stringify({ providers: { default: 'openai' } })
+        '/home/user/.agent/config.yaml',
+        stringifyYaml({ providers: { default: 'openai' } })
       );
 
       await callbackManager.load();
@@ -390,8 +399,8 @@ describe('ConfigManager', () => {
     it('should apply AGENT_MODEL to merged default provider', async () => {
       // User config sets anthropic as default
       mockFs.setFile(
-        '/home/user/.agent/settings.json',
-        JSON.stringify({
+        '/home/user/.agent/config.yaml',
+        stringifyYaml({
           providers: { default: 'anthropic' },
         })
       );
@@ -410,8 +419,8 @@ describe('ConfigManager', () => {
     it('should apply AGENT_MODEL to env LLM_PROVIDER when set', async () => {
       // User config sets anthropic as default
       mockFs.setFile(
-        '/home/user/.agent/settings.json',
-        JSON.stringify({
+        '/home/user/.agent/config.yaml',
+        stringifyYaml({
           providers: { default: 'anthropic' },
         })
       );
@@ -455,8 +464,8 @@ describe('ConfigManager', () => {
     it('should apply AGENT_MODEL to azure deployment field', async () => {
       // User config sets azure as default
       mockFs.setFile(
-        '/home/user/.agent/settings.json',
-        JSON.stringify({
+        '/home/user/.agent/config.yaml',
+        stringifyYaml({
           providers: { default: 'azure' },
         })
       );
@@ -472,8 +481,8 @@ describe('ConfigManager', () => {
     it('should apply AGENT_MODEL to foundry modelDeployment field', async () => {
       // User config sets foundry as default
       mockFs.setFile(
-        '/home/user/.agent/settings.json',
-        JSON.stringify({
+        '/home/user/.agent/config.yaml',
+        stringifyYaml({
           providers: { default: 'foundry' },
         })
       );
@@ -521,10 +530,10 @@ describe('ConfigManager', () => {
       const result = await manager.save(config);
       expect(result.success).toBe(true);
 
-      const savedContent = mockFs.getFile('/home/user/.agent/settings.json');
+      const savedContent = mockFs.getFile('/home/user/.agent/config.yaml');
       expect(savedContent).toBeDefined();
 
-      const saved = JSON.parse(savedContent ?? '{}') as Record<string, unknown>;
+      const saved = parseYaml(savedContent ?? '') as Record<string, unknown>;
       expect(saved.version).toBe('1.0');
       expect((saved.providers as Record<string, unknown>).openai).toEqual(
         expect.objectContaining({ apiKey: 'test-key' })
@@ -533,10 +542,10 @@ describe('ConfigManager', () => {
 
     it('should save to custom path', async () => {
       const config = getDefaultConfig();
-      const result = await manager.save(config, '/custom/config.json');
+      const result = await manager.save(config, '/custom/config.yaml');
       expect(result.success).toBe(true);
 
-      const savedContent = mockFs.getFile('/custom/config.json');
+      const savedContent = mockFs.getFile('/custom/config.yaml');
       expect(savedContent).toBeDefined();
     });
 
@@ -544,19 +553,19 @@ describe('ConfigManager', () => {
       const config = getDefaultConfig();
       await manager.save(config);
 
-      const permissions = mockFs.getPermissions('/home/user/.agent/settings.json');
+      const permissions = mockFs.getPermissions('/home/user/.agent/config.yaml');
       expect(permissions).toBe(0o600);
     });
 
-    it('should produce minimal JSON output', async () => {
+    it('should produce minimal YAML output', async () => {
       const config = getDefaultConfig();
       // Only set openai apiKey, leave everything else as default
       config.providers.openai = { apiKey: 'my-key', model: 'gpt-4o' };
 
       await manager.save(config);
 
-      const savedContent = mockFs.getFile('/home/user/.agent/settings.json');
-      const saved = JSON.parse(savedContent ?? '{}') as Record<string, unknown>;
+      const savedContent = mockFs.getFile('/home/user/.agent/config.yaml');
+      const saved = parseYaml(savedContent ?? '') as Record<string, unknown>;
 
       // Should include version and providers
       expect(saved.version).toBe('1.0');
@@ -578,8 +587,8 @@ describe('ConfigManager', () => {
 
       await manager.save(config);
 
-      const savedContent = mockFs.getFile('/home/user/.agent/settings.json');
-      const saved = JSON.parse(savedContent ?? '{}') as Record<string, unknown>;
+      const savedContent = mockFs.getFile('/home/user/.agent/config.yaml');
+      const saved = parseYaml(savedContent ?? '') as Record<string, unknown>;
       expect(saved.telemetry).toBeDefined();
     });
 
@@ -589,8 +598,8 @@ describe('ConfigManager', () => {
 
       await manager.save(config);
 
-      const savedContent = mockFs.getFile('/home/user/.agent/settings.json');
-      const saved = JSON.parse(savedContent ?? '{}') as Record<string, unknown>;
+      const savedContent = mockFs.getFile('/home/user/.agent/config.yaml');
+      const saved = parseYaml(savedContent ?? '') as Record<string, unknown>;
       expect(saved.memory).toBeDefined();
     });
 
@@ -600,8 +609,8 @@ describe('ConfigManager', () => {
 
       await manager.save(config);
 
-      const savedContent = mockFs.getFile('/home/user/.agent/settings.json');
-      const saved = JSON.parse(savedContent ?? '{}') as Record<string, unknown>;
+      const savedContent = mockFs.getFile('/home/user/.agent/config.yaml');
+      const saved = parseYaml(savedContent ?? '') as Record<string, unknown>;
       expect(saved.skills).toBeDefined();
     });
 
@@ -611,8 +620,8 @@ describe('ConfigManager', () => {
 
       await manager.save(config);
 
-      const savedContent = mockFs.getFile('/home/user/.agent/settings.json');
-      const saved = JSON.parse(savedContent ?? '{}') as Record<string, unknown>;
+      const savedContent = mockFs.getFile('/home/user/.agent/config.yaml');
+      const saved = parseYaml(savedContent ?? '') as Record<string, unknown>;
       expect(saved.agent).toBeDefined();
     });
 
@@ -623,8 +632,8 @@ describe('ConfigManager', () => {
 
       await manager.save(config);
 
-      const savedContent = mockFs.getFile('/home/user/.agent/settings.json');
-      const saved = JSON.parse(savedContent ?? '{}') as Record<string, unknown>;
+      const savedContent = mockFs.getFile('/home/user/.agent/config.yaml');
+      const saved = parseYaml(savedContent ?? '') as Record<string, unknown>;
       const providers = saved.providers as Record<string, unknown>;
       expect(providers.openai).toBeDefined();
       expect(providers.anthropic).toBeDefined();
@@ -657,7 +666,7 @@ describe('ConfigManager', () => {
       // Callback receives the validated config and path
       expect(callbacks.onConfigSave).toHaveBeenCalledWith(
         expect.objectContaining({ version: '1.0' }),
-        '/home/user/.agent/settings.json'
+        '/home/user/.agent/config.yaml'
       );
     });
 
@@ -729,8 +738,8 @@ describe('ConfigManager', () => {
 
       await manager.save(config);
 
-      const savedContent = mockFs.getFile('/home/user/.agent/settings.json');
-      const saved = JSON.parse(savedContent ?? '{}') as Record<string, unknown>;
+      const savedContent = mockFs.getFile('/home/user/.agent/config.yaml');
+      const saved = parseYaml(savedContent ?? '') as Record<string, unknown>;
       // memory should exist but mem0 should be stripped since all values are undefined
       expect(saved.memory).toBeDefined();
       const memory = saved.memory as Record<string, unknown>;
@@ -744,8 +753,8 @@ describe('ConfigManager', () => {
 
       await manager.save(config);
 
-      const savedContent = mockFs.getFile('/home/user/.agent/settings.json');
-      const saved = JSON.parse(savedContent ?? '{}') as Record<string, unknown>;
+      const savedContent = mockFs.getFile('/home/user/.agent/config.yaml');
+      const saved = parseYaml(savedContent ?? '') as Record<string, unknown>;
       const skills = saved.skills as Record<string, unknown>;
       expect(skills.userDir).toBe('/custom/skills');
       expect(skills.plugins).toBeUndefined(); // Empty array stripped
@@ -760,8 +769,8 @@ describe('ConfigManager', () => {
       const result = await manager.save(config as ReturnType<typeof getDefaultConfig>);
       expect(result.success).toBe(true);
 
-      const savedContent = mockFs.getFile('/home/user/.agent/settings.json');
-      const saved = JSON.parse(savedContent ?? '{}') as Record<string, unknown>;
+      const savedContent = mockFs.getFile('/home/user/.agent/config.yaml');
+      const saved = parseYaml(savedContent ?? '') as Record<string, unknown>;
       // Unknown fields should be stripped by Zod
       expect(saved.unknownField).toBeUndefined();
       expect((saved.providers as Record<string, unknown>).unknownProvider).toBeUndefined();
@@ -778,8 +787,8 @@ describe('ConfigManager', () => {
 
       await manager.save(config);
 
-      const savedContent = mockFs.getFile('/home/user/.agent/settings.json');
-      const saved = JSON.parse(savedContent ?? '{}') as Record<string, unknown>;
+      const savedContent = mockFs.getFile('/home/user/.agent/config.yaml');
+      const saved = parseYaml(savedContent ?? '') as Record<string, unknown>;
       const providers = saved.providers as Record<string, unknown>;
       // Should include gemini even without apiKey (has useVertexai, projectId, location)
       expect(providers.gemini).toBeDefined();
@@ -797,8 +806,8 @@ describe('ConfigManager', () => {
 
       await manager.save(config);
 
-      const savedContent = mockFs.getFile('/home/user/.agent/settings.json');
-      const saved = JSON.parse(savedContent ?? '{}') as Record<string, unknown>;
+      const savedContent = mockFs.getFile('/home/user/.agent/config.yaml');
+      const saved = parseYaml(savedContent ?? '') as Record<string, unknown>;
       const providers = saved.providers as Record<string, unknown>;
       expect(providers.openai).toBeDefined();
       expect((providers.openai as Record<string, unknown>).baseUrl).toBe(
@@ -822,6 +831,59 @@ describe('loadConfig convenience function', () => {
     } else {
       expect(result.error).toBeDefined();
     }
+  });
+});
+
+describe('loadConfigFromFiles', () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    // Create a unique temp directory for each test
+    tempDir = path.join(
+      os.tmpdir(),
+      `agent-config-test-${String(Date.now())}-${Math.random().toString(36).slice(2)}`
+    );
+    await fs.mkdir(path.join(tempDir, '.agent'), { recursive: true });
+  });
+
+  afterEach(async () => {
+    // Cleanup temp directory
+    try {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  it('should return PARSE_ERROR for invalid YAML in project config', async () => {
+    // Write invalid YAML to project config
+    const configPath = path.join(tempDir, '.agent', 'config.yaml');
+    await fs.writeFile(configPath, 'invalid: yaml: [unclosed');
+
+    const result = await loadConfigFromFiles(tempDir);
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('PARSE_ERROR');
+    expect(result.message).toContain('Invalid YAML');
+  });
+
+  it('should return success for valid YAML in project config', async () => {
+    // Write valid YAML to project config
+    const configPath = path.join(tempDir, '.agent', 'config.yaml');
+    await fs.writeFile(configPath, stringifyYaml({ providers: { default: 'openai' } }));
+
+    const result = await loadConfigFromFiles(tempDir);
+    expect(result.success).toBe(true);
+    expect(result.result?.providers.default).toBe('openai');
+  });
+
+  it('should return defaults when no config files exist', async () => {
+    // Use a path with no config file
+    const emptyDir = path.join(tempDir, 'empty');
+    await fs.mkdir(emptyDir, { recursive: true });
+
+    const result = await loadConfigFromFiles(emptyDir);
+    expect(result.success).toBe(true);
+    expect(result.result?.providers.default).toBe('openai'); // Default value
   });
 });
 
@@ -857,7 +919,7 @@ describe('NodeFileSystem', () => {
   });
 
   it('should get dirname of a path', () => {
-    const dir = nodeFs.dirname('/home/user/.agent/settings.json');
+    const dir = nodeFs.dirname('/home/user/.agent/config.yaml');
     expect(dir).toBe('/home/user/.agent');
   });
 

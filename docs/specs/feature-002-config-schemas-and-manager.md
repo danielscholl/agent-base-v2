@@ -8,7 +8,7 @@ Port the Python configuration system (`agent-base/src/agent/config/schema.py`) t
 2. Automatically infers TypeScript types from schemas (no manual type definitions)
 3. Loads configuration from multiple sources with hierarchical merging
 4. Validates configuration on load and save operations
-5. Persists configuration in stable, minimal JSON format
+5. Persists configuration in stable, minimal YAML format
 
 This is **Feature 2** from the TypeScript rewrite plan and serves as the foundation that every other feature depends on.
 
@@ -24,7 +24,7 @@ The TypeScript agent framework needs a robust configuration system that:
 - Provides type safety through Zod schema inference
 - Supports multi-level configuration merging (defaults, user-level, project-level, environment)
 - Validates configuration at load time to catch errors early
-- Persists changes in a clean, minimal JSON format
+- Persists changes in a clean, minimal YAML format
 - Maintains compatibility with the Python version's config structure for migration
 
 ## Solution Statement
@@ -35,7 +35,7 @@ Implement a configuration module in `src/config/` that:
 3. Implements a `ConfigManager` class with dependency injection
 4. Provides merge utilities for hierarchical configuration
 5. Handles environment variable overrides with proper type coercion
-6. Writes minimal JSON (only enabled providers, non-null values)
+6. Writes minimal YAML (only enabled providers, non-null values)
 
 ## Related Documentation
 
@@ -199,9 +199,9 @@ Implement the ConfigManager class with:
 - **Description**: Add file I/O operations to ConfigManager
 - **Files to modify**: Update `src/config/manager.ts`
 - **Details**:
-  - Read JSON from `~/.agent/settings.json` (user config)
-  - Read JSON from `./.agent/settings.json` (project config)
-  - Write minimal JSON (only enabled providers, non-null values)
+  - Read YAML from `~/.agent/config.yaml` (user config)
+  - Read YAML from `./.agent/config.yaml` (project config)
+  - Write minimal YAML (only enabled providers, non-null values)
   - Set restrictive permissions (0o600) on POSIX for security
   - Create parent directories if missing
 
@@ -244,7 +244,7 @@ Implement the ConfigManager class with:
 - **Details**:
   - Mock file system operations
   - Test config hierarchy merging (defaults < user < project < env)
-  - Test save with minimal JSON output
+  - Test save with minimal YAML output
   - Test validation error handling
   - Test callback invocation
 
@@ -278,7 +278,7 @@ Implement the ConfigManager class with:
 
 - Empty config file (should use defaults)
 - Missing config file (should use defaults, no error)
-- Invalid JSON (should return validation error)
+- Invalid YAML (should return validation error)
 - Partial config (should merge with defaults)
 - Environment variables with invalid values (should use defaults)
 - Config file with unknown fields (should be stripped on save)
@@ -290,7 +290,7 @@ Implement the ConfigManager class with:
 - [ ] ConfigManager loads from user (~/.agent) and project (./.agent) paths
 - [ ] Environment variables override config file values
 - [ ] Validation returns structured errors (not exceptions)
-- [ ] Save produces minimal JSON (only enabled providers, non-null values)
+- [ ] Save produces minimal YAML (only enabled providers, non-null values)
 - [ ] File permissions set to 0o600 on POSIX systems
 - [ ] 85%+ test coverage for all config module files
 - [ ] All tests pass with `bun run test`
@@ -323,24 +323,19 @@ The Python version uses `snake_case` for config keys (e.g., `api_key`, `base_url
 2. A migration tool (Feature 40) will handle the conversion
 3. For now, TypeScript version uses its own config format
 
-### Minimal JSON Output
+### Minimal YAML Output
 
-The `save()` method produces minimal JSON like the Python `model_dump_json_minimal()`:
+The `save()` method produces minimal YAML like the Python `model_dump_json_minimal()`:
 
-```json
-{
-  "version": "1.0",
-  "providers": {
-    "default": "openai",
-    "openai": {
-      "apiKey": "sk-...",
-      "model": "gpt-4o"
-    }
-  },
-  "telemetry": {
-    "enabled": false
-  }
-}
+```yaml
+version: "1.0"
+providers:
+  default: openai
+  openai:
+    apiKey: sk-...
+    model: gpt-4o
+telemetry:
+  enabled: false
 ```
 
 Instead of the verbose full config with all 7 providers. This improves:

@@ -7,6 +7,8 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
 
+import { parse as parseYaml, stringify as stringifyYaml, YAMLParseError } from 'yaml';
+
 import { CONFIG_DIR_NAME, CONFIG_FILE_NAME, CONFIG_FILE_PERMISSIONS } from './constants.js';
 import { ProcessEnvReader, readEnvConfig, getEnvModel, type IEnvReader } from './env.js';
 import { AppConfigSchema, getDefaultConfig, type AppConfig } from './schema.js';
@@ -157,8 +159,8 @@ export class NodeFileSystem implements IFileSystem {
  *
  * Config hierarchy (highest to lowest priority):
  * 1. Environment variables
- * 2. Project config (./.agent/settings.json)
- * 3. User config (~/.agent/settings.json)
+ * 2. Project config (./.agent/config.yaml)
+ * 3. User config (~/.agent/config.yaml)
  * 4. Schema defaults
  */
 export class ConfigManager {
@@ -202,7 +204,7 @@ export class ConfigManager {
   }
 
   /**
-   * Load configuration from a JSON file.
+   * Load configuration from a YAML file.
    * @param filePath - Path to the config file
    * @returns Partial config or undefined if file doesn't exist
    */
@@ -213,10 +215,10 @@ export class ConfigManager {
       }
 
       const content = await this.fileSystem.readFile(filePath);
-      return JSON.parse(content) as Partial<AppConfig>;
+      return parseYaml(content) as Partial<AppConfig>;
     } catch (error) {
-      if (error instanceof SyntaxError) {
-        throw new ConfigError(`Invalid JSON in config file: ${filePath}`, 'PARSE_ERROR', filePath);
+      if (error instanceof YAMLParseError) {
+        throw new ConfigError(`Invalid YAML in config file: ${filePath}`, 'PARSE_ERROR', filePath);
       }
       throw error;
     }
@@ -234,7 +236,7 @@ export class ConfigManager {
       // Start with schema defaults
       let config = this.getDefaults();
 
-      // Load user config (~/.agent/settings.json)
+      // Load user config (~/.agent/config.yaml)
       const userConfigPath = this.getUserConfigPath();
       const userConfig = await this.loadConfigFile(userConfigPath);
       if (userConfig) {
@@ -242,7 +244,7 @@ export class ConfigManager {
         this.callbacks?.onConfigLoad?.(config, 'user');
       }
 
-      // Load project config (./.agent/settings.json)
+      // Load project config (./.agent/config.yaml)
       const projectConfigPath = this.getProjectConfigPath(projectPath);
       const projectConfig = await this.loadConfigFile(projectConfigPath);
       if (projectConfig) {
@@ -328,7 +330,7 @@ export class ConfigManager {
 
   /**
    * Save configuration to a file.
-   * Produces minimal JSON (only non-default, non-null values).
+   * Produces minimal YAML (only non-default, non-null values).
    *
    * @param config - Configuration to save
    * @param filePath - Optional file path (defaults to user config)
@@ -353,8 +355,8 @@ export class ConfigManager {
       const dir = this.fileSystem.dirname(targetPath);
       await this.fileSystem.mkdir(dir);
 
-      // Write the config file
-      const content = JSON.stringify(minimalConfig, null, 2);
+      // Write the config file as YAML
+      const content = stringifyYaml(minimalConfig, { indent: 2 });
       await this.fileSystem.writeFile(targetPath, content);
 
       // Set restrictive permissions on Unix
@@ -531,7 +533,7 @@ export async function loadConfig(projectPath?: string): Promise<ConfigResponse<A
 
 /**
  * Check if user configuration file exists.
- * Returns true if ~/.agent/settings.json exists.
+ * Returns true if ~/.agent/config.yaml exists.
  */
 export async function userConfigExists(): Promise<boolean> {
   const manager = new ConfigManager();
@@ -542,7 +544,7 @@ export async function userConfigExists(): Promise<boolean> {
 
 /**
  * Check if any configuration file exists (user or project).
- * Returns true if either ~/.agent/settings.json or ./.agent/settings.json exists.
+ * Returns true if either ~/.agent/config.yaml or ./.agent/config.yaml exists.
  */
 export async function configFileExists(projectPath?: string): Promise<boolean> {
   const manager = new ConfigManager();
@@ -564,7 +566,7 @@ export async function configFileExists(projectPath?: string): Promise<boolean> {
 /**
  * Load configuration from files only (no environment variable merging).
  * Use this for health checks and validation where you need to know
- * which providers are explicitly configured in settings files.
+ * which providers are explicitly configured in config files.
  */
 export async function loadConfigFromFiles(
   projectPath?: string
@@ -576,20 +578,42 @@ export async function loadConfigFromFiles(
     // Start with schema defaults
     let config = manager.getDefaults();
 
-    // Load user config (~/.agent/settings.json)
+    // Load user config (~/.agent/config.yaml)
     const userConfigPath = manager.getUserConfigPath();
     if (await fs.exists(userConfigPath)) {
       const content = await fs.readFile(userConfigPath);
-      const userConfig = JSON.parse(content) as Partial<AppConfig>;
-      config = deepMerge(config, userConfig);
+      try {
+        const userConfig = parseYaml(content) as Partial<AppConfig>;
+        config = deepMerge(config, userConfig);
+      } catch (error) {
+        if (error instanceof YAMLParseError) {
+          throw new ConfigError(
+            `Invalid YAML in config file: ${userConfigPath}`,
+            'PARSE_ERROR',
+            userConfigPath
+          );
+        }
+        throw error;
+      }
     }
 
-    // Load project config (./.agent/settings.json)
+    // Load project config (./.agent/config.yaml)
     const projectConfigPath = manager.getProjectConfigPath(projectPath);
     if (await fs.exists(projectConfigPath)) {
       const content = await fs.readFile(projectConfigPath);
-      const projectConfig = JSON.parse(content) as Partial<AppConfig>;
-      config = deepMerge(config, projectConfig);
+      try {
+        const projectConfig = parseYaml(content) as Partial<AppConfig>;
+        config = deepMerge(config, projectConfig);
+      } catch (error) {
+        if (error instanceof YAMLParseError) {
+          throw new ConfigError(
+            `Invalid YAML in config file: ${projectConfigPath}`,
+            'PARSE_ERROR',
+            projectConfigPath
+          );
+        }
+        throw error;
+      }
     }
 
     // Validate the merged config
@@ -600,6 +624,9 @@ export async function loadConfigFromFiles(
 
     return successResponse(validation.data, 'Configuration loaded from files');
   } catch (error) {
+    if (error instanceof ConfigError) {
+      return errorResponse(error.code, error.message);
+    }
     const message = error instanceof Error ? error.message : 'Unknown error loading config';
     return errorResponse('FILE_READ_ERROR', message);
   }

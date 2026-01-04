@@ -37,7 +37,7 @@ function showConfigHelp(context: CommandContext): CommandResult {
   context.onOutput('  agent config provider           # List providers', 'info');
   context.onOutput('  agent config provider local     # Configure local provider', 'info');
   context.onOutput('  agent config provider default local  # Set default', 'info');
-  context.onOutput('\nConfiguration file: ~/.agent/settings.json', 'info');
+  context.onOutput('\nConfiguration file: ~/.agent/config.yaml', 'info');
   return { success: true, message: 'Showed help' };
 }
 
@@ -273,7 +273,7 @@ export const configShowHandler: CommandHandler = async (_args, context): Promise
 
   // Output config file location
   context.onOutput('', 'info');
-  context.onOutput(`Configuration file: ~/.agent/settings.json`, 'info');
+  context.onOutput(`Configuration file: ~/.agent/config.yaml`, 'info');
 
   return { success: true, data: config };
 };
@@ -870,7 +870,7 @@ export const configProviderHandler: CommandHandler = async (
   if (setAsDefault) {
     context.onOutput(`  Set as default: yes`, 'info');
   }
-  context.onOutput('  Location: ~/.agent/settings.json\n', 'info');
+  context.onOutput('  Location: ~/.agent/config.yaml\n', 'info');
 
   return { success: true, message: `${wizard.displayName} configured successfully` };
 };
