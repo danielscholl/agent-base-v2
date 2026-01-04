@@ -654,6 +654,14 @@ export class Agent {
           const toolCtx = createChildSpanContext(rootCtx);
           const toolResult = await this.executeTool(toolCall, toolCtx);
 
+          // Check for LLM_ASSIST_REQUIRED signal from tools that need LLM help
+          const assistRequest = this.parseLLMAssistRequest(toolResult.content);
+          if (assistRequest !== undefined) {
+            this.callbacks?.onDebug?.('LLM_ASSIST_REQUIRED detected', assistRequest);
+            // Note: Full subagent spawning is future work - for now, pass through to LLM
+            // The LLM will interpret the request and may provide assistance or guidance
+          }
+
           // Add tool result message (content is already properly formatted)
           const toolMessage = new ToolMessage({
             content: toolResult.content,
@@ -877,4 +885,41 @@ export class Agent {
 
     return 'UNKNOWN';
   }
+
+  /**
+   * Parse LLM assist request from tool output content.
+   * Tool outputs may contain a structured request for LLM assistance.
+   *
+   * @returns Parsed request if content contains LLM_ASSIST_REQUIRED action, undefined otherwise
+   */
+  private parseLLMAssistRequest(content: string): LLMAssistRequest | undefined {
+    try {
+      const parsed: unknown = JSON.parse(content);
+      if (
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        'action' in parsed &&
+        (parsed as { action: unknown }).action === 'LLM_ASSIST_REQUIRED'
+      ) {
+        return parsed as LLMAssistRequest;
+      }
+    } catch {
+      // Not JSON or invalid structure - not an assist request
+    }
+    return undefined;
+  }
+}
+
+/**
+ * LLM assist request structure emitted by tools that need LLM help.
+ * Used by task delegation tool to signal subagent spawning.
+ */
+interface LLMAssistRequest {
+  action: 'LLM_ASSIST_REQUIRED';
+  taskType?: string;
+  sessionID?: string;
+  subagentType?: string;
+  description?: string;
+  prompt?: string;
+  message?: string;
 }

@@ -581,6 +581,67 @@ describe('Agent', () => {
       );
     });
 
+    it('detects LLM_ASSIST_REQUIRED in tool output and logs via onDebug', async () => {
+      // Tool that returns LLM_ASSIST_REQUIRED
+      const assistTool = {
+        name: 'delegate_task',
+        description: 'Delegate a task',
+        invoke: jest.fn<(args: Record<string, unknown>) => Promise<string>>().mockResolvedValue(
+          JSON.stringify({
+            action: 'LLM_ASSIST_REQUIRED',
+            taskType: 'subagent_delegation',
+            sessionID: 'test-session',
+            subagentType: 'research',
+            description: 'Research topic',
+            prompt: 'Find information about X',
+            message: 'Agent layer should spawn subagent',
+          })
+        ),
+      };
+
+      // Mock model to return tool call then final answer
+      let callCount = 0;
+      const mockModelWithAssist = {
+        invoke: jest.fn<(messages: unknown) => Promise<AIMessage>>().mockImplementation(() => {
+          callCount++;
+          if (callCount === 1) {
+            return Promise.resolve(
+              new AIMessage({
+                content: '',
+                tool_calls: [{ id: 'call_1', name: 'delegate_task', args: {} }],
+              })
+            );
+          }
+          return Promise.resolve(new AIMessage({ content: 'Task delegated successfully' }));
+        }),
+        bindTools: jest.fn<(tools: StructuredToolInterface[]) => unknown>().mockReturnThis(),
+      };
+
+      mockGetModel.mockReturnValue({
+        success: true,
+        result: mockModelWithAssist as unknown as BaseChatModel,
+        message: 'Model retrieved',
+      });
+
+      const onDebug = jest.fn();
+      const agent = new Agent({
+        config,
+        callbacks: { ...callbacks, onDebug },
+        tools: [assistTool as unknown as StructuredToolInterface],
+      });
+
+      await agent.run('Delegate a research task');
+
+      // Verify onDebug was called with LLM_ASSIST_REQUIRED detection
+      expect(onDebug).toHaveBeenCalledWith(
+        'LLM_ASSIST_REQUIRED detected',
+        expect.objectContaining({
+          action: 'LLM_ASSIST_REQUIRED',
+          taskType: 'subagent_delegation',
+        })
+      );
+    });
+
     it('respects max iterations limit', async () => {
       // Set up model to always return tool calls (infinite loop scenario)
       const mockModelWithTools = {
