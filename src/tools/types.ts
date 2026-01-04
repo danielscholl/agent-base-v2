@@ -41,17 +41,3 @@ export interface ErrorResponse {
  * Tools MUST return this type at public boundaries, never throw.
  */
 export type ToolResponse<T = unknown> = SuccessResponse<T> | ErrorResponse;
-
-/**
- * Type guard to check if response is successful.
- */
-export function isSuccessResponse<T>(response: ToolResponse<T>): response is SuccessResponse<T> {
-  return response.success;
-}
-
-/**
- * Type guard to check if response is an error.
- */
-export function isErrorResponse(response: ToolResponse): response is ErrorResponse {
-  return !response.success;
-}

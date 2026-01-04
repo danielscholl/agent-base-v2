@@ -37,14 +37,11 @@ export { taskTool } from './task.js';
 export { todoWriteTool, todoReadTool, clearTodos, getTodos } from './todo.js';
 
 // =============================================================================
-// Legacy Tool Types (for backward compatibility)
+// Tool Response Types (used by Agent callbacks)
 // =============================================================================
 
-// Type exports (used by some external code)
+// Type exports for agent callback system (onToolEnd, error handling)
 export type { ToolErrorCode, ToolResponse, SuccessResponse, ErrorResponse } from './types.js';
-
-// Type guards
-export { isSuccessResponse, isErrorResponse } from './types.js';
 
 // Filesystem utilities (used by new tools)
 export {
