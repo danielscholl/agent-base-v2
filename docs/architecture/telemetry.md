@@ -104,33 +104,47 @@ When `enableSensitiveData: true`:
 
 ## Endpoint Auto-Detection
 
-The telemetry setup auto-detects the OTLP protocol:
+The telemetry setup probes endpoint reachability and auto-detects the OTLP protocol:
 
-1. If `otlpEndpoint` contains `:4317` or `:4318/v1/traces` → Use HTTP exporter
-2. If `otlpEndpoint` contains `:4317` without `/v1/traces` → Use gRPC exporter
-3. Otherwise → Use HTTP exporter as default
+1. If user specifies `otlpEndpoint`, probe its reachability first
+2. If unreachable or unspecified, try HTTP endpoint (`http://localhost:4318/v1/traces`)
+3. If HTTP unreachable, try gRPC endpoint (`http://localhost:4317`)
+4. If both unreachable, fall back to no-op mode (`exporterType: 'none'`)
+
+Protocol detection (when reachable):
+- Port `4317` → gRPC exporter
+- Otherwise → HTTP exporter
 
 ```typescript
 // Examples
-otlpEndpoint: "http://localhost:4317"           // gRPC
-otlpEndpoint: "http://localhost:4318/v1/traces" // HTTP
+otlpEndpoint: "http://localhost:4317"           // gRPC (if reachable)
+otlpEndpoint: "http://localhost:4318/v1/traces" // HTTP (if reachable)
 ```
+
+**Note:** Use `skipEndpointCheck: true` in options to bypass reachability probing.
 
 ---
 
 ## No-Op Behavior
 
-When telemetry is disabled (`enabled: false`) or configuration is missing:
+When telemetry is disabled (`enabled: false`) or no endpoints are reachable:
 
-- No-op span implementations used
-- Zero performance overhead
+- OpenTelemetry's built-in no-op tracer is used
+- Zero performance overhead (no provider/resource allocation)
 - Agent continues normally
 - All telemetry calls become no-ops
 
 ```typescript
-// In setup.ts
-if (!config.telemetry.enabled) {
-  return createNoopHelpers();
+// In setup.ts - disabled via config
+if (!config.enabled) {
+  initResult = { enabled: false, exporterType: 'none', serviceName };
+  return successResponse(initResult, 'Telemetry disabled');
+}
+
+// Or when no endpoints reachable
+if (exporterType === 'none') {
+  initResult = { enabled: false, exporterType: 'none', serviceName };
+  return successResponse(initResult, 'Telemetry initialized with none exporter');
 }
 ```
 

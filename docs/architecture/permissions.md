@@ -56,14 +56,14 @@ const toolPermissions: Record<string, ToolPermissions> = {
 
 ### Permission Filtering
 
-The `ToolRegistry.tools()` method accepts a permissions filter:
+The `ToolRegistry.tools()` method accepts an `enabledPermissions` filter:
 
 ```typescript
 // Get only tools that require 'read' permission
 const readTools = await ToolRegistry.tools({
   initCtx: { workingDir: '/project' },
   createContext: (toolId, callId) => myContext,
-  permissions: new Set(['read']),
+  enabledPermissions: new Set(['read']),
 });
 
 // Get all tools (no permission filtering)

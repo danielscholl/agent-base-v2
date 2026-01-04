@@ -121,7 +121,7 @@ AppConfig
   apiKey?: string,      // Falls back to OPENAI_API_KEY
   model: string,        // Default: "gpt-5-mini"
   baseUrl?: string,     // Optional custom endpoint
-  supportsFunctionCalling?: boolean  // Default: true
+  supportsFunctionCalling?: boolean  // Optional (undefined = assume true)
 }
 ```
 
@@ -131,7 +131,7 @@ AppConfig
 {
   apiKey?: string,      // Falls back to ANTHROPIC_API_KEY
   model: string,        // Default: "claude-sonnet-4-20250514"
-  supportsFunctionCalling?: boolean  // Default: true
+  supportsFunctionCalling?: boolean  // Optional (undefined = assume true)
 }
 ```
 
@@ -143,7 +143,7 @@ AppConfig
   deployment?: string,  // Required - Deployment name
   apiVersion: string,   // Default: "2024-06-01"
   apiKey?: string,      // Falls back to AZURE_OPENAI_API_KEY
-  supportsFunctionCalling?: boolean  // Default: true
+  supportsFunctionCalling?: boolean  // Optional (undefined = assume true)
 }
 ```
 
@@ -159,7 +159,7 @@ AppConfig
   // Local mode
   modelAlias: string,             // Default: "qwen2.5-coder-14b"
   temperature?: number,
-  supportsFunctionCalling?: boolean  // Default: true
+  supportsFunctionCalling?: boolean  // Optional (undefined = assume true)
 }
 ```
 
@@ -172,7 +172,7 @@ AppConfig
   useVertexai: boolean,  // Default: false (RESERVED - not implemented)
   projectId?: string,    // RESERVED for future Vertex AI
   location: string,      // Default: "us-central1" (RESERVED)
-  supportsFunctionCalling?: boolean  // Default: true
+  supportsFunctionCalling?: boolean  // Optional (undefined = assume true)
 }
 ```
 
@@ -186,7 +186,7 @@ AppConfig
   model: string,        // Default: "gpt-4o"
   endpoint: string,     // Default: "https://models.github.ai/inference"
   org?: string,         // Optional org for enterprise
-  supportsFunctionCalling?: boolean  // Default: true
+  supportsFunctionCalling?: boolean  // Optional (undefined = assume true)
 }
 ```
 
@@ -196,7 +196,7 @@ AppConfig
 {
   baseUrl: string,      // Default: "http://localhost:11434/v1"
   model: string,        // Default: "qwen3:latest"
-  supportsFunctionCalling?: boolean  // Default: true
+  supportsFunctionCalling?: boolean  // Optional (undefined = assume true)
 }
 ```
 

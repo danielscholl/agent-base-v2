@@ -21,7 +21,7 @@ The Model Layer provides a unified interface to 7 LLM providers:
 | `github` | GitHub Models | gpt-4o |
 | `local` | Ollama/Docker Model Runner | qwen3:latest |
 
-**Common Feature:** All providers include `supportsFunctionCalling?: boolean` (default: true) for tool use capability.
+**Common Feature:** All providers include `supportsFunctionCalling?: boolean` (optional, undefined = assume true) for tool use capability.
 
 ---
 
@@ -109,7 +109,7 @@ getSupportedProviders(): ProviderName[]
   apiKey?: string,                 // Falls back to OPENAI_API_KEY
   model: string,                   // Default: "gpt-5-mini"
   baseUrl?: string,                // Optional custom endpoint
-  supportsFunctionCalling?: boolean // Default: true
+  supportsFunctionCalling?: boolean // Optional (undefined = assume true)
 }
 ```
 
@@ -121,7 +121,7 @@ getSupportedProviders(): ProviderName[]
 {
   apiKey?: string,                 // Falls back to ANTHROPIC_API_KEY
   model: string,                   // Default: "claude-sonnet-4-20250514"
-  supportsFunctionCalling?: boolean // Default: true
+  supportsFunctionCalling?: boolean // Optional (undefined = assume true)
 }
 ```
 
@@ -135,7 +135,7 @@ getSupportedProviders(): ProviderName[]
   deployment?: string,             // Required - Deployment name (NOT model)
   apiVersion: string,              // Default: "2024-06-01"
   apiKey?: string,                 // Falls back to AZURE_OPENAI_API_KEY
-  supportsFunctionCalling?: boolean // Default: true
+  supportsFunctionCalling?: boolean // Optional (undefined = assume true)
 }
 ```
 
@@ -158,7 +158,7 @@ getSupportedProviders(): ProviderName[]
   modelAlias: string,              // Default: "qwen2.5-coder-14b"
   temperature?: number,
 
-  supportsFunctionCalling?: boolean // Default: true
+  supportsFunctionCalling?: boolean // Optional (undefined = assume true)
 }
 ```
 
@@ -177,7 +177,7 @@ getSupportedProviders(): ProviderName[]
   useVertexai: boolean,            // Default: false (RESERVED)
   projectId?: string,              // RESERVED for future Vertex AI
   location: string,                // Default: "us-central1" (RESERVED)
-  supportsFunctionCalling?: boolean // Default: true
+  supportsFunctionCalling?: boolean // Optional (undefined = assume true)
 }
 ```
 
@@ -193,7 +193,7 @@ getSupportedProviders(): ProviderName[]
   model: string,                   // Default: "gpt-4o"
   endpoint: string,                // Default: "https://models.github.ai/inference"
   org?: string,                    // Optional org name for enterprise
-  supportsFunctionCalling?: boolean // Default: true
+  supportsFunctionCalling?: boolean // Optional (undefined = assume true)
 }
 ```
 
@@ -210,7 +210,7 @@ config.token → GITHUB_TOKEN env var → `gh auth token` command → ERROR
 {
   baseUrl: string,                 // Default: "http://localhost:11434/v1" (Ollama)
   model: string,                   // Default: "qwen3:latest"
-  supportsFunctionCalling?: boolean // Default: true
+  supportsFunctionCalling?: boolean // Optional (undefined = assume true)
 }
 ```
 
