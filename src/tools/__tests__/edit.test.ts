@@ -70,16 +70,21 @@ describe('Edit Tool', () => {
       expect(content).toBe('Goodbye World');
     });
 
-    it('should throw error for non-unique match without replace_all', async () => {
+    it('should return error for non-unique match without replace_all', async () => {
       const filePath = path.join(tempDir, 'test.txt');
       await fs.writeFile(filePath, 'hello hello hello');
 
       const initialized = await editTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(
-        initialized.execute({ file_path: filePath, old_string: 'hello', new_string: 'hi' }, ctx)
-      ).rejects.toThrow('3 times');
+      const result = await initialized.execute(
+        { file_path: filePath, old_string: 'hello', new_string: 'hi' },
+        ctx
+      );
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('VALIDATION_ERROR');
+      expect(result.output).toContain('3 times');
     });
 
     it('should replace all occurrences with replace_all', async () => {
@@ -100,34 +105,41 @@ describe('Edit Tool', () => {
       expect(content).toBe('hi hi hi');
     });
 
-    it('should throw error when old_string not found', async () => {
+    it('should return error when old_string not found', async () => {
       const filePath = path.join(tempDir, 'test.txt');
       await fs.writeFile(filePath, 'Hello World');
 
       const initialized = await editTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(
-        initialized.execute(
-          { file_path: filePath, old_string: 'Nonexistent', new_string: 'New' },
-          ctx
-        )
-      ).rejects.toThrow('not found');
+      const result = await initialized.execute(
+        { file_path: filePath, old_string: 'Nonexistent', new_string: 'New' },
+        ctx
+      );
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('NOT_FOUND');
+      expect(result.output).toContain('not found');
     });
 
-    it('should throw error for empty old_string', async () => {
+    it('should return error for empty old_string', async () => {
       const filePath = path.join(tempDir, 'test.txt');
       await fs.writeFile(filePath, 'Hello World');
 
       const initialized = await editTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(
-        initialized.execute({ file_path: filePath, old_string: '', new_string: 'New' }, ctx)
-      ).rejects.toThrow('cannot be empty');
+      const result = await initialized.execute(
+        { file_path: filePath, old_string: '', new_string: 'New' },
+        ctx
+      );
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('VALIDATION_ERROR');
+      expect(result.output).toContain('cannot be empty');
     });
 
-    it('should throw error when writes are disabled', async () => {
+    it('should return error when writes are disabled', async () => {
       process.env['AGENT_FILESYSTEM_WRITES_ENABLED'] = 'false';
       const filePath = path.join(tempDir, 'test.txt');
       await fs.writeFile(filePath, 'Hello World');
@@ -135,24 +147,31 @@ describe('Edit Tool', () => {
       const initialized = await editTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(
-        initialized.execute({ file_path: filePath, old_string: 'Hello', new_string: 'Hi' }, ctx)
-      ).rejects.toThrow('Filesystem writes are disabled');
+      const result = await initialized.execute(
+        { file_path: filePath, old_string: 'Hello', new_string: 'Hi' },
+        ctx
+      );
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('PERMISSION_DENIED');
+      expect(result.output).toContain('Filesystem writes are disabled');
     });
 
-    it('should throw error for non-existent file', async () => {
+    it('should return error for non-existent file', async () => {
       const initialized = await editTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(
-        initialized.execute(
-          { file_path: path.join(tempDir, 'nonexistent.txt'), old_string: 'a', new_string: 'b' },
-          ctx
-        )
-      ).rejects.toThrow();
+      const result = await initialized.execute(
+        { file_path: path.join(tempDir, 'nonexistent.txt'), old_string: 'a', new_string: 'b' },
+        ctx
+      );
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBeDefined();
+      expect(result.output).toContain('Error');
     });
 
-    it('should throw error for binary file', async () => {
+    it('should return error for binary file', async () => {
       const filePath = path.join(tempDir, 'binary.bin');
       const buffer = Buffer.alloc(100);
       buffer[0] = 0x00;
@@ -162,18 +181,28 @@ describe('Edit Tool', () => {
       const initialized = await editTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(
-        initialized.execute({ file_path: filePath, old_string: 'hello', new_string: 'hi' }, ctx)
-      ).rejects.toThrow('binary');
+      const result = await initialized.execute(
+        { file_path: filePath, old_string: 'hello', new_string: 'hi' },
+        ctx
+      );
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('VALIDATION_ERROR');
+      expect(result.output).toContain('binary');
     });
 
-    it('should throw error for directory', async () => {
+    it('should return error for directory', async () => {
       const initialized = await editTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(
-        initialized.execute({ file_path: tempDir, old_string: 'a', new_string: 'b' }, ctx)
-      ).rejects.toThrow('not a file');
+      const result = await initialized.execute(
+        { file_path: tempDir, old_string: 'a', new_string: 'b' },
+        ctx
+      );
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('VALIDATION_ERROR');
+      expect(result.output).toContain('not a file');
     });
 
     it('should generate diff output', async () => {

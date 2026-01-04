@@ -139,13 +139,18 @@ describe('Grep Tool', () => {
       expect(result.metadata.matchCount).toBe(0);
     });
 
-    it('should throw error for invalid regex', async () => {
+    it('should return error for invalid regex', async () => {
       const initialized = await grepTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(
-        initialized.execute({ pattern: '[invalid(', path: tempDir, regex: true }, ctx)
-      ).rejects.toThrow('Invalid regex');
+      const result = await initialized.execute(
+        { pattern: '[invalid(', path: tempDir, regex: true },
+        ctx
+      );
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('VALIDATION_ERROR');
+      expect(result.output).toContain('Invalid regex');
     });
 
     it('should search single file when path is file', async () => {

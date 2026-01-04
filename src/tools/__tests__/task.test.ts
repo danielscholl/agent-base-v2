@@ -47,20 +47,23 @@ describe('Task Tool', () => {
       expect(result.metadata.status).toBe('pending');
     });
 
-    it('should throw error for invalid subagent type', async () => {
+    it('should return error for invalid subagent type', async () => {
       const initialized = await taskTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      expect(() =>
-        initialized.execute(
-          {
-            description: 'Test task',
-            prompt: 'Do something',
-            subagent_type: 'invalid-type',
-          },
-          ctx
-        )
-      ).toThrow("Unknown subagent type 'invalid-type'");
+      const result = await initialized.execute(
+        {
+          description: 'Test task',
+          prompt: 'Do something',
+          subagent_type: 'invalid-type',
+        },
+        ctx
+      );
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('VALIDATION_ERROR');
+      expect(result.metadata.status).toBe('failed');
+      expect(result.output).toContain("Unknown subagent type 'invalid-type'");
     });
 
     it('should use default subagent type when not provided', async () => {

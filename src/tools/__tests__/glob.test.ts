@@ -184,16 +184,18 @@ describe('Glob Tool', () => {
       expect(newerIndex).toBeLessThan(olderIndex);
     });
 
-    it('should throw error for non-directory path', async () => {
+    it('should return error for non-directory path', async () => {
       const filePath = path.join(tempDir, 'file.txt');
       await fs.writeFile(filePath, 'content');
 
       const initialized = await globTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(initialized.execute({ pattern: '*.ts', path: filePath }, ctx)).rejects.toThrow(
-        'not a directory'
-      );
+      const result = await initialized.execute({ pattern: '*.ts', path: filePath }, ctx);
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('VALIDATION_ERROR');
+      expect(result.output).toContain('not a directory');
     });
   });
 });

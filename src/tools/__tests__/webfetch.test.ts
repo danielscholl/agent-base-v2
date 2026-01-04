@@ -163,18 +163,21 @@ describe('WebFetch Tool', () => {
       expect(result.output).toContain('—'); // mdash
     });
 
-    it('should throw error for HTTP error status', async () => {
+    it('should return error for HTTP error status', async () => {
       mockFetch.mockResolvedValue(createMockResponse('Not Found', { status: 404 }));
 
       const initialized = await webfetchTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(
-        initialized.execute({ url: 'https://example.com/notfound' }, ctx)
-      ).rejects.toThrow('HTTP 404');
+      const result = await initialized.execute({ url: 'https://example.com/notfound' }, ctx);
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('IO_ERROR');
+      expect(result.metadata.status).toBe(404);
+      expect(result.output).toContain('HTTP 404');
     });
 
-    it('should throw error for content too large', async () => {
+    it('should return error for content too large', async () => {
       const headers = new Headers({
         'content-type': 'text/html',
         'content-length': String(10 * 1024 * 1024), // 10MB
@@ -191,9 +194,11 @@ describe('WebFetch Tool', () => {
       const initialized = await webfetchTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(initialized.execute({ url: 'https://example.com/large' }, ctx)).rejects.toThrow(
-        'Content too large'
-      );
+      const result = await initialized.execute({ url: 'https://example.com/large' }, ctx);
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('VALIDATION_ERROR');
+      expect(result.output).toContain('Content too large');
     });
 
     it('should convert links in markdown format', async () => {
@@ -295,40 +300,46 @@ describe('WebFetch Tool', () => {
       expect(result.output).toBe('Plain text content');
     });
 
-    it('should handle network errors', async () => {
+    it('should return error for network errors', async () => {
       mockFetch.mockRejectedValue(new Error('Network error'));
 
       const initialized = await webfetchTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(initialized.execute({ url: 'https://example.com' }, ctx)).rejects.toThrow(
-        'Failed to fetch'
-      );
+      const result = await initialized.execute({ url: 'https://example.com' }, ctx);
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('IO_ERROR');
+      expect(result.output).toContain('Failed to fetch');
     });
 
-    it('should handle timeout errors', async () => {
+    it('should return error for timeout errors', async () => {
       mockFetch.mockRejectedValue(new Error('timeout'));
 
       const initialized = await webfetchTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(initialized.execute({ url: 'https://example.com' }, ctx)).rejects.toThrow(
-        'timed out'
-      );
+      const result = await initialized.execute({ url: 'https://example.com' }, ctx);
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('TIMEOUT');
+      expect(result.output).toContain('timed out');
     });
 
-    it('should handle abort errors', async () => {
+    it('should return error for abort errors', async () => {
       mockFetch.mockRejectedValue(new Error('aborted'));
 
       const initialized = await webfetchTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(initialized.execute({ url: 'https://example.com' }, ctx)).rejects.toThrow(
-        'aborted'
-      );
+      const result = await initialized.execute({ url: 'https://example.com' }, ctx);
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('IO_ERROR');
+      expect(result.output).toContain('aborted');
     });
 
-    it('should handle no response body', async () => {
+    it('should return error for no response body', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
@@ -340,9 +351,11 @@ describe('WebFetch Tool', () => {
       const initialized = await webfetchTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(initialized.execute({ url: 'https://example.com' }, ctx)).rejects.toThrow(
-        'No response body'
-      );
+      const result = await initialized.execute({ url: 'https://example.com' }, ctx);
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('IO_ERROR');
+      expect(result.output).toContain('No response body');
     });
 
     it('should cap timeout at max value', async () => {
@@ -502,10 +515,12 @@ describe('WebFetch Tool', () => {
         abortController.abort();
       }, 20);
 
-      await expect(executePromise).rejects.toThrow('aborted');
+      const result = await executePromise;
+      expect(result.metadata.error).toBe('IO_ERROR');
+      expect(result.output).toContain('aborted');
     });
 
-    it('should handle content exceeding size during streaming', async () => {
+    it('should return error for content exceeding size during streaming', async () => {
       // Create a response that streams more than MAX_CONTENT_BYTES
       const largeContent = 'x'.repeat(6 * 1024 * 1024); // 6MB
       const encoder = new TextEncoder();
@@ -537,12 +552,13 @@ describe('WebFetch Tool', () => {
       const initialized = await webfetchTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(initialized.execute({ url: 'https://example.com' }, ctx)).rejects.toThrow(
-        'exceeded'
-      );
+      const result = await initialized.execute({ url: 'https://example.com' }, ctx);
+
+      expect(result.metadata.error).toBe('VALIDATION_ERROR');
+      expect(result.output).toContain('exceeded');
     });
 
-    it('should handle fetch timeout with custom timeout value', async () => {
+    it('should return error for fetch timeout with custom timeout value', async () => {
       // Mock a fetch that takes longer than the timeout
       mockFetch.mockImplementation(async (_url, options) => {
         const signal = options?.signal as AbortSignal | undefined;
@@ -559,9 +575,10 @@ describe('WebFetch Tool', () => {
       const initialized = await webfetchTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(
-        initialized.execute({ url: 'https://example.com', timeout: 50 }, ctx)
-      ).rejects.toThrow('aborted');
+      const result = await initialized.execute({ url: 'https://example.com', timeout: 50 }, ctx);
+
+      expect(result.metadata.error).toBe('IO_ERROR');
+      expect(result.output).toContain('aborted');
     });
 
     it('should handle markdown conversion for non-HTML content', async () => {

@@ -89,23 +89,32 @@ describe('Read Tool', () => {
       expect(result.metadata.truncated).toBe(true);
     });
 
-    it('should throw error for non-existent file', async () => {
+    it('should return error for non-existent file', async () => {
       const initialized = await readTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(
-        initialized.execute({ file_path: path.join(tempDir, 'nonexistent.txt') }, ctx)
-      ).rejects.toThrow();
+      const result = await initialized.execute(
+        { file_path: path.join(tempDir, 'nonexistent.txt') },
+        ctx
+      );
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBeDefined();
+      expect(result.output).toContain('Error');
     });
 
-    it('should throw error for directory', async () => {
+    it('should return error for directory', async () => {
       const initialized = await readTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(initialized.execute({ file_path: tempDir }, ctx)).rejects.toThrow('not a file');
+      const result = await initialized.execute({ file_path: tempDir }, ctx);
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('VALIDATION_ERROR');
+      expect(result.output).toContain('not a file');
     });
 
-    it('should throw error for binary file', async () => {
+    it('should return error for binary file', async () => {
       const filePath = path.join(tempDir, 'binary.bin');
       const buffer = Buffer.alloc(100);
       buffer[0] = 0x00; // Null byte makes it binary
@@ -114,19 +123,25 @@ describe('Read Tool', () => {
       const initialized = await readTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(initialized.execute({ file_path: filePath }, ctx)).rejects.toThrow('binary');
+      const result = await initialized.execute({ file_path: filePath }, ctx);
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('VALIDATION_ERROR');
+      expect(result.output).toContain('binary');
     });
 
-    it('should throw error for offset beyond file length', async () => {
+    it('should return error for offset beyond file length', async () => {
       const filePath = path.join(tempDir, 'test.txt');
       await fs.writeFile(filePath, 'line1\nline2');
 
       const initialized = await readTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(initialized.execute({ file_path: filePath, offset: 100 }, ctx)).rejects.toThrow(
-        'exceeds file length'
-      );
+      const result = await initialized.execute({ file_path: filePath, offset: 100 }, ctx);
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('VALIDATION_ERROR');
+      expect(result.output).toContain('exceeds file length');
     });
 
     it('should include truncation note when limited', async () => {

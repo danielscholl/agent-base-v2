@@ -10,6 +10,7 @@
 
 import { z } from 'zod';
 import { Tool } from './tool.js';
+import type { ToolErrorCode } from './types.js';
 
 /** Default timeout in milliseconds (30 seconds) */
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -34,6 +35,32 @@ interface WebFetchMetadata extends Tool.Metadata {
   contentLength: number;
   /** Output format used */
   format: string;
+  /** Error code if operation failed */
+  error?: ToolErrorCode;
+}
+
+/**
+ * Helper to create error result for webfetch tool.
+ */
+function createWebFetchError(
+  url: string,
+  format: string,
+  errorCode: ToolErrorCode,
+  message: string,
+  status: number = 0
+): Tool.Result<WebFetchMetadata> {
+  return {
+    title: `Error: ${url}`,
+    metadata: {
+      url,
+      status,
+      contentType: null,
+      contentLength: 0,
+      format,
+      error: errorCode,
+    },
+    output: `Error: ${message}`,
+  };
 }
 
 /**
@@ -262,7 +289,13 @@ export const webfetchTool = Tool.define('webfetch', {
 
       // Check response status
       if (!response.ok) {
-        throw new Error(`HTTP ${String(response.status)}: ${response.statusText}`);
+        return createWebFetchError(
+          url,
+          format,
+          'IO_ERROR',
+          `HTTP ${String(response.status)}: ${response.statusText}`,
+          response.status
+        );
       }
 
       // Check content length
@@ -272,15 +305,19 @@ export const webfetchTool = Tool.define('webfetch', {
         contentLength !== '' &&
         parseInt(contentLength, 10) > MAX_CONTENT_BYTES
       ) {
-        throw new Error(
-          `Content too large: ${contentLength} bytes (max ${String(MAX_CONTENT_BYTES)})`
+        return createWebFetchError(
+          url,
+          format,
+          'VALIDATION_ERROR',
+          `Content too large: ${contentLength} bytes (max ${String(MAX_CONTENT_BYTES)})`,
+          response.status
         );
       }
 
       // Read content with size limit
       const reader = response.body?.getReader();
       if (!reader) {
-        throw new Error('No response body');
+        return createWebFetchError(url, format, 'IO_ERROR', 'No response body', response.status);
       }
 
       const chunks: Uint8Array[] = [];
@@ -294,7 +331,13 @@ export const webfetchTool = Tool.define('webfetch', {
         totalBytes += value.length;
         if (totalBytes > MAX_CONTENT_BYTES) {
           void reader.cancel();
-          throw new Error(`Content exceeded ${String(MAX_CONTENT_BYTES)} bytes`);
+          return createWebFetchError(
+            url,
+            format,
+            'VALIDATION_ERROR',
+            `Content exceeded ${String(MAX_CONTENT_BYTES)} bytes`,
+            response.status
+          );
         }
         chunks.push(value);
       }
@@ -339,15 +382,20 @@ export const webfetchTool = Tool.define('webfetch', {
 
       // Handle abort
       if (message.includes('aborted') || message.includes('abort')) {
-        throw new Error(`Request aborted: ${url}`);
+        return createWebFetchError(url, format, 'IO_ERROR', `Request aborted: ${url}`);
       }
 
       // Handle timeout
       if (message.includes('timeout')) {
-        throw new Error(`Request timed out after ${String(timeout)}ms: ${url}`);
+        return createWebFetchError(
+          url,
+          format,
+          'TIMEOUT',
+          `Request timed out after ${String(timeout)}ms: ${url}`
+        );
       }
 
-      throw new Error(`Failed to fetch ${url}: ${message}`);
+      return createWebFetchError(url, format, 'IO_ERROR', `Failed to fetch ${url}: ${message}`);
     }
   },
 });

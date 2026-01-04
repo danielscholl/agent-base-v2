@@ -12,6 +12,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { z } from 'zod';
 import { Tool } from './tool.js';
+import type { ToolErrorCode } from './types.js';
 import {
   resolveWorkspacePathSafe,
   mapSystemErrorToToolError,
@@ -34,6 +35,8 @@ interface GlobMetadata extends Tool.Metadata {
   fileCount: number;
   /** Whether results were truncated */
   truncated: boolean;
+  /** Error code if operation failed */
+  error?: ToolErrorCode;
 }
 
 /**
@@ -146,7 +149,16 @@ export const globTool = Tool.define<
     const resolvedPath = basePath ?? '.';
     const resolved = await resolveWorkspacePathSafe(resolvedPath, undefined, true);
     if (typeof resolved !== 'string') {
-      throw new Error(resolved.message);
+      return {
+        title: `Error: ${pattern}`,
+        metadata: {
+          pattern,
+          fileCount: 0,
+          truncated: false,
+          error: resolved.error,
+        },
+        output: `Error: ${resolved.message}`,
+      };
     }
 
     // workspaceRoot could be used for relative path display if needed
@@ -156,7 +168,16 @@ export const globTool = Tool.define<
       // Check path is a directory
       const stats = await fs.stat(resolved);
       if (!stats.isDirectory()) {
-        throw new Error(`Path is not a directory: ${resolvedPath}`);
+        return {
+          title: `Error: ${pattern}`,
+          metadata: {
+            pattern,
+            fileCount: 0,
+            truncated: false,
+            error: 'VALIDATION_ERROR' as ToolErrorCode,
+          },
+          output: `Error: Path is not a directory: ${resolvedPath}`,
+        };
       }
 
       // Find matching files
@@ -189,11 +210,17 @@ export const globTool = Tool.define<
         output: output + truncationNote,
       };
     } catch (error) {
-      if (error instanceof Error && error.message.includes('not a directory')) {
-        throw error;
-      }
       const mapped = mapSystemErrorToToolError(error);
-      throw new Error(`Error searching for ${pattern}: ${mapped.message}`);
+      return {
+        title: `Error: ${pattern}`,
+        metadata: {
+          pattern,
+          fileCount: 0,
+          truncated: false,
+          error: mapped.code,
+        },
+        output: `Error searching for ${pattern}: ${mapped.message}`,
+      };
     }
   },
 });

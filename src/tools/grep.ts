@@ -13,6 +13,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { z } from 'zod';
 import { Tool } from './tool.js';
+import type { ToolErrorCode } from './types.js';
 import {
   resolveWorkspacePathSafe,
   mapSystemErrorToToolError,
@@ -42,6 +43,29 @@ interface GrepMetadata extends Tool.Metadata {
   matchCount: number;
   /** Whether results were truncated */
   truncated: boolean;
+  /** Error code if operation failed */
+  error?: ToolErrorCode;
+}
+
+/**
+ * Helper to create error result for grep tool.
+ */
+function createGrepError(
+  pattern: string,
+  errorCode: ToolErrorCode,
+  message: string
+): Tool.Result<GrepMetadata> {
+  return {
+    title: `Error: ${pattern}`,
+    metadata: {
+      pattern,
+      filesSearched: 0,
+      matchCount: 0,
+      truncated: false,
+      error: errorCode,
+    },
+    output: `Error: ${message}`,
+  };
 }
 
 /**
@@ -128,7 +152,11 @@ export const grepTool = Tool.define<
         searchRegex = new RegExp(pattern, caseSensitive ? 'g' : 'gi');
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        throw new Error(`Invalid regex pattern '${pattern}': ${message}`);
+        return createGrepError(
+          pattern,
+          'VALIDATION_ERROR',
+          `Invalid regex pattern '${pattern}': ${message}`
+        );
       }
     }
 
@@ -136,7 +164,7 @@ export const grepTool = Tool.define<
     const resolvedPath = searchPath ?? '.';
     const resolvedResult = await resolveWorkspacePathSafe(resolvedPath, undefined, true);
     if (typeof resolvedResult !== 'string') {
-      throw new Error((resolvedResult as { message: string }).message);
+      return createGrepError(pattern, resolvedResult.error, resolvedResult.message);
     }
     const resolved: string = resolvedResult;
 
@@ -180,7 +208,11 @@ export const grepTool = Tool.define<
         }
         await collectFiles(resolved);
       } else {
-        throw new Error(`Path is neither file nor directory: ${resolvedPath}`);
+        return createGrepError(
+          pattern,
+          'VALIDATION_ERROR',
+          `Path is neither file nor directory: ${resolvedPath}`
+        );
       }
 
       // Search files
@@ -277,15 +309,12 @@ export const grepTool = Tool.define<
         output: output + truncationNote,
       };
     } catch (error) {
-      if (
-        error instanceof Error &&
-        (error.message.includes('Invalid regex') ||
-          error.message.includes('neither file nor directory'))
-      ) {
-        throw error;
-      }
       const mapped = mapSystemErrorToToolError(error);
-      throw new Error(`Error searching for ${pattern}: ${mapped.message}`);
+      return createGrepError(
+        pattern,
+        mapped.code,
+        `Error searching for ${pattern}: ${mapped.message}`
+      );
     }
   },
 });

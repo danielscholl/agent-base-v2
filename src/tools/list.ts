@@ -13,6 +13,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { z } from 'zod';
 import { Tool } from './tool.js';
+import type { ToolErrorCode } from './types.js';
 import {
   resolveWorkspacePathSafe,
   mapSystemErrorToToolError,
@@ -35,6 +36,8 @@ interface ListMetadata extends Tool.Metadata {
   entryCount: number;
   /** Whether output was truncated */
   truncated: boolean;
+  /** Error code if operation failed */
+  error?: ToolErrorCode;
 }
 
 /**
@@ -132,7 +135,16 @@ export const listTool = Tool.define<
     // Resolve and validate path (require directory exists)
     const resolved = await resolveWorkspacePathSafe(dirPath, undefined, true);
     if (typeof resolved !== 'string') {
-      throw new Error(resolved.message);
+      return {
+        title: `Error: ${dirPath}`,
+        metadata: {
+          path: dirPath,
+          entryCount: 0,
+          truncated: false,
+          error: resolved.error,
+        },
+        output: `Error: ${resolved.message}`,
+      };
     }
 
     const workspaceRoot = await getWorkspaceRootReal();
@@ -141,7 +153,16 @@ export const listTool = Tool.define<
       // Check path is a directory
       const stats = await fs.stat(resolved);
       if (!stats.isDirectory()) {
-        throw new Error(`Path is not a directory: ${dirPath}`);
+        return {
+          title: `Error: ${dirPath}`,
+          metadata: {
+            path: dirPath,
+            entryCount: 0,
+            truncated: false,
+            error: 'VALIDATION_ERROR' as ToolErrorCode,
+          },
+          output: `Error: Path is not a directory: ${dirPath}`,
+        };
       }
 
       const entries: EntryInfo[] = [];
@@ -246,11 +267,17 @@ export const listTool = Tool.define<
         output: treeOutput + truncationNote,
       };
     } catch (error) {
-      if (error instanceof Error && error.message.includes('not a directory')) {
-        throw error;
-      }
       const mapped = mapSystemErrorToToolError(error);
-      throw new Error(`Error listing ${dirPath}: ${mapped.message}`);
+      return {
+        title: `Error: ${dirPath}`,
+        metadata: {
+          path: dirPath,
+          entryCount: 0,
+          truncated: false,
+          error: mapped.code,
+        },
+        output: `Error listing ${dirPath}: ${mapped.message}`,
+      };
     }
   },
 });

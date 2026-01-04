@@ -101,15 +101,20 @@ describe('Write Tool', () => {
       expect(content).toBe('Nested');
     });
 
-    it('should throw error when writes are disabled', async () => {
+    it('should return error when writes are disabled', async () => {
       process.env['AGENT_FILESYSTEM_WRITES_ENABLED'] = 'false';
 
       const initialized = await writeTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(
-        initialized.execute({ file_path: path.join(tempDir, 'test.txt'), content: 'test' }, ctx)
-      ).rejects.toThrow('Filesystem writes are disabled');
+      const result = await initialized.execute(
+        { file_path: path.join(tempDir, 'test.txt'), content: 'test' },
+        ctx
+      );
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('PERMISSION_DENIED');
+      expect(result.output).toContain('Filesystem writes are disabled');
     });
 
     it('should track bytes written', async () => {
@@ -163,7 +168,7 @@ describe('Write Tool', () => {
       expect(result.output).toContain('5 bytes');
     });
 
-    it('should throw error for content exceeding max size', async () => {
+    it('should return error for content exceeding max size', async () => {
       const filePath = path.join(tempDir, 'large.txt');
       // Create content larger than DEFAULT_MAX_WRITE_BYTES (10MB)
       const largeContent = 'x'.repeat(11 * 1024 * 1024);
@@ -171,30 +176,36 @@ describe('Write Tool', () => {
       const initialized = await writeTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(
-        initialized.execute({ file_path: filePath, content: largeContent }, ctx)
-      ).rejects.toThrow('exceeds max write limit');
+      const result = await initialized.execute({ file_path: filePath, content: largeContent }, ctx);
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('VALIDATION_ERROR');
+      expect(result.output).toContain('exceeds max write limit');
     });
 
-    it('should throw error for path outside workspace', async () => {
+    it('should return error for path outside workspace', async () => {
       const initialized = await writeTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(
-        initialized.execute({ file_path: '/etc/passwd', content: 'test' }, ctx)
-      ).rejects.toThrow();
+      const result = await initialized.execute({ file_path: '/etc/passwd', content: 'test' }, ctx);
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBeDefined();
+      expect(result.output).toContain('Error');
     });
 
-    it('should throw error for relative path traversal', async () => {
+    it('should return error for relative path traversal', async () => {
       const initialized = await writeTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(
-        initialized.execute(
-          { file_path: path.join(tempDir, '..', '..', 'outside.txt'), content: 'test' },
-          ctx
-        )
-      ).rejects.toThrow();
+      const result = await initialized.execute(
+        { file_path: path.join(tempDir, '..', '..', 'outside.txt'), content: 'test' },
+        ctx
+      );
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBeDefined();
+      expect(result.output).toContain('Error');
     });
 
     it('should handle empty content', async () => {
@@ -210,14 +221,16 @@ describe('Write Tool', () => {
       expect(content).toBe('');
     });
 
-    it('should throw error for directory path', async () => {
+    it('should return error for directory path', async () => {
       const initialized = await writeTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
       // Writing to an existing directory should fail
-      await expect(
-        initialized.execute({ file_path: tempDir, content: 'test' }, ctx)
-      ).rejects.toThrow();
+      const result = await initialized.execute({ file_path: tempDir, content: 'test' }, ctx);
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBeDefined();
+      expect(result.output).toContain('Error');
     });
   });
 });

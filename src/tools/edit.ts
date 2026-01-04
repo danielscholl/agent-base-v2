@@ -13,6 +13,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { z } from 'zod';
 import { Tool } from './tool.js';
+import type { ToolErrorCode } from './types.js';
 import {
   resolveWorkspacePathSafe,
   mapSystemErrorToToolError,
@@ -33,6 +34,29 @@ interface EditMetadata extends Tool.Metadata {
   originalSize: number;
   /** New file size in bytes */
   newSize: number;
+  /** Error code if operation failed */
+  error?: ToolErrorCode;
+}
+
+/**
+ * Helper to create error result for edit tool.
+ */
+function createEditError(
+  filePath: string,
+  errorCode: ToolErrorCode,
+  message: string
+): Tool.Result<EditMetadata> {
+  return {
+    title: `Error: ${filePath}`,
+    metadata: {
+      path: filePath,
+      replacements: 0,
+      originalSize: 0,
+      newSize: 0,
+      error: errorCode,
+    },
+    output: `Error: ${message}`,
+  };
 }
 
 /**
@@ -127,14 +151,20 @@ export const editTool = Tool.define<
 
     // Check if writes are enabled
     if (!isFilesystemWritesEnabled()) {
-      throw new Error(
+      return createEditError(
+        filePath,
+        'PERMISSION_DENIED',
         'Filesystem writes are disabled. Set AGENT_FILESYSTEM_WRITES_ENABLED=true or update config.'
       );
     }
 
     // Validate oldString
     if (oldString === '') {
-      throw new Error('old_string cannot be empty. Provide exact text to match.');
+      return createEditError(
+        filePath,
+        'VALIDATION_ERROR',
+        'old_string cannot be empty. Provide exact text to match.'
+      );
     }
 
     // Stream progress
@@ -143,7 +173,7 @@ export const editTool = Tool.define<
     // Resolve and validate path (require file exists)
     const resolved = await resolveWorkspacePathSafe(filePath, undefined, true);
     if (typeof resolved !== 'string') {
-      throw new Error(resolved.message);
+      return createEditError(filePath, resolved.error, resolved.message);
     }
 
     try {
@@ -154,12 +184,18 @@ export const editTool = Tool.define<
         // Check file is a file
         const stats = await fd.stat();
         if (!stats.isFile()) {
-          throw new Error(`Path is not a file: ${filePath}`);
+          await fd.close();
+          return createEditError(filePath, 'VALIDATION_ERROR', `Path is not a file: ${filePath}`);
         }
 
         // Check for binary
         if (await isBinaryFile(fd)) {
-          throw new Error(`Cannot edit binary file: ${filePath}`);
+          await fd.close();
+          return createEditError(
+            filePath,
+            'VALIDATION_ERROR',
+            `Cannot edit binary file: ${filePath}`
+          );
         }
 
         // Read original content
@@ -174,11 +210,17 @@ export const editTool = Tool.define<
       const occurrences = originalContent.split(oldString).length - 1;
 
       if (occurrences === 0) {
-        throw new Error(`old_string not found in file: ${filePath}. No changes made.`);
+        return createEditError(
+          filePath,
+          'NOT_FOUND',
+          `old_string not found in file: ${filePath}. No changes made.`
+        );
       }
 
       if (occurrences > 1 && !replaceAll) {
-        throw new Error(
+        return createEditError(
+          filePath,
+          'VALIDATION_ERROR',
           `old_string found ${String(occurrences)} times in ${filePath}. Use replace_all=true to replace all, or provide more context to make match unique.`
         );
       }
@@ -198,7 +240,9 @@ export const editTool = Tool.define<
       // Check new size
       const newSize = Buffer.byteLength(newContent, 'utf-8');
       if (newSize > DEFAULT_MAX_WRITE_BYTES) {
-        throw new Error(
+        return createEditError(
+          filePath,
+          'VALIDATION_ERROR',
           `Resulting file size (${String(newSize)} bytes) exceeds max write limit (${String(DEFAULT_MAX_WRITE_BYTES)} bytes)`
         );
       }
@@ -219,7 +263,7 @@ export const editTool = Tool.define<
         } catch {
           // Ignore cleanup errors
         }
-        throw new Error(`Failed to write edited file: ${filePath}`);
+        return createEditError(filePath, 'IO_ERROR', `Failed to write edited file: ${filePath}`);
       }
 
       // Generate diff for output
@@ -236,17 +280,8 @@ export const editTool = Tool.define<
         output: `Applied ${String(replacements)} replacement(s) to ${filePath}\n\n${diff}`,
       };
     } catch (error) {
-      if (
-        error instanceof Error &&
-        (error.message.includes('not found') ||
-          error.message.includes('Cannot edit') ||
-          error.message.includes('found') ||
-          error.message.includes('Failed to write'))
-      ) {
-        throw error;
-      }
       const mapped = mapSystemErrorToToolError(error);
-      throw new Error(`Error editing ${filePath}: ${mapped.message}`);
+      return createEditError(filePath, mapped.code, `Error editing ${filePath}: ${mapped.message}`);
     }
   },
 });

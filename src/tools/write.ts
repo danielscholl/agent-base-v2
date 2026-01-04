@@ -13,6 +13,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { z } from 'zod';
 import { Tool } from './tool.js';
+import type { ToolErrorCode } from './types.js';
 import {
   resolveWorkspacePathSafe,
   mapSystemErrorToToolError,
@@ -30,6 +31,28 @@ interface WriteMetadata extends Tool.Metadata {
   bytesWritten: number;
   /** Whether file existed before */
   existedBefore: boolean;
+  /** Error code if operation failed */
+  error?: ToolErrorCode;
+}
+
+/**
+ * Helper to create error result for write tool.
+ */
+function createWriteError(
+  filePath: string,
+  errorCode: ToolErrorCode,
+  message: string
+): Tool.Result<WriteMetadata> {
+  return {
+    title: `Error: ${filePath}`,
+    metadata: {
+      path: filePath,
+      bytesWritten: 0,
+      existedBefore: false,
+      error: errorCode,
+    },
+    output: `Error: ${message}`,
+  };
 }
 
 /**
@@ -53,7 +76,9 @@ export const writeTool = Tool.define<
 
     // Check if writes are enabled
     if (!isFilesystemWritesEnabled()) {
-      throw new Error(
+      return createWriteError(
+        filePath,
+        'PERMISSION_DENIED',
         'Filesystem writes are disabled. Set AGENT_FILESYSTEM_WRITES_ENABLED=true or update config.'
       );
     }
@@ -64,7 +89,9 @@ export const writeTool = Tool.define<
     // Check content size
     const contentBytes = Buffer.byteLength(content, 'utf-8');
     if (contentBytes > DEFAULT_MAX_WRITE_BYTES) {
-      throw new Error(
+      return createWriteError(
+        filePath,
+        'VALIDATION_ERROR',
         `Content size (${String(contentBytes)} bytes) exceeds max write limit (${String(DEFAULT_MAX_WRITE_BYTES)} bytes)`
       );
     }
@@ -72,7 +99,7 @@ export const writeTool = Tool.define<
     // Resolve and validate path (path may not exist yet)
     const resolved = await resolveWorkspacePathSafe(filePath);
     if (typeof resolved !== 'string') {
-      throw new Error(resolved.message);
+      return createWriteError(filePath, resolved.error, resolved.message);
     }
 
     try {
@@ -105,7 +132,7 @@ export const writeTool = Tool.define<
         } catch {
           // Ignore cleanup errors
         }
-        throw new Error(`Failed to write file: ${filePath}`);
+        return createWriteError(filePath, 'IO_ERROR', `Failed to write file: ${filePath}`);
       }
 
       const action = existedBefore ? 'Overwrote' : 'Created';
@@ -119,11 +146,12 @@ export const writeTool = Tool.define<
         output: `${action} ${filePath} (${String(contentBytes)} bytes)`,
       };
     } catch (error) {
-      if (error instanceof Error && error.message.startsWith('Failed to write')) {
-        throw error;
-      }
       const mapped = mapSystemErrorToToolError(error);
-      throw new Error(`Error writing ${filePath}: ${mapped.message}`);
+      return createWriteError(
+        filePath,
+        mapped.code,
+        `Error writing ${filePath}: ${mapped.message}`
+      );
     }
   },
 });

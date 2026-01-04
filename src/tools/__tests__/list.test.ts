@@ -114,13 +114,15 @@ describe('List Tool', () => {
       expect(result.metadata.entryCount).toBe(0);
     });
 
-    it('should throw error for non-existent path', async () => {
+    it('should return error for non-existent path', async () => {
       const initialized = await listTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(
-        initialized.execute({ path: path.join(tempDir, 'nonexistent') }, ctx)
-      ).rejects.toThrow();
+      const result = await initialized.execute({ path: path.join(tempDir, 'nonexistent') }, ctx);
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBeDefined();
+      expect(result.output).toContain('Error');
     });
 
     it('should show file sizes', async () => {
@@ -195,14 +197,18 @@ describe('List Tool', () => {
       expect(dirIndex).toBeLessThan(fileIndex);
     });
 
-    it('should throw error for file path instead of directory', async () => {
+    it('should return error for file path instead of directory', async () => {
       const filePath = path.join(tempDir, 'file.txt');
       await fs.writeFile(filePath, 'content');
 
       const initialized = await listTool.init();
       const ctx = Tool.createNoopContext({ sessionID: testSessionID });
 
-      await expect(initialized.execute({ path: filePath }, ctx)).rejects.toThrow('not a directory');
+      const result = await initialized.execute({ path: filePath }, ctx);
+
+      expect(result.title).toContain('Error');
+      expect(result.metadata.error).toBe('VALIDATION_ERROR');
+      expect(result.output).toContain('not a directory');
     });
 
     it('should format KB sizes correctly', async () => {

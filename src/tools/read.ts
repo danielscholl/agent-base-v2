@@ -11,6 +11,7 @@
 import * as fs from 'node:fs/promises';
 import { z } from 'zod';
 import { Tool } from './tool.js';
+import type { ToolErrorCode } from './types.js';
 import {
   resolveWorkspacePathSafe,
   mapSystemErrorToToolError,
@@ -38,6 +39,31 @@ interface ReadMetadata extends Tool.Metadata {
   totalLines: number;
   /** Whether output was truncated */
   truncated: boolean;
+  /** Error code if operation failed */
+  error?: ToolErrorCode;
+}
+
+/**
+ * Helper to create error result for read tool.
+ */
+function createReadError(
+  filePath: string,
+  startLine: number,
+  errorCode: ToolErrorCode,
+  message: string
+): Tool.Result<ReadMetadata> {
+  return {
+    title: `Error: ${filePath}`,
+    metadata: {
+      path: filePath,
+      startLine,
+      endLine: 0,
+      totalLines: 0,
+      truncated: false,
+      error: errorCode,
+    },
+    output: `Error: ${message}`,
+  };
 }
 
 /**
@@ -81,7 +107,7 @@ export const readTool = Tool.define<
     // Resolve and validate path
     const resolved = await resolveWorkspacePathSafe(filePath, undefined, true);
     if (typeof resolved !== 'string') {
-      throw new Error(resolved.message);
+      return createReadError(filePath, startLine, resolved.error, resolved.message);
     }
 
     try {
@@ -92,19 +118,35 @@ export const readTool = Tool.define<
         // Check file exists and is a file
         const stats = await fd.stat();
         if (!stats.isFile()) {
-          throw new Error(`Path is not a file: ${filePath}`);
+          await fd.close();
+          return createReadError(
+            filePath,
+            startLine,
+            'VALIDATION_ERROR',
+            `Path is not a file: ${filePath}`
+          );
         }
 
         // Check file size
         if (stats.size > DEFAULT_MAX_READ_BYTES) {
-          throw new Error(
+          await fd.close();
+          return createReadError(
+            filePath,
+            startLine,
+            'VALIDATION_ERROR',
             `File size (${String(stats.size)} bytes) exceeds max read limit (${String(DEFAULT_MAX_READ_BYTES)} bytes)`
           );
         }
 
         // Check for binary
         if (await isBinaryFile(fd)) {
-          throw new Error(`File appears to be binary (contains null bytes): ${filePath}`);
+          await fd.close();
+          return createReadError(
+            filePath,
+            startLine,
+            'VALIDATION_ERROR',
+            `File appears to be binary (contains null bytes): ${filePath}`
+          );
         }
 
         // Read file content
@@ -118,7 +160,10 @@ export const readTool = Tool.define<
 
       // Validate start line
       if (startLine > totalLines && totalLines > 0) {
-        throw new Error(
+        return createReadError(
+          filePath,
+          startLine,
+          'VALIDATION_ERROR',
           `offset (${String(startLine)}) exceeds file length (${String(totalLines)} lines)`
         );
       }
@@ -154,7 +199,12 @@ export const readTool = Tool.define<
       };
     } catch (error) {
       const mapped = mapSystemErrorToToolError(error);
-      throw new Error(`Error reading ${filePath}: ${mapped.message}`);
+      return createReadError(
+        filePath,
+        startLine,
+        mapped.code,
+        `Error reading ${filePath}: ${mapped.message}`
+      );
     }
   },
 });
