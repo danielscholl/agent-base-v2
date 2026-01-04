@@ -897,19 +897,40 @@ export class Agent {
    * @returns Parsed request if content contains LLM_ASSIST_REQUIRED action, undefined otherwise
    */
   private parseLLMAssistRequest(content: string): LLMAssistRequest | undefined {
-    try {
-      const parsed: unknown = JSON.parse(content);
-      if (
-        typeof parsed === 'object' &&
-        parsed !== null &&
-        'action' in parsed &&
-        (parsed as { action: unknown }).action === 'LLM_ASSIST_REQUIRED'
-      ) {
-        return parsed as LLMAssistRequest;
+    // Try multiple parsing strategies for different content formats
+    const tryParse = (text: string): LLMAssistRequest | undefined => {
+      try {
+        const parsed: unknown = JSON.parse(text);
+        if (
+          typeof parsed === 'object' &&
+          parsed !== null &&
+          'action' in parsed &&
+          (parsed as { action: unknown }).action === 'LLM_ASSIST_REQUIRED'
+        ) {
+          return parsed as LLMAssistRequest;
+        }
+      } catch {
+        // Not valid JSON
       }
-    } catch {
-      // Not JSON or invalid structure - not an assist request
+      return undefined;
+    };
+
+    // Strategy 1: Try parsing full content (legacy tools return plain JSON)
+    const fromFull = tryParse(content);
+    if (fromFull !== undefined) {
+      return fromFull;
     }
+
+    // Strategy 2: Try parsing after title separator (ToolRegistry format: "title\n\noutput")
+    const separatorIndex = content.indexOf('\n\n');
+    if (separatorIndex !== -1) {
+      const outputPart = content.slice(separatorIndex + 2);
+      const fromOutput = tryParse(outputPart);
+      if (fromOutput !== undefined) {
+        return fromOutput;
+      }
+    }
+
     return undefined;
   }
 }

@@ -370,11 +370,16 @@ export namespace ToolRegistry {
     try {
       const toolResult = await entry.initialized.execute(args, ctx);
 
+      // Determine success: false if metadata contains error field (return-not-throw pattern)
+      const hasMetadataError =
+        'error' in toolResult.metadata && toolResult.metadata.error !== undefined;
+
       const execResult: ToolExecutionResult<M> = {
         toolId: id,
         result: toolResult as Tool.Result<M>,
         timestamp: startTime,
-        success: true,
+        success: !hasMetadataError,
+        error: hasMetadataError ? String(toolResult.metadata.error) : undefined,
       };
 
       lastResults.set(id, execResult as ToolExecutionResult);
@@ -551,12 +556,16 @@ function createLangChainTool(
       try {
         const result = await initialized.execute(input, ctx);
 
+        // Determine success: false if metadata contains error field (return-not-throw pattern)
+        const hasMetadataError = 'error' in result.metadata && result.metadata.error !== undefined;
+
         // Store result for retrieval via getLastResult()
         const execResult: ToolExecutionResult = {
           toolId: id,
           result,
           timestamp: Date.now(),
-          success: true,
+          success: !hasMetadataError,
+          error: hasMetadataError ? String(result.metadata.error) : undefined,
         };
 
         // Store in registry for getLastResult() access

@@ -217,6 +217,30 @@ describe('ToolRegistry', () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain('Test error');
     });
+
+    it('should mark success false when tool returns error in metadata (return-not-throw pattern)', async () => {
+      const returnErrorTool = Tool.define<z.ZodObject<Record<string, never>>, { error?: string }>(
+        'return-error-tool',
+        {
+          description: 'Returns error in metadata',
+          parameters: z.object({}),
+          execute: () => ({
+            title: 'Error: Test',
+            metadata: { error: 'VALIDATION_ERROR' },
+            output: 'Error: Something went wrong',
+          }),
+        }
+      );
+
+      ToolRegistry.register(returnErrorTool);
+      const ctx = Tool.createNoopContext({ sessionID: testSessionID });
+
+      const result = await ToolRegistry.execute('return-error-tool', {}, ctx);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('VALIDATION_ERROR');
+      expect(result.result.output).toContain('Error:');
+    });
   });
 
   describe('tools', () => {
