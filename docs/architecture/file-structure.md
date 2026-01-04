@@ -12,34 +12,34 @@ This document describes the source code organization of the TypeScript agent fra
 ```
 src/
 ├── index.tsx                 # Entry point, CLI bootstrap
-├── cli.tsx                   # Main CLI component
 │
-├── agent/
-│   ├── agent.ts              # Core Agent class
-│   ├── callbacks.ts          # AgentCallbacks interface
-│   ├── types.ts              # Message, AgentOptions
-│   └── prompts.ts            # System prompt loading
+├── cli/                      # CLI layer
+│   ├── index.ts              # CLI exports
+│   ├── types.ts              # CLI types
+│   ├── callbacks.ts          # Callback implementations
+│   ├── cli-context.ts        # CLI context management
+│   ├── constants.ts          # CLI constants
+│   ├── version.ts            # Version info
+│   ├── input/                # Input handling
+│   └── commands/             # Slash command handlers
+│       ├── index.ts          # Command registry
+│       ├── types.ts          # CommandHandler, CommandResult
+│       ├── help.ts           # /help command
+│       ├── config.ts         # /config command
+│       ├── session.ts        # /session command
+│       ├── skills.ts         # /skills command
+│       ├── telemetry.ts      # /telemetry command
+│       ├── shell.ts          # Shell command handler
+│       ├── clear.ts          # /clear command
+│       └── exit.ts           # /exit command
 │
-├── model/
-│   ├── llm.ts                # LLMClient orchestrator
-│   ├── types.ts              # ModelResponse, ModelErrorCode
-│   ├── base.ts               # Response helpers, error mapping
-│   ├── registry.ts           # Provider registry
-│   ├── retry.ts              # Exponential backoff
-│   ├── index.ts              # Public exports
-│   └── providers/            # Provider-specific implementations
-│       ├── openai.ts
-│       ├── anthropic.ts
-│       ├── azure-openai.ts
-│       ├── gemini.ts
-│       ├── github.ts
-│       ├── local.ts
-│       └── foundry.ts
+├── runtime/                  # Runtime components
+│   └── ...                   # Agent runtime
 │
 ├── tools/
 │   ├── tool.ts               # Tool namespace, Tool.define()
 │   ├── registry.ts           # ToolRegistry
-│   ├── types.ts              # ToolResponse types
+│   ├── types.ts              # ToolErrorCode, ToolResponse types
 │   ├── index.ts              # Public exports + auto-registration
 │   ├── workspace.ts          # Workspace root detection
 │   ├── read.ts               # File reading
@@ -57,12 +57,12 @@ src/
 │   ├── schema.ts             # Zod schemas, AppConfig
 │   ├── manager.ts            # Load/save/merge logic
 │   ├── constants.ts          # Default values
-│   └── providers/            # Setup wizards (Phase 5)
+│   └── providers/            # Setup wizards
 │       └── github.ts         # GitHub CLI integration
 │
 ├── telemetry/
 │   ├── setup.ts              # OTel initialization
-│   ├── types.ts              # TelemetryHelpers
+│   ├── types.ts              # TelemetryHelpers interface
 │   ├── spans.ts              # GenAI span helpers
 │   └── aspire.ts             # Docker dashboard commands
 │
@@ -72,30 +72,22 @@ src/
 │   ├── session.ts            # Session persistence
 │   └── env.ts                # Environment helpers
 │
-├── components/               # React/Ink UI components
-│   ├── Input.tsx
-│   ├── Spinner.tsx
-│   └── AnswerBox.tsx
-│
-├── skills/                   # Phase 4
+├── skills/
 │   ├── manifest.ts           # Zod schemas, YAML parsing
 │   ├── loader.ts             # Discovery, dynamic import
 │   ├── registry.ts           # Persistent metadata
-│   └── context-provider.ts   # Progressive disclosure
+│   ├── context-provider.ts   # Progressive disclosure (3-tier)
+│   ├── prompt.ts             # XML generation for skills
+│   └── types.ts              # DiscoveredSkill types
 │
-├── commands/                 # Phase 5
-│   ├── config.tsx
-│   ├── skills.tsx
-│   └── session.tsx
+├── errors/
+│   └── index.ts              # AgentErrorCode, AgentResponse
 │
 ├── prompts/
 │   └── system.md             # Default system prompt
 │
-├── _bundled_skills/          # Shipped with agent
-│   └── .gitkeep
-│
-└── errors/
-    └── index.ts              # AgentError hierarchy
+└── _bundled_skills/          # Shipped with agent
+    └── .gitkeep
 ```
 
 ---
@@ -106,14 +98,16 @@ Tests are co-located with source files:
 
 ```
 src/
-├── agent/
-│   ├── agent.ts
+├── cli/
 │   └── __tests__/
-│       └── agent.test.ts
+│       └── commands.test.ts
 ├── tools/
 │   ├── read.ts
 │   └── __tests__/
 │       └── read.test.ts
+├── config/
+│   └── __tests__/
+│       └── schema.test.ts
 ```
 
 **Shared resources:**
@@ -163,10 +157,10 @@ project-root/
 | File | Purpose |
 |------|---------|
 | `src/index.tsx` | CLI entry point |
-| `src/agent/agent.ts` | Agent orchestrator |
-| `src/model/llm.ts` | LLM client |
+| `src/runtime/` | Agent runtime |
 | `src/tools/registry.ts` | Tool management |
 | `src/config/manager.ts` | Config loading |
+| `src/cli/commands/index.ts` | Command registry |
 
 ---
 
@@ -175,11 +169,11 @@ project-root/
 ```
 Public API (index.ts exports)
 │
-├── src/agent/index.ts        # Agent, AgentCallbacks
-├── src/model/index.ts        # LLMClient, ModelResponse
 ├── src/tools/index.ts        # Tool, ToolRegistry
 ├── src/config/index.ts       # ConfigManager, AppConfig
-└── src/telemetry/index.ts    # TelemetryHelpers
+├── src/telemetry/index.ts    # TelemetryHelpers
+├── src/cli/index.ts          # CLI exports
+└── src/errors/index.ts       # AgentResponse, AgentErrorCode
 ```
 
 **Rule:** External code should only import from `index.ts` files.

@@ -1,5 +1,8 @@
 # Coding Styles and Conventions
 
+> **Status:** Current
+> **Source of truth:** [`CLAUDE.md`](../../CLAUDE.md), ESLint/Prettier configs
+
 This document describes the coding patterns, conventions, and style guidelines for the TypeScript agent framework.
 
 ---

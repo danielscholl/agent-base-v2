@@ -1,6 +1,9 @@
 # Skills Architecture
 
-This document describes the skills system, including manifests, progressive disclosure, and toolset loading.
+> **Status:** Partial Implementation
+> **Source of truth:** [`src/skills/manifest.ts`](../../src/skills/manifest.ts), [`src/skills/context-provider.ts`](../../src/skills/context-provider.ts)
+
+This document describes the skills system, including manifests and progressive disclosure.
 
 ---
 
@@ -8,10 +11,14 @@ This document describes the skills system, including manifests, progressive disc
 
 Skills extend the agent's capabilities through:
 
-- **SKILL.md manifests** with YAML front matter
-- **Toolsets** for adding new tools
-- **Progressive disclosure** for efficient context usage
-- **Trigger matching** for automatic activation
+- **SKILL.md manifests** with YAML front matter (Agent Skills spec)
+- **Progressive disclosure** for efficient context usage (3-tier model)
+- **Resource directories** for scripts, references, and assets
+
+> **Note:** The following features are **planned but not yet implemented**:
+> - Toolsets (dynamic tool loading from skill directories)
+> - Trigger-based automatic activation
+> - Script execution
 
 ---
 
@@ -19,124 +26,127 @@ Skills extend the agent's capabilities through:
 
 ```
 skills/
-└── hello-extended/
+└── my-skill/
     ├── SKILL.md              # Manifest (YAML front matter + instructions)
-    └── toolsets/
-        └── index.ts          # Exported tool classes
+    ├── scripts/              # Tier 3 resources (planned)
+    ├── references/           # Tier 3 resources
+    └── assets/               # Tier 3 resources
 ```
-
----
-
-## MVP Scope
-
-| Feature | Status |
-|---------|--------|
-| Toolsets | **Included** |
-| Script execution | Deferred to post-MVP |
-
-**Toolsets vs Scripts:**
-
-| Aspect | Toolsets | Scripts (Post-MVP) |
-|--------|----------|-------------------|
-| Context | Loaded into LLM | Not loaded |
-| Latency | Low (in-process) | Higher (subprocess) |
-| Dependencies | Shared with agent | Isolated per-script |
-| Testing | Synchronous, mockable | Async subprocess |
 
 ---
 
 ## Manifest Format (SKILL.md)
 
+The manifest follows the [Agent Skills specification](https://agentskills.io/specification):
+
 ```yaml
 ---
-name: hello-extended
-description: Extended greeting capabilities
-version: 1.0.0
-toolsets:
-  - "toolsets/index:HelloToolset"     # path:Class format
-triggers:
-  keywords: ["hello", "greet", "greeting"]
-  verbs: ["say", "wave"]
-  patterns: ["greet\\s+\\w+"]
-default_enabled: true
+name: my-skill
+description: Brief description of what this skill does and when to use it
+license: MIT
+compatibility: Requires Node.js 18+
+metadata:
+  author: Your Name
+  version: "1.0.0"
+allowed-tools: "Bash(git:*) Read"
 ---
 
-# Hello Extended Skill
+# My Skill
 
-Instructions for using this skill...
+Instructions for the LLM on how to use this skill.
+
+## Usage
+
+Detailed usage examples and guidance...
 ```
 
 ---
 
-## Manifest Fields
+## Manifest Fields (SkillManifestSchema)
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `name` | Yes | Skill identifier (alphanumeric, hyphens, max 64 chars) |
-| `description` | Yes | Brief description (max 500 chars) |
-| `version` | No | Semantic version (e.g., "1.0.0") |
-| `toolsets` | No | TypeScript toolset classes ("path:Class" format) |
-| `scripts` | No | Script list (parsed but not executed in MVP) |
-| `triggers.keywords` | No | Direct keyword matches (word boundary) |
-| `triggers.verbs` | No | Action verbs (word boundary) |
-| `triggers.patterns` | No | Regex patterns |
-| `default_enabled` | No | For bundled skills (default: true) |
-| `brief_description` | No | Auto-generated from first sentence if omitted |
+| `name` | Yes | Skill identifier (1-64 chars, lowercase alphanumeric + hyphens) |
+| `description` | Yes | Brief description (1-1024 chars) |
+| `license` | No | License name or file reference |
+| `compatibility` | No | Environment requirements (1-500 chars) |
+| `metadata` | No | Arbitrary key-value string mapping |
+| `allowed-tools` | No | Space-delimited tool patterns (experimental) |
+
+**Validation Rules:**
+- `name` must match directory name
+- `name` pattern: `^[a-z0-9]+(-[a-z0-9]+)*$` (no leading/trailing/consecutive hyphens)
+- Schema is **strict** - unknown fields are rejected
 
 ---
 
-## Progressive Disclosure
+## Progressive Disclosure (3-Tier Model)
+
+The context provider implements a 3-tier disclosure model to minimize context window usage:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Four-Tier Disclosure                          │
-│                                                                  │
-│  Tier 0: Nothing                                                │
-│  └── When: No skills loaded or no match                         │
-│                                                                  │
-│  Tier 1: Breadcrumb (~10 tokens)                                │
-│  ├── When: Skills exist with triggers but don't match query     │
-│  └── Shows: "[N skills available]"                              │
-│                                                                  │
-│  Tier 2: Registry (~15 tokens/skill)                            │
-│  ├── When: User asks "what can you do?" / "list skills"         │
-│  │   OR skills have no triggers defined                         │
-│  └── Shows: Skill names + brief descriptions                    │
-│                                                                  │
-│  Tier 3: Full Documentation (hundreds of tokens)                │
-│  ├── When: Triggers match user query                            │
-│  └── Shows: Complete skill instructions from SKILL.md           │
+│                    Three-Tier Disclosure                        │
+│                                                                 │
+│  Tier 1: Metadata (~100 tokens/skill)                          │
+│  ├── When: System prompt injection at startup                  │
+│  └── Shows: <available_skills> XML with names + descriptions   │
+│                                                                 │
+│  Tier 2: Instructions (<5000 tokens)                           │
+│  ├── When: Agent activates a skill                             │
+│  └── Shows: Full SKILL.md content                              │
+│                                                                 │
+│  Tier 3: Resources (as needed)                                 │
+│  ├── When: Agent requests specific resource                    │
+│  └── Shows: Content from scripts/, references/, assets/        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Trigger Matching Flow
+## SkillContextProvider API
 
+```typescript
+class SkillContextProvider {
+  // Tier 1: Get metadata for all skills (injected in system prompt)
+  getTier1Context(): string;
+
+  // Tier 2: Get full instructions for a specific skill
+  async getTier2Context(skillName: string): Promise<string | null>;
+
+  // Tier 3: List available resources for a skill
+  async getTier3ResourceList(
+    skillName: string,
+    resourceType: 'scripts' | 'references' | 'assets'
+  ): Promise<string[]>;
+
+  // Tier 3: Get specific resource content
+  async getTier3Resource(
+    skillName: string,
+    resourcePath: string
+  ): Promise<string | null>;
+
+  // Utility methods
+  getSkill(name: string): DiscoveredSkill | undefined;
+  getSkillNames(): string[];
+}
 ```
-User Query
-    │
-    ▼
-┌─────────────────────────────┐
-│  Match against all skills:  │
-│  • Keywords (exact match)   │
-│  • Verbs (action words)     │
-│  • Patterns (regex)         │
-└─────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────┐
-│  Rank matches by:           │
-│  1. Explicit mention        │
-│  2. Exact phrase match      │
-│  3. Recent usage            │
-└─────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────┐
-│  Inject top N skills        │
-│  (max_skills default: 3)    │
-└─────────────────────────────┘
+
+---
+
+## Tier 1 XML Format
+
+The `getTier1Context()` method generates an `<available_skills>` XML block:
+
+```xml
+<available_skills>
+  <skill name="my-skill">
+    Brief description of what this skill does
+  </skill>
+  <skill name="another-skill">
+    Another skill description
+  </skill>
+</available_skills>
 ```
 
 ---
@@ -151,33 +161,18 @@ User Query
 
 ---
 
-## Toolset Loading
+## Security: Path Traversal Protection
+
+Tier 3 resource access includes defense-in-depth protection:
+
+1. **Pre-check**: Rejects obvious path traversal (`../`, absolute paths)
+2. **Post-check**: Resolves symlinks via `realpath()` and validates containment
 
 ```typescript
-// SKILL.md specifies:
-// toolsets:
-//   - "toolsets/index:HelloToolset"
-
-// Skill loader parses this and:
-// 1. Resolves path relative to skill directory
-// 2. Dynamic import of the module
-// 3. Gets the named export (HelloToolset)
-// 4. Registers tools with ToolRegistry
+// Rejected: ../../../etc/passwd
+// Rejected: /etc/passwd
+// Rejected: symlink -> ../../sensitive
 ```
-
----
-
-## Script Execution (Post-MVP)
-
-Scripts will run as isolated Bun subprocesses with safety limits:
-
-| Limit | Default |
-|-------|---------|
-| Timeout | 60 seconds |
-| Output size | 1MB |
-| Max arguments | 100 |
-| Argument bytes | 4096 |
-| Working directory | Skill directory |
 
 ---
 
@@ -188,8 +183,8 @@ Scripts will run as isolated Bun subprocesses with safety limits:
 ```
 ~/.agent/skills/my-skill/
 ├── SKILL.md
-└── toolsets/
-    └── index.ts
+└── references/
+    └── examples.md
 ```
 
 2. **Write manifest (SKILL.md):**
@@ -197,11 +192,7 @@ Scripts will run as isolated Bun subprocesses with safety limits:
 ```yaml
 ---
 name: my-skill
-description: My custom skill
-toolsets:
-  - "toolsets/index:MyToolset"
-triggers:
-  keywords: ["my", "custom"]
+description: My custom skill for doing useful things
 ---
 
 # My Skill
@@ -209,26 +200,45 @@ triggers:
 Instructions for the LLM on how to use this skill.
 ```
 
-3. **Implement toolset:**
+---
 
-```typescript
-import { z } from 'zod';
-import { Tool } from '@agent/tools';
+## Planned Features
 
-export const myTool = Tool.define('my-tool', {
-  description: 'Does something useful',
-  parameters: z.object({
-    input: z.string(),
-  }),
-  execute: async (args, ctx) => ({
-    title: 'Completed',
-    metadata: {},
-    output: `Processed: ${args.input}`,
-  }),
-});
+The following features are documented for future implementation:
 
-export const MyToolset = [myTool];
+### Toolsets (Planned)
+
+```yaml
+---
+name: my-skill
+description: Skill with custom tools
+toolsets:
+  - "toolsets/index:MyToolset"
+---
 ```
+
+### Trigger-Based Activation (Planned)
+
+```yaml
+---
+name: my-skill
+description: Skill with triggers
+triggers:
+  keywords: ["hello", "greet"]
+  verbs: ["say", "wave"]
+  patterns: ["greet\\s+\\w+"]
+---
+```
+
+### Script Execution (Planned)
+
+Scripts will run as isolated Bun subprocesses with safety limits:
+
+| Limit | Default |
+|-------|---------|
+| Timeout | 60 seconds |
+| Output size | 1MB |
+| Working directory | Skill directory |
 
 ---
 

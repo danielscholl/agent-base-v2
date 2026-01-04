@@ -204,41 +204,68 @@ When `applicationinsightsConnectionString` is provided, the telemetry system con
 
 ```typescript
 interface TelemetryHelpers {
-  // Start LLM span with GenAI conventions
-  startLLMSpan(
-    model: string,
-    provider: string,
-    options?: { temperature?: number; maxTokens?: number }
-  ): Span;
+  /** Get a tracer for creating spans */
+  getTracer(name?: string, version?: string): Tracer;
 
-  // Record token usage on span
-  recordTokenUsage(span: Span, usage: TokenUsage): void;
+  /** Get a meter for creating metrics */
+  getMeter(name?: string, version?: string): Meter;
 
-  // Start tool execution span
-  startToolSpan(toolName: string): Span;
+  /** Check if telemetry is enabled */
+  isEnabled(): boolean;
 
-  // Record tool result on span
-  recordToolResult(span: Span, success: boolean): void;
+  /** Get current configuration */
+  getConfig(): TelemetryInitResult | null;
 
-  // Get current trace context
-  getContext(): SpanContext;
+  /** Shutdown telemetry (flush and close) */
+  shutdown(): Promise<TelemetryResponse>;
 }
 ```
 
 ---
 
-## SpanContext Propagation
+## GenAI Span Types
 
-All callbacks receive `SpanContext` for correlation:
+The framework provides typed options for creating GenAI-compliant spans:
 
 ```typescript
-onLLMStart(ctx: SpanContext, model: string, messages: Message[]): void;
+// LLM span options
+interface LLMSpanOptions {
+  operationName?: string;      // Defaults to 'chat'
+  providerName: string;        // e.g., 'openai', 'anthropic'
+  modelName: string;
+  temperature?: number;
+  maxTokens?: number;
+  enableSensitiveData?: boolean;
+  messages?: unknown[];        // Only recorded if enableSensitiveData
+}
+
+// Tool span options
+interface ToolSpanOptions {
+  toolName: string;
+  toolCallId?: string;
+  enableSensitiveData?: boolean;
+  arguments?: Record<string, unknown>;
+}
+
+// Agent span options
+interface AgentSpanOptions {
+  operationName?: string;
+  providerName?: string;
+  modelName?: string;
+  conversationId?: string;
+}
 ```
 
-This enables:
-- Distributed tracing across services
-- Correlation of LLM calls with tool executions
-- Parent-child span relationships
+---
+
+## Active Span Handle
+
+```typescript
+interface ActiveSpan {
+  span: Span;    // The underlying OTel span
+  end: () => void;  // End the span
+}
+```
 
 ---
 

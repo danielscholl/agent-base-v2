@@ -1,5 +1,8 @@
 # System Layers
 
+> **Status:** Current
+> **Source of truth:** Actual source directory structure in `src/`
+
 This document describes the layered architecture of the TypeScript agent framework.
 
 ---
@@ -47,7 +50,7 @@ This document describes the layered architecture of the TypeScript agent framewo
 │  • Zod input schemas  │       │  • Provider routing             │
 │  • Tool.Result output │       │  • Streaming support            │
 │  • Permission checks  │       │  • Retry with backoff           │
-│  • No LLM calls       │       │  • Structured output (Zod)      │
+│  • No LLM calls       │       │  • ModelResponse union          │
 └───────────────────────┘       └─────────────────────────────────┘
           │                                    │
           └──────────────┬─────────────────────┘
@@ -153,7 +156,7 @@ The Tools layer provides LLM-callable functions with validated inputs and struct
 **Key Files:**
 - `src/tools/tool.ts` - Tool namespace and `Tool.define()`
 - `src/tools/registry.ts` - ToolRegistry for management
-- `src/tools/base.ts` - Legacy `createTool()` factory
+- `src/tools/types.ts` - ToolErrorCode and types
 - Individual tool files (read.ts, write.ts, bash.ts, etc.)
 
 See [Tools Architecture](./tools.md) for details.

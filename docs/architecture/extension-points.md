@@ -1,5 +1,8 @@
 # Extension Points
 
+> **Status:** Current
+> **Source of truth:** Various source files (see individual sections)
+
 This document describes how to extend the agent framework with new capabilities.
 
 ---
@@ -169,8 +172,8 @@ const callbacks: AgentCallbacks = {
 ```
 ~/.agent/skills/my-skill/
 ├── SKILL.md
-└── toolsets/
-    └── index.ts
+└── references/
+    └── examples.md
 ```
 
 2. **Write manifest** (`SKILL.md`):
@@ -178,12 +181,9 @@ const callbacks: AgentCallbacks = {
 ```yaml
 ---
 name: my-skill
-description: My custom skill
-version: 1.0.0
-toolsets:
-  - "toolsets/index:MyToolset"
-triggers:
-  keywords: ["custom", "my"]
+description: My custom skill for doing useful things
+license: MIT
+compatibility: Requires Node.js 18+
 ---
 
 # My Skill
@@ -191,68 +191,67 @@ triggers:
 Instructions for using this skill...
 ```
 
-3. **Implement toolset** (`toolsets/index.ts`):
-
-```typescript
-import { z } from 'zod';
-import { Tool } from '@agent/tools';
-
-export const customTool = Tool.define('custom-tool', {
-  description: 'Does something custom',
-  parameters: z.object({
-    input: z.string(),
-  }),
-  execute: async (args, ctx) => ({
-    title: 'Custom result',
-    metadata: {},
-    output: `Processed: ${args.input}`,
-  }),
-});
-
-export const MyToolset = [customTool];
-```
+**Note:** Toolsets and triggers are planned features not yet implemented. See [Skills Architecture](./skills.md) for the current manifest schema.
 
 ---
 
 ## Adding a Command
 
-For slash commands in the CLI:
+Commands use a handler-based pattern (not React components).
 
-1. **Create command file** (`src/commands/<name>.tsx`):
+**Source of truth:** [`src/cli/commands/types.ts`](../../src/cli/commands/types.ts)
+
+1. **Create command file** (`src/cli/commands/<name>.ts`):
 
 ```typescript
-import React from 'react';
-import { Box, Text } from 'ink';
+import type { CommandHandler, CommandResult, CommandDefinition } from './types.js';
 
-interface Props {
-  args: string[];
-}
+const handler: CommandHandler = async (args, context): Promise<CommandResult> => {
+  // Access config, output callbacks, etc.
+  const { config, onOutput } = context;
 
-export function MyCommand({ args }: Props): React.ReactElement {
-  return (
-    <Box>
-      <Text>Command output...</Text>
-    </Box>
-  );
-}
+  // Do command work
+  onOutput('Command output...', 'info');
 
-export const command = {
-  name: '<name>',
-  description: 'Command description',
-  usage: '/<name> [args]',
-  component: MyCommand,
+  return {
+    success: true,
+    message: 'Command completed',
+  };
+};
+
+export const myCommand: CommandDefinition = {
+  aliases: ['mycommand', 'mc'] as const,
+  description: 'Brief description for help',
+  handler,
+  usage: '/mycommand [args]',
 };
 ```
 
-2. **Register in CLI** (`src/cli.tsx`):
+2. **Register in index** (`src/cli/commands/index.ts`):
 
 ```typescript
-import { command as myCommand } from './commands/<name>.js';
+import { myCommand } from './mycommand.js';
 
-const commands = [
+export const COMMANDS: CommandDefinition[] = [
   // ... existing commands
   myCommand,
 ];
+```
+
+### CommandResult Options
+
+```typescript
+interface CommandResult {
+  success: boolean;
+  message?: string;
+  shouldExit?: boolean;           // Exit shell after command
+  shouldClear?: boolean;          // Clear screen
+  shouldClearHistory?: boolean;   // Clear conversation
+  shouldSaveSession?: boolean;    // Save current session
+  sessionName?: string;           // Session name for save
+  sessionToResume?: string;       // Session ID to resume
+  data?: unknown;                 // Additional data
+}
 ```
 
 ---
@@ -275,10 +274,10 @@ const commands = [
 - [ ] Tests covering success and error cases
 
 ### Skill
-- [ ] Valid SKILL.md manifest
-- [ ] Toolsets export array of tools
-- [ ] Triggers defined for progressive disclosure
-- [ ] Instructions clear for LLM use
+- [ ] Valid SKILL.md manifest (name, description required)
+- [ ] Skill name matches directory name
+- [ ] Name follows pattern: lowercase alphanumeric + hyphens
+- [ ] Instructions clear for LLM use in markdown body
 
 ---
 
