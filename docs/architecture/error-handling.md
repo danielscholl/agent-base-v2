@@ -9,14 +9,14 @@ This document describes the error handling patterns, retry strategies, and grace
 
 ## Overview
 
-The framework follows a **structured response** pattern using discriminated unions:
+The framework follows a **structured response** pattern:
 
 - **Tools** return `Tool.Result` (always succeeds, errors in output field)
 - **Model Layer** returns `ModelResponse<T>` discriminated union
-- **Agent Layer** returns `AgentResponse<T>` discriminated union and emits errors via callbacks
-- **CLI Layer** handles responses and displays user-friendly messages
+- **Agent Layer** returns `Promise<string>` and emits structured errors via `onError` callback
+- **CLI Layer** subscribes to callbacks and displays user-friendly messages
 
-**Key Principle:** Public boundaries use typed response objects, not thrown exceptions.
+**Key Principle:** Internal layers use typed response objects; Agent.run() returns a string result and emits errors via callbacks for UI handling.
 
 ---
 
@@ -107,19 +107,22 @@ if (result.success) {
 
 ### Agent Layer
 
-**Strategy:** Return `AgentResponse<T>` and emit errors via callbacks.
+**Strategy:** Return `Promise<string>` and emit errors via `onError` callback.
 
 ```typescript
-// Agent.run() emits errors via callback
-callbacks.onError?.(spanContext, {
-  error: 'RATE_LIMITED',
-  message: 'Rate limit exceeded',
-  metadata: { provider: 'openai', retryAfter: 30 }
-});
+// Agent.run() returns a string and emits errors via callback
+const callbacks: AgentCallbacks = {
+  onError: (ctx, errorInfo) => {
+    // Handle error in UI
+    console.error(`${errorInfo.error}: ${errorInfo.message}`);
+  },
+};
 
-// Returns string result or error message
-const answer = await agent.run(query);
+const agent = new Agent({ config, callbacks });
+const answer = await agent.run(query);  // Returns Promise<string>
 ```
+
+**Note:** `AgentResponse<T>` and `AgentErrorResponse` types are defined in `src/errors/index.ts` for internal use and callback payloads, but `Agent.run()` returns a plain string.
 
 ### CLI Layer
 

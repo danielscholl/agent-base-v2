@@ -116,15 +116,33 @@ export const myTool = Tool.define<MySchema, MyMetadata>('<name>', {
 });
 ```
 
-2. **Register in index** (`src/tools/index.ts`):
+2. **Register the tool** (`src/tools/index.ts`):
 
 ```typescript
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { ToolRegistry } from './registry.js';
 import { myTool } from './<name>.js';
 
-registerBuiltinTools(TOOLS_DIR, [
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Add to toolPermissions map
+const toolPermissions: Record<string, ToolPermissions> = {
   // ... existing tools
-  { tool: myTool, permissions: { required: ['read'] } },
-]);
+  mytool: { required: ['read'] },
+};
+
+// Add to builtinTools array
+const builtinTools = [
+  // ... existing tools
+  { tool: myTool, permissions: toolPermissions.mytool },
+];
+
+// Registration happens in the existing loop:
+for (const { tool, permissions } of builtinTools) {
+  const descriptionPath = path.join(__dirname, `${tool.id}.txt`);
+  ToolRegistry.register(tool, { permissions, descriptionPath });
+}
 ```
 
 3. **Optional: Add external description** (`src/tools/<name>.txt`)

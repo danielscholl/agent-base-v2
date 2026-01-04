@@ -16,9 +16,9 @@ This document describes the key interfaces and contracts used throughout the age
 | `Tool.Context<M>` | Tools | Execution context with session info and abort |
 | `ToolResponse<T>` | Tools | Legacy success/error union (backward compat) |
 | `ModelResponse<T>` | Model | Structured success/error return (never throw) |
-| `ModelFactory` | Model | Creates LangChain model from config |
+| `ProviderFactory` | Model | Creates LangChain model from provider config |
 | `AppConfig` | Utils | Root configuration type (Zod-inferred) |
-| `TelemetryHelpers` | Telemetry | Span creation with GenAI conventions |
+| `TelemetryHelpers` | Telemetry | Access to OTel tracer/meter instances |
 
 ---
 

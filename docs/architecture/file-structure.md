@@ -3,7 +3,7 @@
 > **Status:** Current
 > **Source of truth:** Actual directory contents in `src/`
 
-This document describes the source code organization of the TypeScript agent framework.
+This document describes the source code organization of the TypeScript agent framework. This is a **curated key modules** view, not an exhaustive listing.
 
 ---
 
@@ -12,29 +12,45 @@ This document describes the source code organization of the TypeScript agent fra
 ```
 src/
 ├── index.tsx                 # Entry point, CLI bootstrap
+├── cli.tsx                   # Main CLI component (React/Ink)
+│
+├── agent/                    # Agent layer (orchestration)
+│   ├── agent.ts              # Core Agent class
+│   ├── callbacks.ts          # AgentCallbacks interface
+│   ├── types.ts              # Message, AgentOptions
+│   └── prompts.ts            # System prompt loading
+│
+├── model/                    # Model layer (LLM providers)
+│   ├── llm.ts                # LLMClient orchestrator
+│   ├── types.ts              # ModelResponse, ModelErrorCode
+│   ├── base.ts               # Response helpers, error mapping
+│   ├── registry.ts           # Provider registry
+│   ├── retry.ts              # Exponential backoff
+│   └── providers/            # Provider implementations
+│       ├── openai.ts
+│       ├── anthropic.ts
+│       ├── azure-openai.ts
+│       ├── gemini.ts
+│       ├── github.ts
+│       ├── local.ts
+│       └── foundry.ts
 │
 ├── cli/                      # CLI layer
-│   ├── index.ts              # CLI exports
-│   ├── types.ts              # CLI types
 │   ├── callbacks.ts          # Callback implementations
 │   ├── cli-context.ts        # CLI context management
 │   ├── constants.ts          # CLI constants
-│   ├── version.ts            # Version info
-│   ├── input/                # Input handling
 │   └── commands/             # Slash command handlers
 │       ├── index.ts          # Command registry
 │       ├── types.ts          # CommandHandler, CommandResult
 │       ├── help.ts           # /help command
 │       ├── config.ts         # /config command
 │       ├── session.ts        # /session command
-│       ├── skills.ts         # /skills command
-│       ├── telemetry.ts      # /telemetry command
-│       ├── shell.ts          # Shell command handler
-│       ├── clear.ts          # /clear command
-│       └── exit.ts           # /exit command
+│       └── ...               # Other commands
 │
-├── runtime/                  # Runtime components
-│   └── ...                   # Agent runtime
+├── components/               # React/Ink UI components
+│   ├── App.tsx               # Main app component
+│   ├── InteractiveShell.tsx  # Interactive shell
+│   └── ...                   # Other components
 │
 ├── tools/
 │   ├── tool.ts               # Tool namespace, Tool.define()
@@ -94,15 +110,21 @@ src/
 
 ## Test Organization
 
-Tests are co-located with source files:
+Tests are co-located with source files in `__tests__` directories:
 
 ```
 src/
-├── cli/
+├── agent/
 │   └── __tests__/
-│       └── commands.test.ts
+│       └── agent.test.ts
+├── model/
+│   └── __tests__/
+│       └── providers.test.ts
+├── cli/
+│   └── commands/
+│       └── __tests__/
+│           └── handlers.test.ts
 ├── tools/
-│   ├── read.ts
 │   └── __tests__/
 │       └── read.test.ts
 ├── config/
@@ -112,7 +134,7 @@ src/
 
 **Shared resources:**
 - `tests/integration/` - Integration tests
-- `tests/fixtures/` - Shared test utilities
+- `tests/fixtures/` - Shared test utilities (mock responses, factories)
 
 ---
 
@@ -157,7 +179,9 @@ project-root/
 | File | Purpose |
 |------|---------|
 | `src/index.tsx` | CLI entry point |
-| `src/runtime/` | Agent runtime |
+| `src/cli.tsx` | Main CLI component |
+| `src/agent/agent.ts` | Core Agent class |
+| `src/model/llm.ts` | LLMClient orchestrator |
 | `src/tools/registry.ts` | Tool management |
 | `src/config/manager.ts` | Config loading |
 | `src/cli/commands/index.ts` | Command registry |
@@ -169,6 +193,8 @@ project-root/
 ```
 Public API (index.ts exports)
 │
+├── src/agent/index.ts        # Agent, AgentCallbacks
+├── src/model/index.ts        # LLMClient, ModelResponse
 ├── src/tools/index.ts        # Tool, ToolRegistry
 ├── src/config/index.ts       # ConfigManager, AppConfig
 ├── src/telemetry/index.ts    # TelemetryHelpers

@@ -65,7 +65,7 @@ User → CLI Layer (React/Ink) → Agent Layer → Tools Layer + Model Layer →
 | **Dependency Injection** | All components receive deps via constructor |
 | **Callbacks over Events** | Typed callbacks replace Python's EventBus |
 | **Structured Responses** | Tools return `Tool.Result`, never throw |
-| **Validation at Boundaries** | Zod validates config, LLM output, tool input |
+| **Validation at Boundaries** | Zod validates config and tool input |
 | **Layer Isolation** | Only Agent calls Model; CLI never imports Agent internals |
 | **Graceful Degradation** | Failures logged, agent continues |
 

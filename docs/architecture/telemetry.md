@@ -44,11 +44,13 @@ agent.run (root span)
 ```
 AgentCallbacks
      │
-     ├─► onLLMStart   ──► startLLMSpan()
-     ├─► onLLMEnd     ──► recordTokenUsage(), span.end()
-     ├─► onToolStart  ──► startToolSpan()
-     └─► onToolEnd    ──► recordToolResult(), span.end()
+     ├─► onLLMStart   ──► startLLMSpan(options)
+     ├─► onLLMEnd     ──► endLLMSpan(span, { inputTokens, outputTokens })
+     ├─► onToolStart  ──► startToolSpan(options)
+     └─► onToolEnd    ──► endToolSpan(span, { success })
 ```
+
+**Source of truth:** [`src/telemetry/spans.ts`](../../src/telemetry/spans.ts)
 
 ---
 

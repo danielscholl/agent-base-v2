@@ -140,14 +140,20 @@ The `getTier1Context()` method generates an `<available_skills>` XML block:
 
 ```xml
 <available_skills>
-  <skill name="my-skill">
-    Brief description of what this skill does
-  </skill>
-  <skill name="another-skill">
-    Another skill description
-  </skill>
+<skill>
+<name>my-skill</name>
+<description>Brief description of what this skill does</description>
+<location>/path/to/my-skill/SKILL.md</location>
+</skill>
+<skill>
+<name>another-skill</name>
+<description>Another skill description</description>
+<location>/path/to/another-skill/SKILL.md</location>
+</skill>
 </available_skills>
 ```
+
+**Note:** Each `<skill>` element contains nested `<name>`, `<description>`, and `<location>` elements.
 
 ---
 
