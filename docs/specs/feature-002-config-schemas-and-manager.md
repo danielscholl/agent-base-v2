@@ -278,7 +278,7 @@ Implement the ConfigManager class with:
 
 - Empty config file (should use defaults)
 - Missing config file (should use defaults, no error)
-- Invalid JSON (should return validation error)
+- Invalid YAML (should return validation error)
 - Partial config (should merge with defaults)
 - Environment variables with invalid values (should use defaults)
 - Config file with unknown fields (should be stripped on save)

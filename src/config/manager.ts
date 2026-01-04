@@ -7,7 +7,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
 
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { parse as parseYaml, stringify as stringifyYaml, YAMLParseError } from 'yaml';
 
 import { CONFIG_DIR_NAME, CONFIG_FILE_NAME, CONFIG_FILE_PERMISSIONS } from './constants.js';
 import { ProcessEnvReader, readEnvConfig, getEnvModel, type IEnvReader } from './env.js';
@@ -217,7 +217,7 @@ export class ConfigManager {
       const content = await this.fileSystem.readFile(filePath);
       return parseYaml(content) as Partial<AppConfig>;
     } catch (error) {
-      if (error instanceof Error && error.constructor.name === 'YAMLParseError') {
+      if (error instanceof YAMLParseError) {
         throw new ConfigError(`Invalid YAML in config file: ${filePath}`, 'PARSE_ERROR', filePath);
       }
       throw error;
@@ -586,7 +586,7 @@ export async function loadConfigFromFiles(
         const userConfig = parseYaml(content) as Partial<AppConfig>;
         config = deepMerge(config, userConfig);
       } catch (error) {
-        if (error instanceof Error && error.constructor.name === 'YAMLParseError') {
+        if (error instanceof YAMLParseError) {
           throw new ConfigError(
             `Invalid YAML in config file: ${userConfigPath}`,
             'PARSE_ERROR',
@@ -605,7 +605,7 @@ export async function loadConfigFromFiles(
         const projectConfig = parseYaml(content) as Partial<AppConfig>;
         config = deepMerge(config, projectConfig);
       } catch (error) {
-        if (error instanceof Error && error.constructor.name === 'YAMLParseError') {
+        if (error instanceof YAMLParseError) {
           throw new ConfigError(
             `Invalid YAML in config file: ${projectConfigPath}`,
             'PARSE_ERROR',
