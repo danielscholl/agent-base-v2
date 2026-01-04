@@ -21,7 +21,7 @@ jest.unstable_mockModule('../../config/manager.js', () => ({
       return Promise.resolve({ success: true, message: 'Saved' });
     }
     getUserConfigPath(): string {
-      return '/home/user/.agent/settings.json';
+      return '/home/user/.agent/config.yaml';
     }
   },
   // eslint-disable-next-line @typescript-eslint/no-extraneous-class

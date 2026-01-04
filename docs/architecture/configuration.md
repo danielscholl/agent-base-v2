@@ -21,8 +21,8 @@ The config directory is `.agent/` (matches Python for migration compatibility):
 
 | Location | Purpose | Scope |
 |----------|---------|-------|
-| `./.agent/settings.json` | Project config | Committable, team-shared |
-| `~/.agent/settings.json` | User config | Personal, never committed |
+| `./.agent/config.yaml` | Project config | Committable, team-shared |
+| `~/.agent/config.yaml` | User config | Personal, never committed |
 | `~/.agent/sessions/` | Session storage | Persisted conversations |
 | `~/.agent/context/` | Context storage | Cleared per session |
 | `~/.agent/skills/` | User skills | Installed plugins |
@@ -37,10 +37,10 @@ Priority from highest to lowest:
 1. Environment Variables     ─► OPENAI_API_KEY, AGENT_MODEL, etc.
          │
          ▼
-2. Project Config            ─► ./.agent/settings.json
+2. Project Config            ─► ./.agent/config.yaml
          │                       (committable, team-shared)
          ▼
-3. User Config               ─► ~/.agent/settings.json
+3. User Config               ─► ~/.agent/config.yaml
          │                       (personal, never committed)
          ▼
 4. Schema Defaults           ─► Zod schema .default() values
@@ -178,13 +178,13 @@ ConfigManager.load()
          ↓
 ┌─────────────────────────────────────┐
 │ 2. Load user config                 │
-│    (~/.agent/settings.json)         │
+│    (~/.agent/config.yaml)         │
 │    Deep merge with defaults         │
 └─────────────────────────────────────┘
          ↓
 ┌─────────────────────────────────────┐
 │ 3. Load project config              │
-│    (./.agent/settings.json)         │
+│    (./.agent/config.yaml)         │
 │    Deep merge with user config      │
 └─────────────────────────────────────┘
          ↓

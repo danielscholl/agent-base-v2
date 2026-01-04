@@ -11,115 +11,26 @@ cd agent-base-v2
 bun install
 
 # 2. Verify setup
-bun run typecheck
-bun run test
+bun run typecheck && bun run test
 
 # 3. Build
 bun run build
 ```
 
-## AI-Assisted Development
-
-This project is optimized for development with [Claude Code](https://claude.ai/code). We use structured workflows and tooling to streamline AI-assisted development.
-
-### Recommended Tools
-
-| Tool | Purpose | Link |
-|------|---------|------|
-| **Claude Code** | AI coding assistant | [claude.ai/code](https://claude.ai/code) |
-| **claude-sdlc** | SDLC workflow plugin for Claude Code | [github.com/danielscholl/claude-sdlc](https://github.com/danielscholl/claude-sdlc) |
-| **Archon** | Task management & knowledge base (MCP server) | [github.com/coleam00/Archon](https://github.com/coleam00/Archon) |
-
-### Claude SDLC Workflows
-
-Install the [claude-sdlc](https://github.com/danielscholl/claude-sdlc) plugin to access structured development commands:
-
-```bash
-# Create feature specifications
-/sdlc:feature <description>
-
-# Implement from a spec file
-/sdlc:implement docs/specs/feature-xxx.md
-
-# Create bug fix specifications
-/sdlc:bug <description>
-
-# Maintenance tasks
-/sdlc:chore <description>
-```
-
-These workflows generate detailed specs in `docs/specs/`, integrate with Archon for task tracking, and follow the patterns defined in [CLAUDE.md](CLAUDE.md).
-
-### Archon Integration
-
-When using AI coding assistants (Claude Code, Cursor, Windsurf, etc.) on this project, we recommend [Archon](https://github.com/coleam00/Archon) as a backing system for task management and knowledge sharing.
-
-**What is Archon?**
-
-Archon is an MCP (Model Context Protocol) server that provides:
-- **Task Management**: Track project tasks with status (todo → doing → review → done)
-- **Knowledge Base**: RAG-powered documentation search for your AI assistant
-- **Project Organization**: Manage features, documents, and version history
-
-**Setup:**
-
-1. Clone and run Archon via Docker (see [Archon README](https://github.com/coleam00/Archon#readme))
-2. Configure your AI coding assistant to connect to the Archon MCP server
-3. Create a project for your feature work
-
-**Usage with this project:**
-
-```bash
-# AI assistant commands (via MCP tools)
-find_tasks(filter_by="status", filter_value="todo")  # Get pending tasks
-manage_task("update", task_id="...", status="doing") # Start working
-manage_task("update", task_id="...", status="done")  # Complete task
-```
-
-See [CLAUDE.md](CLAUDE.md) for detailed Archon workflow integration.
-
-## Git Hooks (Automatic Quality Gates)
-
-Git hooks are automatically installed when you run `bun install` (via Husky).
-
-### Pre-commit Hook
-
-Runs `lint-staged` on staged files before each commit:
-
-| File Type | Checks |
-|-----------|--------|
-| `*.ts`, `*.tsx` | Prettier format + ESLint fix |
-| `*.json`, `*.md` | Prettier format |
-
-If any check fails, the commit is blocked until you fix the issues.
-
-### Commit Message Hook
-
-Enforces commit message standards:
-- Blocks commits with `Co-Authored-By: Claude` in the footer
-- Use `aipr` tool to generate commit messages (see Commit Convention below)
-
-### Bypassing Hooks (Not Recommended)
-
-```bash
-# Skip pre-commit checks (emergency only)
-git commit --no-verify -m "message"
-```
-
 ## Development Workflow
 
-### 1. Run Quality Checks Before Changes
+### 1. Run Tests Before Changes
 
 ```bash
 # Run all quality checks (CI equivalent)
-bun run typecheck && bun run lint && bun run test && bun run build
+bun run typecheck && bun run lint && bun run test
 ```
 
 ### 2. Make Your Changes
 
 Follow the patterns in existing code and see [CLAUDE.md](CLAUDE.md) for architectural guidelines.
 
-### 3. Run Quality Checks After Changes
+### 3. Run Tests After Changes
 
 ```bash
 # TypeScript type checking
@@ -155,10 +66,8 @@ Tests are co-located with source files in `__tests__` directories:
 src/
 ├── config/
 │   ├── manager.ts
-│   ├── schema.ts
 │   └── __tests__/
-│       ├── manager.test.ts
-│       └── schema.test.ts
+│       └── manager.test.ts
 ```
 
 Integration tests and shared fixtures are in `tests/`:
@@ -184,9 +93,6 @@ bun run test src/config
 # Run single test file
 bun run test src/config/__tests__/manager.test.ts
 
-# Run tests matching pattern
-bun run test --testNamePattern="should load"
-
 # Watch mode for development
 bun run test --watch
 ```
@@ -196,25 +102,6 @@ bun run test --watch
 Use dependency injection for testability:
 
 ```typescript
-// Create mock implementations
-class MockFileSystem implements IFileSystem {
-  private files: Map<string, string> = new Map();
-
-  async readFile(path: string): Promise<string> {
-    const content = this.files.get(path);
-    if (content === undefined) {
-      throw new Error(`ENOENT: ${path}`);
-    }
-    return content;
-  }
-
-  // Test helper
-  setFile(path: string, content: string): void {
-    this.files.set(path, content);
-  }
-}
-
-// Use in tests
 describe('ConfigManager', () => {
   let mockFs: MockFileSystem;
   let manager: ConfigManager;
@@ -241,14 +128,11 @@ describe('ConfigManager', () => {
 ### Coverage Requirements
 
 - **Minimum:** 85% overall coverage (enforced by CI)
-- **View report:** `bun run test --coverage` displays coverage table
-- **HTML report:** Configure Jest for `html` reporter if needed
+- **View report:** `bun run test --coverage`
 
 ## Code Style
 
-### TypeScript
-
-**Strict mode required** - no `any` types without explicit justification:
+**Type hints required** for all public APIs:
 
 ```typescript
 // GOOD - Explicit types
@@ -265,75 +149,38 @@ function processConfig(config) {  // Error: implicit any
 **Use Zod for validation with inferred types:**
 
 ```typescript
-// Define schema
 export const MyConfigSchema = z.object({
   name: z.string(),
   enabled: z.boolean().default(false),
 });
 
-// Infer type from schema (don't duplicate)
 export type MyConfig = z.infer<typeof MyConfigSchema>;
 ```
 
-### Structured Responses
-
-All tools return structured responses:
+**Structured responses** for all tools:
 
 ```typescript
 // Success
-return {
-  success: true,
-  result: data,
-  message: 'Operation completed'
-};
+return { success: true, result: data, message: 'Operation completed' };
 
 // Error
-return {
-  success: false,
-  error: 'INVALID_INPUT',
-  message: 'Input validation failed'
-};
+return { success: false, error: 'INVALID_INPUT', message: 'Validation failed' };
 ```
 
-### Tool Docstrings
-
-Keep tool descriptions concise for LLM consumption:
+**Tool docstrings** should be concise for LLM consumption:
 
 ```typescript
 // GOOD - Simple tool (10-20 tokens)
-/**
- * Say hello to someone. Returns greeting message.
- */
+/** Say hello to someone. Returns greeting message. */
 
 // GOOD - Complex tool (25-40 tokens)
-/**
- * Read config file with hierarchical merging.
- * Sources: defaults < user < project < env.
- */
+/** Read config file with hierarchical merging. Sources: defaults < user < project < env. */
 
 // BAD - Verbose (100+ tokens)
-/**
- * Read configuration file from the filesystem.
- *
- * This function reads a JSON configuration file and parses it
- * into the appropriate configuration object. It supports...
- * [50 more lines]
- */
+/** Read configuration file from the filesystem... [50 more lines] */
 ```
 
-**What to include:**
-- What the tool does (first sentence)
-- Critical constraints
-- Key defaults
-
-**What to exclude:**
-- Code examples
-- Complete response format structures
-- Multi-line Args/Returns sections
-
-### Line Length
-
-100 characters (enforced by Prettier)
+**Line length:** 100 characters (enforced by Prettier)
 
 ## Commit Convention
 
@@ -343,47 +190,11 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 <type>(<scope>): <description>
 ```
 
-**Types:**
-- `feat` - New feature
-- `fix` - Bug fix
-- `docs` - Documentation
-- `refactor` - Code refactoring
-- `test` - Tests
-- `chore` - Maintenance
-- `ci` - CI/CD changes
+**Types:** `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`
 
 **Scopes:** `agent`, `tools`, `skills`, `config`, `cli`, `model`, `utils`, `tests`
 
-### Using `aipr` for Commit Messages (Recommended)
-
-This project uses `aipr` (AI Pull Request) to generate commit messages and PR descriptions.
-
-**Install from PyPI:**
-
-```bash
-# Install globally with pip
-pip install aipr
-
-# Or with pipx (recommended for CLI tools)
-pipx install aipr
-```
-
-**PyPI:** https://pypi.org/project/aipr/
-
-**Usage:**
-
-```bash
-# Generate commit message from staged changes
-git commit -m "$(aipr commit -s)"
-
-# Generate PR description
-gh pr create --title "feat: add new feature" --body "$(aipr pr -s)"
-```
-
-The commit-msg hook blocks manually-added `Co-Authored-By: Claude` footers to encourage using `aipr`.
-
-### Manual Commit Examples
-
+**Examples:**
 ```bash
 git commit -m "feat(config): add Azure Foundry provider support"
 git commit -m "fix(agent): handle empty tool list gracefully"
@@ -394,19 +205,15 @@ git commit -m "test(config): add env validation tests"
 
 1. **Create branch:** `git checkout -b feat/your-feature`
 2. **Make changes** following code style
-3. **Run quality checks:**
-   ```bash
-   bun run typecheck && bun run lint && bun run test && bun run build
-   ```
+3. **Run quality checks** (see above)
 4. **Commit** using conventional format
 5. **Push:** `git push origin feat/your-feature`
 6. **Create PR** with clear description
 
 **PR Requirements:**
 - All CI checks pass (typecheck, lint, test, build)
-- Coverage ≥ 85%
+- Coverage >= 85%
 - Type annotations on all public functions
-- JSDoc for public classes and complex functions
 - Conventional commit format
 
 ## Architecture Decisions
@@ -425,31 +232,20 @@ For significant architectural changes, document decisions in `docs/decisions/`:
 # 1. Copy template
 cp docs/decisions/adr-template.md docs/decisions/NNNN-your-decision.md
 
-# 2. Fill in sections:
-#    - Context and Problem Statement
-#    - Decision Drivers
-#    - Considered Options
-#    - Decision Outcome
-#    - Consequences
-
-# 3. Commit with decision
+# 2. Fill in sections and commit
 git commit -m "docs(adr): add ADR for [decision topic]"
 ```
 
 See existing ADRs in `docs/decisions/` for examples.
 
-## Tech Stack Reference
+## Releases
 
-| Component | Technology | Notes |
-|-----------|------------|-------|
-| Language | TypeScript 5.x | Strict mode required |
-| Runtime | Bun 1.3.x | Development and runtime (Node 24 APIs) |
-| UI Framework | React 19 + Ink 6 | Terminal UI rendering |
-| LLM Integration | LangChain.js 1.x | Multi-provider abstraction |
-| Schema Validation | Zod 4.x | Runtime validation + type inference |
-| Observability | OpenTelemetry | OTLP export |
-| Testing | Jest + ts-jest | Run via `bun run test` |
-| Linting | ESLint + Prettier | Consistent code style |
+Releases use [release-please](https://github.com/googleapis/release-please):
+- `feat:` -> minor version bump
+- `fix:` -> patch version bump
+- `BREAKING CHANGE:` -> major version bump
+
+Merging the release PR automatically creates a GitHub release.
 
 ## License
 

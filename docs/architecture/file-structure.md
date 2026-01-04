@@ -145,13 +145,13 @@ project-root/
 
 ```
 ~/.agent/
-├── settings.json             # User configuration
+├── config.yaml             # User configuration
 ├── sessions/                 # Persisted sessions
 ├── context/                  # Tool output cache
 └── skills/                   # User plugins
 
 ./.agent/
-├── settings.json             # Project configuration
+├── config.yaml             # Project configuration
 └── skills/                   # Project-specific skills
 ```
 

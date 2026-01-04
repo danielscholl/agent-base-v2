@@ -13,7 +13,7 @@ jest.unstable_mockModule('../../../config/manager.js', () => ({
   loadConfigFromFiles: jest.fn(),
   ConfigManager: jest.fn().mockImplementation(() => ({
     save: jest.fn().mockResolvedValue({ success: true, message: 'Saved' }),
-    getUserConfigPath: jest.fn().mockReturnValue('/home/user/.agent/settings.json'),
+    getUserConfigPath: jest.fn().mockReturnValue('/home/user/.agent/config.yaml'),
   })),
   NodeFileSystem: jest.fn().mockImplementation(() => ({})),
   deepMerge: jest.fn((target: Record<string, unknown>, source: Record<string, unknown>) => ({
@@ -363,9 +363,9 @@ describe('config command handlers', () => {
       const result = await configEditHandler('', context);
 
       // Should output the config file path
-      expect(
-        context.outputs.some((o) => o.content.includes('/home/user/.agent/settings.json'))
-      ).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('/home/user/.agent/config.yaml'))).toBe(
+        true
+      );
       expect(result.success).toBe(true);
     });
   });
@@ -500,7 +500,7 @@ describe('config command handlers', () => {
           manager.ConfigManager as jest.MockedClass<typeof manager.ConfigManager>
         ).mockImplementation(() => ({
           save: mockSave,
-          getUserConfigPath: jest.fn().mockReturnValue('/home/user/.agent/settings.json'),
+          getUserConfigPath: jest.fn().mockReturnValue('/home/user/.agent/config.yaml'),
         }));
 
         const { configProviderHandler } = await import('../config.js');
@@ -547,7 +547,7 @@ describe('config command handlers', () => {
           manager.ConfigManager as jest.MockedClass<typeof manager.ConfigManager>
         ).mockImplementation(() => ({
           save: mockSave,
-          getUserConfigPath: jest.fn().mockReturnValue('/home/user/.agent/settings.json'),
+          getUserConfigPath: jest.fn().mockReturnValue('/home/user/.agent/config.yaml'),
         }));
 
         const { configProviderHandler } = await import('../config.js');
@@ -741,7 +741,7 @@ describe('config command handlers', () => {
           manager.ConfigManager as jest.MockedClass<typeof manager.ConfigManager>
         ).mockImplementation(() => ({
           save: mockSave,
-          getUserConfigPath: jest.fn().mockReturnValue('/home/user/.agent/settings.json'),
+          getUserConfigPath: jest.fn().mockReturnValue('/home/user/.agent/config.yaml'),
         }));
 
         const { configProviderHandler } = await import('../config.js');

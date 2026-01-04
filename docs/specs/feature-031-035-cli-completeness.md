@@ -26,7 +26,7 @@ The current TypeScript agent framework lacks:
 - Skill management commands (no way to inspect or validate skills from CLI)
 - Complete help documentation (current `/help` is minimal)
 
-Users must manually create and edit `~/.agent/settings.json` with no validation feedback, making initial setup error-prone and frustrating.
+Users must manually create and edit `~/.agent/config.yaml` with no validation feedback, making initial setup error-prone and frustrating.
 
 ## Solution Statement
 
@@ -516,7 +516,7 @@ Update `/help` with comprehensive documentation.
 
     context.onOutput('✓ Configuration saved successfully!', 'success');
     context.onOutput(`  Provider: ${selectedProvider.displayName}`, 'info');
-    context.onOutput('  Location: ~/.agent/settings.json\n', 'info');
+    context.onOutput('  Location: ~/.agent/config.yaml\n', 'info');
     context.onOutput('Run /config show to view your configuration', 'info');
 
     return { success: true, message: 'Configuration initialized' };
@@ -1051,8 +1051,8 @@ For MVP, provider wizards validate format only (e.g., API key starts with expect
 
 ### Config File Locations
 
-- User config: `~/.agent/settings.json` (created by /config init)
-- Project config: `./.agent/settings.json` (optional, team-shared)
+- User config: `~/.agent/config.yaml` (created by /config init)
+- Project config: `./.agent/config.yaml` (optional, team-shared)
 - Environment variables override both (highest priority)
 
 ### Skill Discovery Order

@@ -133,7 +133,7 @@ execute: async (input, config) => {
 
 ## Permission Configuration
 
-### Project Settings (`./.agent/settings.json`)
+### Project Settings (`./.agent/config.yaml`)
 
 ```json
 {
@@ -145,7 +145,7 @@ execute: async (input, config) => {
 }
 ```
 
-### User Settings (`~/.agent/settings.json`)
+### User Settings (`~/.agent/config.yaml`)
 
 ```json
 {

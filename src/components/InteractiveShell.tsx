@@ -361,7 +361,7 @@ export function InteractiveShell({
     void loadConfiguration();
   }, [resumeSession]);
 
-  // Run config init when setup is needed (no settings.json)
+  // Run config init when setup is needed (no config.yaml)
   useEffect(() => {
     if (!state.needsSetup || state.runningConfigInit) return;
 
@@ -1276,7 +1276,7 @@ export function InteractiveShell({
     return <Spinner message="Loading configuration..." />;
   }
 
-  // Render config init flow if no settings.json exists
+  // Render config init flow if no config.yaml exists
   if (state.needsSetup) {
     return (
       <Box flexDirection="column" padding={1}>

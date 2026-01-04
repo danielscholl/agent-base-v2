@@ -11,7 +11,7 @@ consulted: Claude Code architecture review
 ## Context and Problem Statement
 
 The agent framework needs runtime validation for:
-- Configuration files (settings.json)
+- Configuration files (config.yaml)
 - LLM structured outputs
 - Tool input parameters
 - Skill manifests

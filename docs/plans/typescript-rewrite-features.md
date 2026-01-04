@@ -14,8 +14,8 @@ Create a fresh `agent` project using Bun, enable strict TypeScript, set up modul
 ### Feature 2: Port configuration schemas and config manager
 Recreate `agent-base/src/agent/config/schema.py` as Zod schemas with inferred TS types, including agent settings, providers, memory, skills, and paths. Implement a config manager that:
 - Loads defaults from Zod schemas
-- Merges project-level config (`./.agent/settings.json` - committable)
-- Merges user-level config (`~/.agent/settings.json` - personal)
+- Merges project-level config (`./.agent/config.yaml` - committable)
+- Merges user-level config (`~/.agent/config.yaml` - personal)
 - Applies environment variable overrides (highest priority)
 - Validates on load/save and writes to disk in a stable JSON format
 - Uses camelCase for all config keys (TypeScript convention)
@@ -288,7 +288,7 @@ Set up test infrastructure with co-located unit tests (`src/**/__tests__/`) for 
 Write integration tests that exercise the full agent flow: prompt → LLM → tool call → response. Use mocked providers to ensure deterministic results. Include telemetry span assertions.
 
 ### Feature 38: Build Python → TypeScript config migration tool
-Write a converter that reads existing agent-base config (`~/.agent/settings.json`), maps fields to the new Zod schema, and writes a TS-compatible config file with clear warnings on unsupported options. Provide dry-run mode.
+Write a converter that reads existing agent-base config (`~/.agent/config.yaml`), maps fields to the new Zod schema, and writes a TS-compatible config file with clear warnings on unsupported options. Provide dry-run mode.
 
 ### Feature 39: Implement system prompt template system
 Finalize `agent/prompts.ts` with three-tier loading (env → user → package), placeholder replacement, and YAML front matter stripping. Document customization options.

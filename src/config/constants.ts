@@ -5,7 +5,7 @@
 
 // Config file and directory names
 export const CONFIG_DIR_NAME = '.agent' as const;
-export const CONFIG_FILE_NAME = 'settings.json' as const;
+export const CONFIG_FILE_NAME = 'config.yaml' as const;
 export const CONFIG_VERSION = '1.0' as const;
 
 // Provider names

@@ -199,8 +199,8 @@ Implement the ConfigManager class with:
 - **Description**: Add file I/O operations to ConfigManager
 - **Files to modify**: Update `src/config/manager.ts`
 - **Details**:
-  - Read JSON from `~/.agent/settings.json` (user config)
-  - Read JSON from `./.agent/settings.json` (project config)
+  - Read JSON from `~/.agent/config.yaml` (user config)
+  - Read JSON from `./.agent/config.yaml` (project config)
   - Write minimal JSON (only enabled providers, non-null values)
   - Set restrictive permissions (0o600) on POSIX for security
   - Create parent directories if missing
