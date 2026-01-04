@@ -53,7 +53,7 @@ interface ReadMetadata extends Tool.Metadata {
 }
 
 // Define the tool
-export const readTool = Tool.define<ReadSchema, ReadMetadata>('read', {
+export const readTool = Tool.define('read', {
   description: 'Read file contents with line numbers',
   parameters: z.object({
     path: z.string().describe('Absolute file path to read'),
@@ -109,7 +109,7 @@ interface FileMetadata extends Tool.Metadata {
   path: string;
 }
 
-export const readFileTool = Tool.define<ReadSchema, FileMetadata>('read_file', {
+export const readFileTool = Tool.define('read_file', {
   description: 'Read contents of a file',
   parameters: z.object({
     path: z.string().describe('File path to read'),
@@ -180,7 +180,7 @@ interface WriteMetadata extends Tool.Metadata {
   bytes: number;
 }
 
-export const writeFileTool = Tool.define<WriteSchema, WriteMetadata>('write_file', {
+export const writeFileTool = Tool.define('write_file', {
   description: 'Write content to a file (requires write permission)',
   parameters: z.object({
     path: z.string().describe('File path to write'),
@@ -260,7 +260,7 @@ interface SearchMetadata extends Tool.Metadata {
   totalMatches: number;
 }
 
-export const searchCodeTool = Tool.define<SearchSchema, SearchMetadata>('search_code', {
+export const searchCodeTool = Tool.define('search_code', {
   description: 'Search codebase with regex pattern',
   parameters: z.object({
     query: z.string().describe('Regex pattern to search'),

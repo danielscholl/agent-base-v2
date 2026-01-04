@@ -61,8 +61,8 @@ function assertDefined<T>(value: T | undefined | null, name = 'value'): asserts 
 /**
  * Helper to convert Tool.Info to StructuredToolInterface for testing.
  */
-function toolToLangChain(info: Tool.Info): StructuredToolInterface {
-  const initialized = info.init();
+async function toolToLangChain(info: Tool.Info): Promise<StructuredToolInterface> {
+  const initialized = await info.init();
   return new DynamicStructuredTool({
     name: info.id,
     description: initialized.description,
@@ -70,7 +70,7 @@ function toolToLangChain(info: Tool.Info): StructuredToolInterface {
     func: async (input) => {
       const ctx = Tool.createNoopContext();
       const result = await initialized.execute(input, ctx);
-      return `${String(result.title)}\n\n${String(result.output)}`;
+      return `${result.title}\n\n${result.output}`;
     },
   });
 }
@@ -206,7 +206,7 @@ describe('Telemetry Integration', () => {
       const agent = new Agent({
         config,
         callbacks: callbacks as unknown as AgentCallbacks,
-        tools: [toolToLangChain(greetingTool)],
+        tools: [await toolToLangChain(greetingTool)],
         systemPrompt: 'Test',
       });
 
@@ -256,7 +256,7 @@ describe('Telemetry Integration', () => {
       const agent = new Agent({
         config,
         callbacks: callbacks as unknown as AgentCallbacks,
-        tools: [toolToLangChain(greetingTool)],
+        tools: [await toolToLangChain(greetingTool)],
         systemPrompt: 'Test',
       });
 
@@ -372,7 +372,7 @@ describe('Telemetry Integration', () => {
       const agent = new Agent({
         config,
         callbacks: callbacks as unknown as AgentCallbacks,
-        tools: [toolToLangChain(greetingTool)],
+        tools: [await toolToLangChain(greetingTool)],
         systemPrompt: 'Test',
       });
 
@@ -426,7 +426,7 @@ describe('Telemetry Integration', () => {
       const agent = new Agent({
         config,
         callbacks: callbacks as unknown as AgentCallbacks,
-        tools: [toolToLangChain(failingTool)],
+        tools: [await toolToLangChain(failingTool)],
         systemPrompt: 'Test',
       });
 
@@ -580,7 +580,7 @@ describe('Telemetry Integration', () => {
       const agent = new Agent({
         config,
         callbacks: callbacks as unknown as AgentCallbacks,
-        tools: [toolToLangChain(greetingTool)],
+        tools: [await toolToLangChain(greetingTool)],
         systemPrompt: 'Test',
       });
 
