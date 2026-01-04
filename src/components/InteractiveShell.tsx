@@ -27,7 +27,7 @@ import { ErrorDisplay } from './ErrorDisplay.js';
 import { AnswerBox } from './AnswerBox.js';
 import { ExecutionStatus } from './ExecutionStatus.js';
 import { PromptDivider } from './PromptDivider.js';
-import type { ToolNode } from './ExecutionStatus.js';
+import type { ToolNode, ExecutionPhase } from './ExecutionStatus.js';
 import { initializeTelemetry } from '../telemetry/index.js';
 import type { InteractiveShellProps, ShellMessage } from '../cli/types.js';
 
@@ -124,6 +124,18 @@ interface PromptState {
 }
 
 /**
+ * Phase tracking state for execution visualization.
+ */
+interface PhaseState {
+  /** Current phase number (1-indexed) */
+  currentPhase: number;
+  /** Start time of each phase (indexed by phase number - 1) */
+  phaseStartTimes: number[];
+  /** Message count for each phase (indexed by phase number - 1) */
+  phaseMessageCounts: number[];
+}
+
+/**
  * Shell state interface.
  */
 interface ShellState {
@@ -164,6 +176,10 @@ interface ShellState {
   } | null;
   /** Tool nodes from the last completed execution (for verbose mode) */
   lastExecutionToolNodes: ToolNode[];
+  /** Phases from the last completed execution (for verbose mode) */
+  lastExecutionPhases: ExecutionPhase[];
+  /** Phase tracking state */
+  phaseState: PhaseState;
 }
 
 /**
@@ -212,6 +228,12 @@ export function InteractiveShell({
     lastExecutionDuration: null,
     sessionSelection: null,
     lastExecutionToolNodes: [],
+    lastExecutionPhases: [],
+    phaseState: {
+      currentPhase: 0,
+      phaseStartTimes: [],
+      phaseMessageCounts: [],
+    },
   });
 
   // Load config on mount and handle session resume
@@ -732,61 +754,6 @@ export function InteractiveShell({
           return;
         }
 
-        // Handle /history command - show conversation history
-        if (result.shouldShowHistory === true) {
-          const msgHistory = messageHistoryRef.current;
-          if (msgHistory !== null && !msgHistory.isEmpty) {
-            const stored = msgHistory.getAllStored();
-            const historyOutput = stored
-              .map((m, i) => {
-                let rolePrefix = '';
-                if (m.role === 'user') {
-                  rolePrefix = '> ';
-                } else if (m.role === 'system') {
-                  rolePrefix = '! ';
-                } else if (m.role === 'assistant') {
-                  rolePrefix = '< ';
-                  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-                } else if (m.role === 'tool') {
-                  rolePrefix = '# ';
-                }
-                const prefix = `[${String(i + 1)}] ${rolePrefix}`;
-                return `${prefix}${m.content.slice(0, 200)}${m.content.length > 200 ? '...' : ''}`;
-              })
-              .join('\n');
-            // Update the last system message with history output
-            setState((s) => {
-              const lastMsgIndex = s.messages.length - 1;
-              const lastMsg = s.messages[lastMsgIndex];
-              if (lastMsg && lastMsg.role === 'system') {
-                const updatedMessages = [...s.messages];
-                updatedMessages[lastMsgIndex] = {
-                  ...lastMsg,
-                  content: `Conversation history (${String(stored.length)} messages):\n${historyOutput}`,
-                };
-                return { ...s, messages: updatedMessages };
-              }
-              return s;
-            });
-          } else {
-            // No history to show
-            setState((s) => {
-              const lastMsgIndex = s.messages.length - 1;
-              const lastMsg = s.messages[lastMsgIndex];
-              if (lastMsg && lastMsg.role === 'system') {
-                const updatedMessages = [...s.messages];
-                updatedMessages[lastMsgIndex] = {
-                  ...lastMsg,
-                  content: 'No conversation history yet.',
-                };
-                return { ...s, messages: updatedMessages };
-              }
-              return s;
-            });
-          }
-          return;
-        }
-
         // Handle /resume command - show interactive session selector
         if (result.shouldShowSessionSelector === true && result.availableSessions !== undefined) {
           // Remove the placeholder system message and enter session selection mode
@@ -829,6 +796,11 @@ export function InteractiveShell({
       messageCount: 0,
       executionStartTime: Date.now(),
       lastExecutionToolNodes: [], // Clear previous execution history
+      phaseState: {
+        currentPhase: 0,
+        phaseStartTimes: [],
+        phaseMessageCounts: [],
+      },
     }));
 
     // Synchronize filesystem writes config to env var before each run
@@ -857,6 +829,7 @@ export function InteractiveShell({
             // Calculate duration when execution completes
             const duration =
               s.executionStartTime !== null ? (Date.now() - s.executionStartTime) / 1000 : null;
+            const now = Date.now();
 
             // Save tool nodes for verbose mode display
             const toolNodes: ToolNode[] = s.completedTasks.map((task) => ({
@@ -865,7 +838,38 @@ export function InteractiveShell({
               status: task.success ? ('complete' as const) : ('error' as const),
               duration: task.duration >= 0 ? task.duration / 1000 : undefined,
               error: task.error,
+              phase: task.phase,
             }));
+
+            // Build completed phases for verbose mode display
+            const phases: ExecutionPhase[] = [];
+            for (let i = 0; i < s.phaseState.currentPhase; i++) {
+              const phaseNumber = i + 1;
+              const startTime = s.phaseState.phaseStartTimes[i] ?? now;
+              const nextPhaseStart = s.phaseState.phaseStartTimes[i + 1];
+              const phaseDuration =
+                nextPhaseStart !== undefined
+                  ? (nextPhaseStart - startTime) / 1000
+                  : (now - startTime) / 1000;
+
+              phases.push({
+                number: phaseNumber,
+                status: 'complete',
+                duration: phaseDuration,
+                messageCount: s.phaseState.phaseMessageCounts[i] ?? s.messageCount,
+                isThinking: false,
+                toolNodes: s.completedTasks
+                  .filter((t) => t.phase === phaseNumber)
+                  .map((task) => ({
+                    id: task.id,
+                    name: task.name,
+                    status: task.success ? ('complete' as const) : ('error' as const),
+                    duration: task.duration >= 0 ? task.duration / 1000 : undefined,
+                    error: task.error,
+                    phase: task.phase,
+                  })),
+              });
+            }
 
             if (s.error !== null || answer.startsWith('Error:')) {
               // Error already displayed via ErrorDisplay, don't duplicate
@@ -875,6 +879,7 @@ export function InteractiveShell({
                 isProcessing: false,
                 lastExecutionDuration: duration,
                 lastExecutionToolNodes: toolNodes,
+                lastExecutionPhases: phases,
               };
             }
             // State management design:
@@ -897,13 +902,17 @@ export function InteractiveShell({
               isProcessing: false,
               lastExecutionDuration: duration,
               lastExecutionToolNodes: toolNodes,
+              lastExecutionPhases: phases,
             };
           });
         },
         addActiveTask: (id, name, args) => {
           setState((s) => ({
             ...s,
-            activeTasks: [...s.activeTasks, { id, name, args, startTime: Date.now() }],
+            activeTasks: [
+              ...s.activeTasks,
+              { id, name, args, startTime: Date.now(), phase: s.phaseState.currentPhase },
+            ],
           }));
         },
         completeTask: (id, name, success, _duration, error) => {
@@ -911,7 +920,7 @@ export function InteractiveShell({
             // Match by unique id to handle concurrent calls of same tool
             const task = s.activeTasks.find((t) => t.id === id);
             if (task === undefined) {
-              // Task not found - use -1 to indicate unknown duration
+              // Task not found - use -1 to indicate unknown duration, current phase
               // Log debug message if verbose mode enabled
               if (process.env.AGENT_DEBUG !== undefined) {
                 process.stderr.write(
@@ -920,14 +929,20 @@ export function InteractiveShell({
               }
               return {
                 ...s,
-                completedTasks: [...s.completedTasks, { id, name, success, duration: -1, error }],
+                completedTasks: [
+                  ...s.completedTasks,
+                  { id, name, success, duration: -1, error, phase: s.phaseState.currentPhase },
+                ],
               };
             }
             const duration = Date.now() - task.startTime;
             return {
               ...s,
               activeTasks: s.activeTasks.filter((t) => t.id !== id),
-              completedTasks: [...s.completedTasks, { id, name, success, duration, error }],
+              completedTasks: [
+                ...s.completedTasks,
+                { id, name, success, duration, error, phase: task.phase },
+              ],
             };
           });
         },
@@ -944,8 +959,36 @@ export function InteractiveShell({
           }));
         },
         setMessageCount: (count) => {
-          setState((s) => ({ ...s, messageCount: count }));
+          setState((s) => {
+            // Also track message count for the current phase
+            const newPhaseMessageCounts = [...s.phaseState.phaseMessageCounts];
+            if (s.phaseState.currentPhase > 0) {
+              newPhaseMessageCounts[s.phaseState.currentPhase - 1] = count;
+            }
+            return {
+              ...s,
+              messageCount: count,
+              phaseState: {
+                ...s.phaseState,
+                phaseMessageCounts: newPhaseMessageCounts,
+              },
+            };
+          });
         },
+        incrementPhase: () => {
+          setState((s) => {
+            const newPhase = s.phaseState.currentPhase + 1;
+            return {
+              ...s,
+              phaseState: {
+                currentPhase: newPhase,
+                phaseStartTimes: [...s.phaseState.phaseStartTimes, Date.now()],
+                phaseMessageCounts: [...s.phaseState.phaseMessageCounts, 0],
+              },
+            };
+          });
+        },
+        getCurrentPhase: () => stateRef.current.phaseState.currentPhase,
       });
 
       // Wrap callbacks with telemetry if enabled
@@ -1271,6 +1314,78 @@ export function InteractiveShell({
     }
   });
 
+  // Build phases array for ExecutionStatus
+  const buildPhases = (): ExecutionPhase[] => {
+    const {
+      phaseState,
+      completedTasks,
+      activeTasks,
+      messageCount,
+      spinnerMessage,
+      streamingOutput,
+    } = state;
+
+    if (phaseState.currentPhase === 0) {
+      return [];
+    }
+
+    const phases: ExecutionPhase[] = [];
+    const now = Date.now();
+
+    for (let i = 0; i < phaseState.currentPhase; i++) {
+      const phaseNumber = i + 1;
+      const isCurrentPhase = phaseNumber === phaseState.currentPhase;
+      const startTime = phaseState.phaseStartTimes[i] ?? now;
+      const phaseMessageCount = phaseState.phaseMessageCounts[i] ?? messageCount;
+
+      // Get tools for this phase
+      const phaseCompletedTools = completedTasks.filter((t) => t.phase === phaseNumber);
+      const phaseActiveTools = activeTasks.filter((t) => t.phase === phaseNumber);
+
+      // Calculate phase duration (for completed phases, use next phase start or now)
+      const nextPhaseStart = phaseState.phaseStartTimes[i + 1];
+      const phaseDuration = isCurrentPhase
+        ? undefined
+        : nextPhaseStart !== undefined
+          ? (nextPhaseStart - startTime) / 1000
+          : (now - startTime) / 1000;
+
+      // Build tool nodes for this phase
+      const toolNodes: ToolNode[] = [
+        ...phaseCompletedTools.map(
+          (task): ToolNode => ({
+            id: task.id,
+            name: task.name,
+            status: task.success ? 'complete' : 'error',
+            duration: task.duration >= 0 ? task.duration / 1000 : undefined,
+            error: task.error,
+            phase: phaseNumber,
+          })
+        ),
+        ...phaseActiveTools.map(
+          (task): ToolNode => ({
+            id: task.id,
+            name: task.name,
+            args: task.args !== undefined ? formatToolArgs(task.args) : undefined,
+            status: 'running',
+            phase: phaseNumber,
+          })
+        ),
+      ];
+
+      phases.push({
+        number: phaseNumber,
+        status: isCurrentPhase ? 'working' : 'complete',
+        duration: phaseDuration,
+        messageCount: phaseMessageCount,
+        isThinking: isCurrentPhase && spinnerMessage !== '' && streamingOutput === '',
+        toolNodes,
+      });
+    }
+
+    return phases;
+  };
+
   // Render config loading state
   if (!state.configLoaded) {
     return <Spinner message="Loading configuration..." />;
@@ -1352,6 +1467,7 @@ export function InteractiveShell({
                   toolCount={state.lastExecutionToolNodes.length}
                   duration={state.lastExecutionDuration}
                   toolNodes={state.lastExecutionToolNodes}
+                  phases={state.lastExecutionPhases}
                   showToolHistory={verbose}
                 />
               )}
@@ -1387,6 +1503,7 @@ export function InteractiveShell({
                 status: task.success ? 'complete' : 'error',
                 duration: task.duration >= 0 ? task.duration / 1000 : undefined,
                 error: task.error,
+                phase: task.phase,
               })
             ),
             ...state.activeTasks.map(
@@ -1395,9 +1512,12 @@ export function InteractiveShell({
                 name: task.name,
                 args: task.args !== undefined ? formatToolArgs(task.args) : undefined,
                 status: 'running',
+                phase: task.phase,
               })
             ),
           ]}
+          phases={buildPhases()}
+          showToolHistory={verbose}
         />
       )}
 

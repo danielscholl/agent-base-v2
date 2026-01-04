@@ -7,12 +7,9 @@ import {
   COMMAND_EXIT,
   COMMAND_HELP,
   COMMAND_CLEAR,
-  COMMAND_HISTORY,
   COMMAND_TELEMETRY,
   COMMAND_SAVE,
-  COMMAND_SESSIONS,
   COMMAND_RESUME,
-  COMMAND_PURGE,
   matchesCommand,
   isShellCommand,
   isSlashCommand,
@@ -22,10 +19,12 @@ import {
 import { helpHandler } from './help.js';
 import { clearHandler } from './clear.js';
 import { exitHandler } from './exit.js';
-import { historyHandler } from './history.js';
 import { telemetryHandler } from './telemetry.js';
 import { shellHandler } from './shell.js';
-import { saveHandler, sessionsHandler, resumeHandler, purgeHandler } from './session.js';
+import { saveHandler, resumeHandler } from './session.js';
+
+// CLI-only handlers (not interactive commands)
+export { sessionsHandler, purgeHandler } from './session.js';
 
 // Note: configHandler and skillHandler are exported for CLI subcommand use,
 // but are no longer registered as interactive commands (use `agent config` / `agent skill` instead)
@@ -37,13 +36,10 @@ export {
   helpHandler,
   clearHandler,
   exitHandler,
-  historyHandler,
   telemetryHandler,
   shellHandler,
   saveHandler,
-  sessionsHandler,
   resumeHandler,
-  purgeHandler,
 };
 
 /** All registered commands */
@@ -64,11 +60,6 @@ export const COMMANDS: CommandDefinition[] = [
     handler: clearHandler,
   },
   {
-    aliases: COMMAND_HISTORY,
-    description: 'Show conversation history',
-    handler: historyHandler,
-  },
-  {
     aliases: COMMAND_TELEMETRY,
     description: 'Manage telemetry dashboard',
     handler: telemetryHandler,
@@ -81,21 +72,10 @@ export const COMMANDS: CommandDefinition[] = [
     usage: '/save [name]',
   },
   {
-    aliases: COMMAND_SESSIONS,
-    description: 'List saved sessions',
-    handler: sessionsHandler,
-  },
-  {
     aliases: COMMAND_RESUME,
     description: 'Resume a saved session',
     handler: resumeHandler,
     usage: '/resume [session-id]',
-  },
-  {
-    aliases: COMMAND_PURGE,
-    description: 'Delete old or specific sessions',
-    handler: purgeHandler,
-    usage: '/purge [count|session-id]',
   },
 ];
 

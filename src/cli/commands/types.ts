@@ -18,8 +18,6 @@ export interface CommandResult {
   shouldClear?: boolean;
   /** Whether to clear the conversation history */
   shouldClearHistory?: boolean;
-  /** Whether to display conversation history */
-  shouldShowHistory?: boolean;
   /** Whether to save the current session */
   shouldSaveSession?: boolean;
   /** Session name for save operation */

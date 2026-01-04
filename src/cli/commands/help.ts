@@ -12,9 +12,7 @@ export const helpHandler: CommandHandler = (_args, context): Promise<CommandResu
 
 SESSION MANAGEMENT
   /save [name]         Save current session
-  /sessions            List all saved sessions
   /resume [id]         Resume a session (interactive selector if no id)
-  /purge [count]       Delete old sessions (keep N most recent)
 
 TELEMETRY
   /telemetry start     Start Aspire Dashboard (Docker required)
@@ -24,7 +22,6 @@ TELEMETRY
 
 GENERAL
   /help, ?, help       Show this help message
-  /history             Show conversation history
   /clear, clear        Clear screen and history
   /exit, /quit, q      Exit the shell
 

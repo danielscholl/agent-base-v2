@@ -15,24 +15,71 @@ Supports Local (Ollama), GitHub Models, OpenAI, Anthropic, Google Gemini, Azure 
 ```bash
 bun run dev
 
+# First run: Provider Setup (if no provider configured)
+Provider Setup
+══════════════
+
+No providers configured. Select one to set up:
+
+  1. OpenAI           GPT-4, GPT-4o, o1, and other OpenAI models
+  2. Anthropic        Claude Sonnet, Claude Opus, and Claude Haiku models
+  3. Azure OpenAI     Azure-hosted OpenAI models with enterprise security
+  4. Azure AI Foundry Azure AI managed models (local or cloud)
+  5. Google Gemini    Gemini Pro and Gemini Flash models
+  6. GitHub Models    Models via GitHub Copilot infrastructure
+  7. Local            Local models via Ollama, Docker, or LM Studio
+
+# After provider configuration (or on subsequent runs)
 Agent - Conversational Assistant
 Version 0.1.0 • OpenAI/gpt-4o
-
+──────────────────────────────────────────────────────────────────────────────
 > Say hello to Alice
 
-● Thinking...
+✓ Complete (2.9s) - msg:1 tool:0
 
-Hello, Alice! How can I help you today?
+Hello, Alice!
 
+──────────────────────────────────────────────────────────────────────────────
 > What was the name I just mentioned?
 
-● Thinking...
+✓ Complete (1.2s) - msg:1 tool:0
 
 You mentioned "Alice."
 
+──────────────────────────────────────────────────────────────────────────────
 > exit
-Session saved
 Goodbye!
+```
+
+### Verbose Mode
+
+Use `--verbose` for detailed execution phases:
+
+```bash
+# Single prompt mode with verbose
+bun run dev -- -p "What is 2+2?" --verbose
+
+● Phase 1
+└── ● Thinking (2 messages)
+
+2 + 2 = 4
+
+# Interactive mode with verbose
+bun run dev --verbose
+
+Agent - Conversational Assistant
+Version 0.1.0 • OpenAI/gpt-4o
+──────────────────────────────────────────────────────────────────────────────
+> Say hello to Alice
+
+● Phase 1
+└── ● Thinking (2 messages)
+
+Hello, Alice!
+
+# After completion (verbose shows phase history)
+• Phase 1 (2.9s)
+└── • Thinking (1 messages) - Response received
 ```
 
 ## Prerequisites

@@ -12,11 +12,46 @@ import { validateProviderCredentials } from '../config/schema.js';
 import { createCallbacks, wrapWithTelemetry } from '../cli/callbacks.js';
 import { initializeTelemetry, shutdown as shutdownTelemetry } from '../telemetry/index.js';
 import { Spinner } from './Spinner.js';
+import { ExecutionStatus } from './ExecutionStatus.js';
+import type { ToolNode, ExecutionPhase } from './ExecutionStatus.js';
 import { getUserFriendlyMessage } from '../errors/index.js';
 import { resolveModelName } from '../utils/index.js';
 import type { SinglePromptProps } from '../cli/types.js';
 import type { AgentErrorResponse } from '../errors/index.js';
 import type { AppConfig } from '../config/schema.js';
+
+/**
+ * Tool execution tracking for verbose mode.
+ */
+interface ActiveTask {
+  id: string;
+  name: string;
+  args?: Record<string, unknown>;
+  startTime: number;
+  phase: number;
+}
+
+interface CompletedTask {
+  id: string;
+  name: string;
+  success: boolean;
+  duration: number;
+  error?: string;
+  phase: number;
+}
+
+/**
+ * Format tool arguments for display.
+ */
+function formatToolArgs(args: Record<string, unknown>): string {
+  const entries = Object.entries(args);
+  if (entries.length === 0) return '';
+  const formatted = entries
+    .slice(0, 2)
+    .map(([k, v]) => `${k}: ${typeof v === 'string' ? v.slice(0, 30) : String(v)}`)
+    .join(', ');
+  return entries.length > 2 ? `${formatted}, ...` : formatted;
+}
 
 /**
  * SinglePrompt mode component.
@@ -39,15 +74,34 @@ export function SinglePrompt({
     spinnerMessage: string;
     output: string;
     error: AgentErrorResponse | null;
+    // Verbose mode phase tracking
+    currentPhase: number;
+    phaseStartTimes: number[];
+    phaseMessageCounts: number[];
+    messageCount: number;
+    activeTasks: ActiveTask[];
+    completedTasks: CompletedTask[];
+    executionStartTime: number | null;
   }>({
     phase: 'loading',
     spinnerMessage: 'Loading configuration...',
     output: '',
     error: null,
+    currentPhase: 0,
+    phaseStartTimes: [],
+    phaseMessageCounts: [],
+    messageCount: 0,
+    activeTasks: [],
+    completedTasks: [],
+    executionStartTime: null,
   });
 
   // Track if component is mounted to prevent state updates after unmount
   const mountedRef = useRef(true);
+
+  // State ref for callbacks to avoid stale closures
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   // Execute the prompt
   useEffect(() => {
@@ -57,7 +111,8 @@ export function SinglePrompt({
       // Check if any config file exists (user or project)
       const hasConfigFile = await configFileExists();
       if (!hasConfigFile) {
-        setState({
+        setState((s) => ({
+          ...s,
           phase: 'error',
           spinnerMessage: '',
           output: '',
@@ -66,7 +121,7 @@ export function SinglePrompt({
             error: 'CONFIG_ERROR',
             message: 'No configuration found. Run "agent config init" to set up your provider.',
           },
-        });
+        }));
         return;
       }
 
@@ -76,7 +131,8 @@ export function SinglePrompt({
       if (!mountedRef.current) return;
 
       if (!configResult.success) {
-        setState({
+        setState((s) => ({
+          ...s,
           phase: 'error',
           spinnerMessage: '',
           output: '',
@@ -85,7 +141,7 @@ export function SinglePrompt({
             error: 'CONFIG_ERROR',
             message: configResult.message,
           },
-        });
+        }));
         return;
       }
 
@@ -94,7 +150,8 @@ export function SinglePrompt({
       // Validate provider credentials
       const validation = validateProviderCredentials(config);
       if (!validation.isValid) {
-        setState({
+        setState((s) => ({
+          ...s,
           phase: 'error',
           spinnerMessage: '',
           output: '',
@@ -103,7 +160,7 @@ export function SinglePrompt({
             error: 'CONFIG_ERROR',
             message: validation.errors.join('\n'),
           },
-        });
+        }));
         return;
       }
 
@@ -111,6 +168,13 @@ export function SinglePrompt({
         ...s,
         phase: 'executing',
         spinnerMessage: 'Thinking...',
+        currentPhase: 0,
+        phaseStartTimes: [],
+        phaseMessageCounts: [],
+        messageCount: 0,
+        activeTasks: [],
+        completedTasks: [],
+        executionStartTime: Date.now(),
       }));
 
       // Initialize telemetry if enabled
@@ -176,6 +240,61 @@ export function SinglePrompt({
                 // In verbose mode, use streamed output; in non-verbose, use final answer
                 output: verbose === true && s.output !== '' ? s.output : answer,
               }));
+            }
+          },
+          // Phase and tool tracking for verbose mode
+          setMessageCount: (count) => {
+            if (mountedRef.current) {
+              setState((s) => {
+                const newPhaseMessageCounts = [...s.phaseMessageCounts];
+                if (s.currentPhase > 0) {
+                  newPhaseMessageCounts[s.currentPhase - 1] = count;
+                }
+                return {
+                  ...s,
+                  messageCount: count,
+                  phaseMessageCounts: newPhaseMessageCounts,
+                };
+              });
+            }
+          },
+          incrementPhase: () => {
+            if (mountedRef.current) {
+              setState((s) => ({
+                ...s,
+                currentPhase: s.currentPhase + 1,
+                phaseStartTimes: [...s.phaseStartTimes, Date.now()],
+                phaseMessageCounts: [...s.phaseMessageCounts, 0],
+              }));
+            }
+          },
+          getCurrentPhase: () => stateRef.current.currentPhase,
+          addActiveTask: (id, name, args) => {
+            if (mountedRef.current) {
+              setState((s) => ({
+                ...s,
+                activeTasks: [
+                  ...s.activeTasks,
+                  { id, name, args, startTime: Date.now(), phase: s.currentPhase },
+                ],
+              }));
+            }
+          },
+          completeTask: (id, name, success, _duration, error) => {
+            if (mountedRef.current) {
+              setState((s) => {
+                const task = s.activeTasks.find((t) => t.id === id);
+                const duration = task !== undefined ? Date.now() - task.startTime : -1;
+                const phase = task?.phase ?? s.currentPhase;
+                return {
+                  ...s,
+                  activeTasks: s.activeTasks.filter((t) => t.id !== id),
+                  completedTasks: [
+                    ...s.completedTasks,
+                    { id, name, success, duration, error, phase },
+                  ],
+                };
+              });
             }
           },
         },
@@ -309,13 +428,76 @@ export function SinglePrompt({
   }
 
   if (state.phase === 'executing') {
-    // Show streaming output as it arrives, with spinner if no output yet
+    // Build phases for ExecutionStatus
+    const phases: ExecutionPhase[] = [];
+    const now = Date.now();
+    for (let i = 0; i < state.currentPhase; i++) {
+      const phaseNumber = i + 1;
+      const isCurrentPhase = phaseNumber === state.currentPhase;
+      const startTime = state.phaseStartTimes[i] ?? now;
+      const nextPhaseStart = state.phaseStartTimes[i + 1];
+      const phaseDuration = isCurrentPhase
+        ? undefined
+        : nextPhaseStart !== undefined
+          ? (nextPhaseStart - startTime) / 1000
+          : (now - startTime) / 1000;
+
+      const phaseCompletedTools = state.completedTasks.filter((t) => t.phase === phaseNumber);
+      const phaseActiveTools = state.activeTasks.filter((t) => t.phase === phaseNumber);
+
+      const toolNodes: ToolNode[] = [
+        ...phaseCompletedTools.map(
+          (task): ToolNode => ({
+            id: task.id,
+            name: task.name,
+            status: task.success ? 'complete' : 'error',
+            duration: task.duration >= 0 ? task.duration / 1000 : undefined,
+            error: task.error,
+            phase: phaseNumber,
+          })
+        ),
+        ...phaseActiveTools.map(
+          (task): ToolNode => ({
+            id: task.id,
+            name: task.name,
+            args: task.args !== undefined ? formatToolArgs(task.args) : undefined,
+            status: 'running',
+            phase: phaseNumber,
+          })
+        ),
+      ];
+
+      phases.push({
+        number: phaseNumber,
+        status: isCurrentPhase ? 'working' : 'complete',
+        duration: phaseDuration,
+        messageCount: state.phaseMessageCounts[i] ?? state.messageCount,
+        isThinking: isCurrentPhase && state.spinnerMessage !== '' && state.output === '',
+        toolNodes,
+      });
+    }
+
+    // Show ExecutionStatus with phase info
+    // Note: toolNodes are already included in phases, so we don't need to pass them separately
     return (
       <Box flexDirection="column">
-        {state.output !== '' && <Text>{state.output}</Text>}
-        {state.output === '' && state.spinnerMessage !== '' && (
+        {state.currentPhase > 0 && (
+          <ExecutionStatus
+            status="working"
+            messageCount={state.messageCount}
+            toolCount={state.completedTasks.length + state.activeTasks.length}
+            thinkingState={{
+              messageCount: state.messageCount,
+              isActive: state.spinnerMessage !== '' && state.output === '',
+            }}
+            phases={phases}
+            showToolHistory={true}
+          />
+        )}
+        {state.currentPhase === 0 && state.spinnerMessage !== '' && (
           <Spinner message={state.spinnerMessage} />
         )}
+        {state.output !== '' && <Text>{state.output}</Text>}
       </Box>
     );
   }

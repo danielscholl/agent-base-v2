@@ -89,7 +89,6 @@ describe('Command Handlers', () => {
       expect(helpText).toContain('Up/Down');
       // Session commands should be present
       expect(helpText).toContain('/resume');
-      expect(helpText).toContain('/purge');
       // CLI subcommands section should be present
       expect(helpText).toContain('CLI SUBCOMMANDS');
       expect(helpText).toContain('agent config');

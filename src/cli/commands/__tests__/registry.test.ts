@@ -196,10 +196,9 @@ describe('getAutocompleteCommands', () => {
     // Check that key commands are present
     expect(names).toContain('clear');
     expect(names).toContain('help');
-    expect(names).toContain('history');
     expect(names).toContain('telemetry');
     expect(names).toContain('save');
-    expect(names).toContain('sessions');
+    expect(names).toContain('resume');
   });
 
   it('should include descriptions', () => {

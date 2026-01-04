@@ -61,6 +61,13 @@ export interface CallbackState {
   updateTokenUsage?: (usage: SessionTokenUsage) => void;
   /** Set message count from LLM context (for execution status display) */
   setMessageCount?: (count: number) => void;
+  /**
+   * Increment phase counter (called on each LLM iteration).
+   * Each LLM call starts a new phase - Phase 1, Phase 2, etc.
+   */
+  incrementPhase?: () => void;
+  /** Get current phase number (for associating tools with phases) */
+  getCurrentPhase?: () => number;
 }
 
 /**
@@ -99,6 +106,8 @@ export function createCallbacks(
     },
 
     onLLMStart: (_ctx, _model, messages) => {
+      // Increment phase counter - each LLM call starts a new phase
+      state.incrementPhase?.();
       // Track message count for execution status display
       state.setMessageCount?.(messages.length);
     },

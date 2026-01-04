@@ -19,6 +19,8 @@ export interface ActiveTask {
   args?: Record<string, unknown>;
   /** Timestamp when tool started */
   startTime: number;
+  /** Phase number this task belongs to (1-indexed) */
+  phase: number;
 }
 
 /**
@@ -35,6 +37,8 @@ export interface CompletedTask {
   duration: number;
   /** Error message if failed */
   error?: string;
+  /** Phase number this task belongs to (1-indexed) */
+  phase: number;
 }
 
 /**

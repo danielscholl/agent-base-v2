@@ -95,10 +95,10 @@ describe('createOpenAIClient', () => {
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.message).toContain('gpt-4o');
+      expect(result.message).toContain('gpt-5-mini');
     }
     expect(mockChatOpenAI).toHaveBeenCalledWith({
-      model: 'gpt-4o',
+      model: 'gpt-5-mini',
       openAIApiKey: 'test-key',
       configuration: undefined,
     });
