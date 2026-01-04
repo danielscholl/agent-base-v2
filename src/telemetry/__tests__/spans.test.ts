@@ -873,6 +873,40 @@ describe('createTracingCallbacks', () => {
     callbacks.onAgentEnd?.(agentCtx, 'Done');
   });
 
+  it('prefers executionResult for success/error when available', () => {
+    const { callbacks, getState } = createTracingCallbacks({
+      providerName: 'openai',
+      modelName: 'gpt-4o',
+    });
+
+    const agentCtx = { traceId: 'abc123', spanId: 'agent1' };
+    const toolCtx = { traceId: 'abc123', spanId: 'tool1' };
+
+    callbacks.onAgentStart?.(agentCtx, 'Hello');
+    callbacks.onToolStart?.(toolCtx, 'return_error_tool', {});
+
+    // Result says success (legacy), but executionResult says failure (from metadata.error)
+    const legacyResult = { success: true, result: {}, message: 'OK' };
+    const executionResult = {
+      toolId: 'return_error_tool',
+      result: {
+        title: 'Error: return_error_tool',
+        metadata: { error: 'VALIDATION_ERROR' },
+        output: 'Error: Invalid input',
+      },
+      timestamp: Date.now(),
+      success: false,
+      error: 'VALIDATION_ERROR',
+    };
+
+    callbacks.onToolEnd?.(toolCtx, 'return_error_tool', legacyResult, executionResult);
+
+    const state = getState();
+    expect(state.toolSpans.size).toBe(0); // Span was ended
+
+    callbacks.onAgentEnd?.(agentCtx, 'Done');
+  });
+
   it('respects conversationId option', () => {
     const { callbacks, getState } = createTracingCallbacks({
       providerName: 'openai',
