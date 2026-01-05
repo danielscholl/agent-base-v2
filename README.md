@@ -59,31 +59,14 @@ Requires [Ollama](https://ollama.ai/) or [Docker Desktop](https://www.docker.com
 
 ## Installation
 
-### macOS / Linux / WSL
-
 ```bash
+# macOS / Linux / WSL
 curl -fsSL https://raw.githubusercontent.com/danielscholl/agent-base-v2/main/install.sh | bash
-```
 
-### Windows PowerShell
-
-```powershell
+# Windows PowerShell
 irm https://raw.githubusercontent.com/danielscholl/agent-base-v2/main/install.ps1 | iex
 ```
 
-### Windows CMD
-
-```batch
-curl -fsSL https://raw.githubusercontent.com/danielscholl/agent-base-v2/main/install.cmd -o install.cmd && install.cmd && del install.cmd
-```
-
-> **Note:** The above commands use the latest installer from the main branch. For production environments, you can pin to a specific release by replacing `main` with a version tag (e.g., `v0.2.0`).
-
-### Alternative: Using Bun directly
-
-```bash
-bun install -g --trust github:danielscholl/agent-base-v2
-```
 
 ## Quick Start
 
@@ -98,39 +81,24 @@ agent
 agent --help
 ```
 
-## Upgrade
-
-Re-run the installer to upgrade to the latest version:
+## Upgrade and Uninstall
 
 ```bash
-# macOS / Linux / WSL
-curl -fsSL https://raw.githubusercontent.com/danielscholl/agent-base-v2/main/install.sh | bash
-
 # Or use built-in update (source installs only)
 agent update
 ```
 
-## Uninstall
-
-### macOS / Linux / WSL
-
 ```bash
+# macOS / Linux / WSL
 rm -f ~/.local/bin/agent
 rm -rf ~/.agent/repo ~/.agent/bin
-```
 
-### Windows PowerShell
-
-```powershell
+# Windows PowerShell
 Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\agent.exe" -Force -ErrorAction SilentlyContinue
 Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\agent.cmd" -Force -ErrorAction SilentlyContinue
 Remove-Item "$env:LOCALAPPDATA\Programs\agent-base-v2" -Recurse -Force
-```
 
-### Clean up configuration (optional)
-
-```bash
-# Remove all settings and state
+# Clean up configuration (optional)
 rm -rf ~/.agent
 ```
 
