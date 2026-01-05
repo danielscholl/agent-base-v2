@@ -53,14 +53,12 @@ jobs:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
             target: bun-darwin-arm64
             artifact: agent-darwin-arm64
-          - os: macos-13
-            target: bun-darwin-x64
-            artifact: agent-darwin-x64
           - os: ubuntu-latest
             target: bun-linux-x64
             artifact: agent-linux-x64
@@ -131,6 +129,7 @@ jobs:
 
   publish-release:
     needs: [release-please, build-binaries]
+    if: always() && needs.release-please.outputs.release_created == 'true' && needs.build-binaries.result != 'cancelled'
     runs-on: ubuntu-latest
 
     steps:

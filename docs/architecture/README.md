@@ -48,7 +48,7 @@ See [System Layers](./layers.md) for the detailed diagram.
 | Agent | Orchestration, Query→LLM→Tool→Response loop, callbacks |
 | Tools | Zod validation, Tool.Result output, permissions |
 | Model | Provider routing, streaming, retry with backoff |
-| Utils | Configuration, context storage, session persistence |
+| Utils | Configuration, session persistence, message history; context storage planned |
 
 ---
 

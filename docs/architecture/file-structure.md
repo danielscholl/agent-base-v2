@@ -48,8 +48,10 @@ src/
 │       └── ...               # Other commands
 │
 ├── components/               # React/Ink UI components
-│   ├── App.tsx               # Main app component
 │   ├── InteractiveShell.tsx  # Interactive shell
+│   ├── SinglePrompt.tsx      # Single prompt mode
+│   ├── ToolsInfo.tsx         # Tools listing display
+│   ├── HealthCheck.tsx       # Startup diagnostics
 │   └── ...                   # Other components
 │
 ├── tools/
@@ -65,7 +67,7 @@ src/
 │   ├── grep.ts               # Content searching
 │   ├── list.ts               # Directory listing
 │   ├── bash.ts               # Shell execution
-│   ├── task.ts               # Subagent spawning
+│   ├── task.ts               # Subagent spawning (planned)
 │   ├── todo.ts               # Task tracking (todowrite, todoread)
 │   └── webfetch.ts           # URL fetching
 │
@@ -74,7 +76,13 @@ src/
 │   ├── manager.ts            # Load/save/merge logic
 │   ├── constants.ts          # Default values
 │   └── providers/            # Setup wizards
-│       └── github.ts         # GitHub CLI integration
+│       ├── openai.ts
+│       ├── anthropic.ts
+│       ├── azure.ts
+│       ├── foundry.ts
+│       ├── gemini.ts
+│       ├── github.ts
+│       └── local.ts
 │
 ├── telemetry/
 │   ├── setup.ts              # OTel initialization
@@ -83,17 +91,19 @@ src/
 │   └── aspire.ts             # Docker dashboard commands
 │
 ├── utils/
-│   ├── context.ts            # IContextManager implementation
+│   ├── context.ts            # Context storage manager (not yet wired to agent)
 │   ├── message-history.ts    # Conversation memory
+│   ├── model.ts              # Model selection helpers
 │   ├── session.ts            # Session persistence
-│   └── env.ts                # Environment helpers
+│   └── tokens.ts             # Token utilities
 │
 ├── skills/
 │   ├── manifest.ts           # Zod schemas, YAML parsing
-│   ├── loader.ts             # Discovery, dynamic import
-│   ├── registry.ts           # Persistent metadata
+│   ├── parser.ts             # SKILL.md parsing
+│   ├── loader.ts             # Discovery and filtering
 │   ├── context-provider.ts   # Progressive disclosure (3-tier)
 │   ├── prompt.ts             # XML generation for skills
+│   ├── installer.ts          # Plugin installation/update/remove
 │   └── types.ts              # DiscoveredSkill types
 │
 ├── errors/
@@ -103,7 +113,8 @@ src/
 │   └── base.md               # Default system prompt
 │
 └── _bundled_skills/          # Shipped with agent
-    └── .gitkeep
+    ├── gh/
+    └── glab/
 ```
 
 ---
@@ -144,16 +155,14 @@ src/
 project-root/
 ├── package.json              # Dependencies, scripts
 ├── tsconfig.json             # TypeScript config
-├── eslint.config.mjs         # ESLint flat config
-├── jest.config.mjs           # Jest configuration
-├── .prettierrc               # Prettier config
+├── eslint.config.js          # ESLint flat config
+├── jest.config.js            # Jest configuration
+├── bun.lock                  # Bun lockfile
 ├── CLAUDE.md                 # AI assistant rules
 └── docs/                     # Documentation
     ├── architecture/         # Architecture docs
     ├── guides/               # Implementation guides
-    ├── decisions/            # ADRs
-    ├── plans/                # Feature plans
-    └── specs/                # Feature specifications
+    └── decisions/            # ADRs
 ```
 
 ---
@@ -165,7 +174,8 @@ project-root/
 ├── config.yaml             # User configuration
 ├── sessions/                 # Persisted sessions
 ├── context/                  # Tool output cache
-└── skills/                   # User plugins
+├── skills/                   # User skills
+└── plugins/                  # Installed plugin skills
 
 ./.agent/
 ├── config.yaml             # Project configuration
