@@ -341,6 +341,55 @@ Hello {{MODEL}}!`);
       expect(result).toContain('claude-3-opus');
       expect(result).toContain('anthropic');
     });
+
+    it('loads from config.agent.systemPromptFile first (tier 1)', async () => {
+      config.agent.systemPromptFile = '/custom/base-prompt.md';
+      mockAccess.mockResolvedValue(undefined);
+      mockReadFile.mockResolvedValue('---\nname: custom\n---\nCustom base for {{MODEL}}');
+
+      const result = await loadBasePrompt({
+        config,
+        model: 'gpt-4o',
+        provider: 'openai',
+      });
+
+      expect(result).toBe('Custom base for gpt-4o');
+      expect(mockReadFile).toHaveBeenCalledWith('/custom/base-prompt.md', 'utf-8');
+    });
+
+    it('falls back to user default when config path not found (tier 2)', async () => {
+      config.agent.systemPromptFile = '/nonexistent/prompt.md';
+
+      // First call (config path) fails, second call (user path) succeeds
+      mockAccess.mockRejectedValueOnce(new Error('ENOENT')).mockResolvedValueOnce(undefined);
+      mockReadFile.mockResolvedValue('User base prompt for {{MODEL}}');
+
+      const result = await loadBasePrompt({
+        config,
+        model: 'gpt-4o',
+        provider: 'openai',
+      });
+
+      expect(result).toBe('User base prompt for gpt-4o');
+      expect(mockReadFile).toHaveBeenCalledWith('/home/testuser/.agent/system.md', 'utf-8');
+    });
+
+    it('falls back to package default when user path not found (tier 3)', async () => {
+      // No systemPromptFile set, user path fails, package path succeeds
+      mockAccess
+        .mockRejectedValueOnce(new Error('ENOENT')) // user path
+        .mockResolvedValueOnce(undefined); // package base.md
+
+      mockReadFile.mockResolvedValue('---\nname: default\n---\nPackage base for {{MODEL}}');
+
+      const result = await loadBasePrompt({
+        config,
+        model: 'gpt-4o',
+        provider: 'openai',
+      });
+
+      expect(result).toBe('Package base for gpt-4o');
+    });
   });
 
   describe('loadProviderLayer', () => {

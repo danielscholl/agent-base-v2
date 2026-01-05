@@ -241,6 +241,54 @@ describe('ToolRegistry', () => {
       expect(result.error).toBe('VALIDATION_ERROR');
       expect(result.result.output).toContain('Error:');
     });
+
+    it('should mark success true when tool returns error: false in metadata (bash success case)', async () => {
+      const bashLikeTool = Tool.define<z.ZodObject<Record<string, never>>, { error: boolean }>(
+        'bash-like-tool',
+        {
+          description: 'Returns error: false like bash does on success',
+          parameters: z.object({}),
+          execute: () => ({
+            title: 'Completed: echo hello',
+            metadata: { error: false, exitCode: 0 },
+            output: 'hello',
+          }),
+        }
+      );
+
+      ToolRegistry.register(bashLikeTool);
+      const ctx = Tool.createNoopContext({ sessionID: testSessionID });
+
+      const result = await ToolRegistry.execute('bash-like-tool', {}, ctx);
+
+      expect(result.success).toBe(true);
+      expect(result.error).toBeUndefined();
+      expect(result.result.output).toBe('hello');
+    });
+
+    it('should mark success false when tool returns error: true in metadata (bash failure case)', async () => {
+      const bashLikeFailTool = Tool.define<z.ZodObject<Record<string, never>>, { error: boolean }>(
+        'bash-like-fail-tool',
+        {
+          description: 'Returns error: true like bash does on failure',
+          parameters: z.object({}),
+          execute: () => ({
+            title: 'Failed (exit 1): bad-command',
+            metadata: { error: true, exitCode: 1 },
+            output: 'command not found: bad-command',
+          }),
+        }
+      );
+
+      ToolRegistry.register(bashLikeFailTool);
+      const ctx = Tool.createNoopContext({ sessionID: testSessionID });
+
+      const result = await ToolRegistry.execute('bash-like-fail-tool', {}, ctx);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('true');
+      expect(result.result.output).toContain('command not found');
+    });
   });
 
   describe('tools', () => {
@@ -275,6 +323,40 @@ describe('ToolRegistry', () => {
 
       expect(tools).toHaveLength(1);
       expect(tools[0]?.name).toBe('test-tool');
+    });
+
+    it('should create fresh wrappers when createContext is provided (multi-agent isolation)', async () => {
+      ToolRegistry.register(testTool);
+
+      // First agent with custom context
+      const agent1Context = jest.fn(() => Tool.createNoopContext({ sessionID: 'agent-1-session' }));
+      const tools1 = await ToolRegistry.tools({ createContext: agent1Context });
+
+      // Second agent with different context
+      const agent2Context = jest.fn(() => Tool.createNoopContext({ sessionID: 'agent-2-session' }));
+      const tools2 = await ToolRegistry.tools({ createContext: agent2Context });
+
+      // Invoke both tools - they should use their respective contexts
+      await tools1[0]?.invoke({ input: 'from agent 1' });
+      await tools2[0]?.invoke({ input: 'from agent 2' });
+
+      // Each context factory should have been called
+      expect(agent1Context).toHaveBeenCalled();
+      expect(agent2Context).toHaveBeenCalled();
+
+      // The wrappers should be different objects (not cached)
+      expect(tools1[0]).not.toBe(tools2[0]);
+    });
+
+    it('should use cached wrappers when no createContext or onToolResult provided', async () => {
+      ToolRegistry.register(testTool);
+
+      // Get tools without createContext - uses caching
+      const tools1 = await ToolRegistry.tools();
+      const tools2 = await ToolRegistry.tools();
+
+      // Should be the same cached wrapper
+      expect(tools1[0]).toBe(tools2[0]);
     });
   });
 
