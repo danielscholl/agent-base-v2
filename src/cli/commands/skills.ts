@@ -17,6 +17,11 @@ import { ConfigManager, loadConfig } from '../../config/manager.js';
 import type { AppConfig, PluginDefinition } from '../../config/schema.js';
 
 /**
+ * Maximum length for skill descriptions before truncation.
+ */
+const DESCRIPTION_MAX_LENGTH = 60;
+
+/**
  * Find a plugin by name, supporting both named plugins and legacy string-only plugins.
  * Legacy plugins (created from string URLs) have no name field, so we derive name from URL.
  */
@@ -123,7 +128,10 @@ export const skillShowHandler: CommandHandler = async (_args, context): Promise<
       const status = isDisabled ? '○ ' : '✓ ';
       const statusText = isDisabled ? '(disabled)' : '(enabled)';
       const desc = skill.manifest.description;
-      const truncatedDesc = desc.length > 60 ? desc.slice(0, 57) + '...' : desc;
+      const truncatedDesc =
+        desc.length > DESCRIPTION_MAX_LENGTH
+          ? desc.slice(0, DESCRIPTION_MAX_LENGTH - 3) + '...'
+          : desc;
       context.onOutput(`  ${status}${skill.manifest.name}`, isDisabled ? 'warning' : 'success');
       context.onOutput(`      ${truncatedDesc} ${statusText}`, 'info');
     }
@@ -137,7 +145,10 @@ export const skillShowHandler: CommandHandler = async (_args, context): Promise<
       const status = isDisabled ? '○ ' : '✓ ';
       const statusText = isDisabled ? '(disabled)' : '(enabled)';
       const desc = skill.manifest.description;
-      const truncatedDesc = desc.length > 60 ? desc.slice(0, 57) + '...' : desc;
+      const truncatedDesc =
+        desc.length > DESCRIPTION_MAX_LENGTH
+          ? desc.slice(0, DESCRIPTION_MAX_LENGTH - 3) + '...'
+          : desc;
       context.onOutput(`  ${status}${skill.manifest.name}`, isDisabled ? 'warning' : 'success');
       context.onOutput(`      ${truncatedDesc} ${statusText}`, 'info');
       context.onOutput(`      ${skill.directory}`, 'info');
@@ -148,7 +159,10 @@ export const skillShowHandler: CommandHandler = async (_args, context): Promise<
     context.onOutput('\n[User Skills]', 'info');
     for (const skill of user) {
       const desc = skill.manifest.description;
-      const truncatedDesc = desc.length > 60 ? desc.slice(0, 57) + '...' : desc;
+      const truncatedDesc =
+        desc.length > DESCRIPTION_MAX_LENGTH
+          ? desc.slice(0, DESCRIPTION_MAX_LENGTH - 3) + '...'
+          : desc;
       context.onOutput(`  ✓ ${skill.manifest.name}`, 'success');
       context.onOutput(`      ${truncatedDesc}`, 'info');
     }
@@ -158,7 +172,10 @@ export const skillShowHandler: CommandHandler = async (_args, context): Promise<
     context.onOutput('\n[Project Skills]', 'info');
     for (const skill of project) {
       const desc = skill.manifest.description;
-      const truncatedDesc = desc.length > 60 ? desc.slice(0, 57) + '...' : desc;
+      const truncatedDesc =
+        desc.length > DESCRIPTION_MAX_LENGTH
+          ? desc.slice(0, DESCRIPTION_MAX_LENGTH - 3) + '...'
+          : desc;
       context.onOutput(`  ✓ ${skill.manifest.name}`, 'success');
       context.onOutput(`      ${truncatedDesc}`, 'info');
     }
@@ -208,10 +225,10 @@ export const skillInstallHandler: CommandHandler = async (
 
   for (let i = 1; i < parts.length; i++) {
     const nextPart = parts[i + 1] ?? '';
-    if (parts[i] === '--name' && nextPart !== '') {
+    if (parts[i] === '--name' && nextPart !== '' && !nextPart.startsWith('--')) {
       name = nextPart;
       i++;
-    } else if (parts[i] === '--ref' && nextPart !== '') {
+    } else if (parts[i] === '--ref' && nextPart !== '' && !nextPart.startsWith('--')) {
       ref = nextPart;
       i++;
     }
@@ -222,10 +239,10 @@ export const skillInstallHandler: CommandHandler = async (
   // Get config to determine plugins directory
   const configResult = await loadConfig();
   const config = configResult.success ? (configResult.result as AppConfig) : null;
-  const pluginsDir = config?.skills.pluginsDir;
+  const baseDir = config?.skills.pluginsDir;
 
   // Install the skill
-  const result = await installSkill({ url, ref, name, baseDir: pluginsDir });
+  const result = await installSkill({ url, ref, name, baseDir });
 
   if (!result.success) {
     context.onOutput(`\nInstallation failed: ${result.error ?? 'Unknown error'}`, 'error');
@@ -253,12 +270,14 @@ export const skillInstallHandler: CommandHandler = async (
       pluginEntry.ref = ref;
     }
 
-    if (existingIndex >= 0) {
-      // Update existing entry
-      config.skills.plugins[existingIndex] = pluginEntry;
+    if (existingIndex >= 0 && existingIndex < config.skills.plugins.length) {
+      // Update existing entry using a copied array for clarity and safety
+      const updatedPlugins = [...config.skills.plugins];
+      updatedPlugins.splice(existingIndex, 1, pluginEntry);
+      config.skills.plugins = updatedPlugins;
     } else {
-      // Add new entry
-      config.skills.plugins.push(pluginEntry);
+      // Add new entry using a new array instance
+      config.skills.plugins = [...config.skills.plugins, pluginEntry];
     }
 
     // Save updated config

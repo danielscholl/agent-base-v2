@@ -126,9 +126,9 @@ function isValidSkillName(name: string): boolean {
  */
 export async function installSkill(options: InstallOptions): Promise<InstallResult> {
   const { url, ref, name } = options;
-  const baseDir = getPluginsDir(options.baseDir);
+  const pluginsDir = getPluginsDir(options.baseDir);
   const repoName = name ?? extractRepoName(url);
-  const targetDir = join(baseDir, repoName);
+  const targetDir = join(pluginsDir, repoName);
 
   // Validate inputs to prevent shell injection
   if (!isValidGitUrl(url)) {
@@ -161,7 +161,7 @@ export async function installSkill(options: InstallOptions): Promise<InstallResu
     }
 
     // Ensure base directory exists
-    await mkdir(baseDir, { recursive: true });
+    await mkdir(pluginsDir, { recursive: true });
 
     // Clone repository using execFile to avoid shell injection
     const cloneArgs = ['clone', '--depth', '1'];
@@ -196,7 +196,7 @@ export async function installSkill(options: InstallOptions): Promise<InstallResu
         success: false,
         skillName: repoName,
         path: targetDir,
-        error: `Repository does not contain a SKILL.md file. Not a valid skill package.`,
+        error: `Repository does not contain a 'SKILL.md' file. Not a valid skill package.`,
       };
     }
 
@@ -211,7 +211,7 @@ export async function installSkill(options: InstallOptions): Promise<InstallResu
         success: false,
         skillName: repoName,
         path: targetDir,
-        error: `Invalid SKILL.md: ${parseResult.error}`,
+        error: `Invalid 'SKILL.md': ${parseResult.error}`,
       };
     }
 
@@ -226,13 +226,13 @@ export async function installSkill(options: InstallOptions): Promise<InstallResu
         success: false,
         skillName: repoName,
         path: targetDir,
-        error: `Invalid skill name in SKILL.md: "${actualName}". Must start with alphanumeric and contain only alphanumeric, hyphens, and underscores (max 64 chars).`,
+        error: `Invalid skill name in 'SKILL.md': "${actualName}". Must start with alphanumeric and contain only alphanumeric, hyphens, and underscores (max 64 chars).`,
       };
     }
 
     // If manifest name differs from directory name, rename the directory
     if (actualName !== repoName) {
-      const newTargetDir = join(baseDir, actualName);
+      const newTargetDir = join(pluginsDir, actualName);
       if (await pathExists(newTargetDir)) {
         // Rollback: remove cloned directory
         await rm(targetDir, { recursive: true, force: true });
@@ -240,7 +240,7 @@ export async function installSkill(options: InstallOptions): Promise<InstallResu
           success: false,
           skillName: actualName,
           path: newTargetDir,
-          error: `Skill "${actualName}" already exists. Choose a different name with --name option.`,
+          error: `Skill "${actualName}" already exists. Choose a different name with '--name' option.`,
         };
       }
       // Use fs.rename instead of shell mv for portability

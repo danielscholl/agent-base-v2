@@ -130,7 +130,9 @@ export class SkillLoader {
             return { ...skill, disabled: true };
           }
         }
-        // Mark disabled plugins
+        // Preserve disabled status for plugins (already set in scanPlugins)
+        // This prevents line 137 from incorrectly resetting disabled plugins to false
+        // when includeDisabled is true
         if (skill.source === 'plugin' && skill.disabled === true) {
           return skill;
         }
@@ -143,9 +145,9 @@ export class SkillLoader {
         return skill.disabled !== true;
       });
 
-    // Check for duplicate skill names (plugin > project > user > bundled)
+    // Check for duplicate skill names - effective priority: plugin > project > user > bundled
     // Skills are scanned in order: bundled, user, project, plugins
-    // Later sources override earlier ones, giving plugins highest priority
+    // Later sources override earlier ones (Map.set replaces duplicates), so plugins win
     const seen = new Map<string, DiscoveredSkill>();
     for (const skill of filteredSkills) {
       if (seen.has(skill.manifest.name)) {

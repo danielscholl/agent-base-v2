@@ -225,7 +225,7 @@ describe('installer', () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Invalid SKILL.md');
+      expect(result.error).toContain("Invalid 'SKILL.md'");
       expect(mockRm).toHaveBeenCalled();
     });
 
