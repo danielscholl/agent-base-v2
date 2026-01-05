@@ -373,4 +373,28 @@ export class LLMClient {
     const model = providerConfig.model;
     return typeof model === 'string' ? model : 'unknown';
   }
+
+  /**
+   * Get the current provider mode (e.g., 'local', 'cloud').
+   * Only applicable to providers that support modes (e.g., foundry).
+   * Returns undefined if the provider doesn't have a mode.
+   */
+  getProviderMode(): string | undefined {
+    const providerName = this.config.providers.default;
+    const providerConfig = this.config.providers[providerName] as
+      | Record<string, unknown>
+      | undefined;
+
+    if (providerConfig === undefined) {
+      return undefined;
+    }
+
+    // Currently only foundry supports modes
+    if (providerName === 'foundry') {
+      const mode = providerConfig.mode;
+      return typeof mode === 'string' ? mode : undefined;
+    }
+
+    return undefined;
+  }
 }

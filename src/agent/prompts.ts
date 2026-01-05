@@ -102,6 +102,8 @@ export interface PromptAssemblyOptions extends PromptOptions {
   includeEnvironment?: boolean;
   /** Include provider-specific layer (default: true) */
   includeProviderLayer?: boolean;
+  /** Provider mode for mode-specific prompts (e.g., 'local', 'cloud') */
+  providerMode?: string;
   /** Working directory for environment context (default: process.cwd()) */
   workingDir?: string;
   /** User override content (appended at end) */
@@ -353,13 +355,27 @@ export async function loadBasePrompt(options: PromptOptions): Promise<string> {
  * Load provider-specific layer if it exists.
  * Returns empty string if no layer exists for the provider.
  *
- * @param provider - Provider name (e.g., 'anthropic', 'openai')
+ * Supports mode-specific files (e.g., foundry.local.md, foundry.cloud.md).
+ * Falls back to generic provider file (e.g., foundry.md) if mode-specific doesn't exist.
+ *
+ * @param provider - Provider name (e.g., 'anthropic', 'openai', 'foundry')
+ * @param mode - Optional mode (e.g., 'local', 'cloud') for mode-specific files
  * @returns Provider layer content, or empty string
  */
-export async function loadProviderLayer(provider: string): Promise<string> {
+export async function loadProviderLayer(provider: string, mode?: string): Promise<string> {
   const promptsDir = getPromptsDir();
-  const providerPath = join(promptsDir, 'providers', `${provider}.md`);
 
+  // Try mode-specific file first (e.g., foundry.local.md)
+  if (mode !== undefined && mode !== '') {
+    const modeSpecificPath = join(promptsDir, 'providers', `${provider}.${mode}.md`);
+    if (await fileExists(modeSpecificPath)) {
+      const content = await readFile(modeSpecificPath, 'utf-8');
+      return stripYamlFrontMatter(content);
+    }
+  }
+
+  // Fall back to generic provider file (e.g., foundry.md)
+  const providerPath = join(promptsDir, 'providers', `${provider}.md`);
   if (!(await fileExists(providerPath))) {
     return '';
   }
@@ -456,6 +472,7 @@ export async function assembleSystemPrompt(options: PromptAssemblyOptions): Prom
     provider,
     includeEnvironment = true,
     includeProviderLayer = true,
+    providerMode,
     workingDir,
     userOverride,
     onDebug,
@@ -470,12 +487,16 @@ export async function assembleSystemPrompt(options: PromptAssemblyOptions): Prom
 
   // 2. Load provider layer (if enabled and exists)
   if (includeProviderLayer) {
-    const providerLayer = await loadProviderLayer(provider);
+    const providerLayer = await loadProviderLayer(provider, providerMode);
     if (providerLayer) {
       sections.push(providerLayer);
-      onDebug?.('Loaded provider layer', { provider, length: providerLayer.length });
+      onDebug?.('Loaded provider layer', {
+        provider,
+        mode: providerMode,
+        length: providerLayer.length,
+      });
     } else {
-      onDebug?.('No provider layer found', { provider });
+      onDebug?.('No provider layer found', { provider, mode: providerMode });
     }
   }
 

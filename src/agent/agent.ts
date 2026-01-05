@@ -132,6 +132,7 @@ export class Agent {
         config: this.config,
         model: this.getModelName(),
         provider: this.getProviderName(),
+        providerMode: this.getProviderMode(),
         includeEnvironment: true,
         includeProviderLayer: true,
         workingDir: process.cwd(),
@@ -815,6 +816,13 @@ export class Agent {
    */
   getProviderName(): string {
     return this.llmClient.getProviderName();
+  }
+
+  /**
+   * Get the current provider mode (e.g., 'local', 'cloud').
+   */
+  getProviderMode(): string | undefined {
+    return this.llmClient.getProviderMode();
   }
 
   /**
