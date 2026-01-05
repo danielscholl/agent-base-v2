@@ -312,6 +312,27 @@ Hello {{MODEL}}!`);
       expect(result).not.toContain('name:');
       expect(result).not.toContain('version:');
     });
+
+    it('emits warning when configured prompt file does not exist', async () => {
+      const onDebug = jest.fn<(message: string, data?: Record<string, unknown>) => void>();
+      config.agent.systemPromptFile = '/nonexistent/custom-prompt.md';
+
+      // Config path fails, user path succeeds
+      mockAccess.mockRejectedValueOnce(new Error('ENOENT')).mockResolvedValueOnce(undefined);
+      mockReadFile.mockResolvedValue('User fallback prompt');
+
+      await loadSystemPrompt({
+        config,
+        model: 'gpt-4o',
+        provider: 'openai',
+        onDebug,
+      });
+
+      expect(onDebug).toHaveBeenCalledWith(
+        'Configured system prompt file not found at path "/nonexistent/custom-prompt.md". Falling back to default prompts.',
+        { configPath: '/nonexistent/custom-prompt.md', fallbackTier: 'user-default' }
+      );
+    });
   });
 
   describe('loadBasePrompt', () => {
@@ -389,6 +410,27 @@ Hello {{MODEL}}!`);
       });
 
       expect(result).toBe('Package base for gpt-4o');
+    });
+
+    it('emits warning when configured prompt file does not exist', async () => {
+      const onDebug = jest.fn<(message: string, data?: Record<string, unknown>) => void>();
+      config.agent.systemPromptFile = '/nonexistent/custom-prompt.md';
+
+      // Config path fails, user path succeeds
+      mockAccess.mockRejectedValueOnce(new Error('ENOENT')).mockResolvedValueOnce(undefined);
+      mockReadFile.mockResolvedValue('User fallback prompt');
+
+      await loadBasePrompt({
+        config,
+        model: 'gpt-4o',
+        provider: 'openai',
+        onDebug,
+      });
+
+      expect(onDebug).toHaveBeenCalledWith(
+        'Configured system prompt file not found at path "/nonexistent/custom-prompt.md". Falling back to default prompts.',
+        { configPath: '/nonexistent/custom-prompt.md', fallbackTier: 'user-default' }
+      );
     });
   });
 

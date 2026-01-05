@@ -158,7 +158,10 @@ export function ToolsInfo(): React.ReactElement {
 
       // Initialize workspace root from config (before building tool groups)
       if (config.success && config.result !== undefined) {
-        await initializeWorkspaceRoot(config.result.agent.workspaceRoot);
+        const workspaceInit = await initializeWorkspaceRoot(config.result.agent.workspaceRoot);
+        if (workspaceInit.warning !== undefined && workspaceInit.warning !== '') {
+          console.warn('Workspace configuration warning:', workspaceInit.warning);
+        }
       }
 
       // Build tool groups from registry

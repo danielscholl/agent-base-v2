@@ -76,11 +76,13 @@ function expandPath(inputPath: string): string {
 
 /**
  * Check if a path is within another path (child of or equal to).
+ * Uses path.relative() to avoid issues with case-insensitive filesystems.
  */
 function isPathWithin(child: string, parent: string): boolean {
   const resolvedChild = path.resolve(child);
   const resolvedParent = path.resolve(parent);
-  return resolvedChild === resolvedParent || resolvedChild.startsWith(resolvedParent + path.sep);
+  const relative = path.relative(resolvedParent, resolvedChild);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
 /**
@@ -118,11 +120,15 @@ async function safeRealpath(inputPath: string): Promise<string> {
  *    - If config resolves outside env root, it's ignored with a warning
  * 4. Falls back to process.cwd() if nothing is set
  *
+ * **Side Effect:** This function modifies `process.env['AGENT_WORKSPACE_ROOT']`
+ * when config is applied (cases 2 and 3). This ensures tools using `getWorkspaceRoot()`
+ * see the effective workspace. Callers should be aware of this global state mutation.
+ *
  * Call this at agent startup to ensure workspace is properly configured.
  *
  * @param configWorkspaceRoot - The config.agent.workspaceRoot value
  * @param onDebug - Optional debug callback
- * @returns The effective workspace root and source
+ * @returns The effective workspace root and source (includes warning if config was rejected)
  */
 export async function initializeWorkspaceRoot(
   configWorkspaceRoot?: string,

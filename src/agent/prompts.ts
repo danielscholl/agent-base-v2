@@ -89,6 +89,8 @@ export interface PromptOptions {
   model: string;
   /** Current provider name (for {{PROVIDER}} placeholder) */
   provider: string;
+  /** Debug callback for logging */
+  onDebug?: (message: string, data?: Record<string, unknown>) => void;
 }
 
 /**
@@ -276,7 +278,7 @@ export function replacePlaceholders(content: string, values: PlaceholderValues):
  * @returns Base prompt content with placeholders replaced
  */
 export async function loadBasePrompt(options: PromptOptions): Promise<string> {
-  const { config, model, provider } = options;
+  const { config, model, provider, onDebug } = options;
   const promptsDir = getPromptsDir();
 
   let promptContent: string | null = null;
@@ -286,6 +288,11 @@ export async function loadBasePrompt(options: PromptOptions): Promise<string> {
     const configPath = config.agent.systemPromptFile;
     if (await fileExists(configPath)) {
       promptContent = await readFile(configPath, 'utf-8');
+    } else {
+      onDebug?.(
+        `Configured system prompt file not found at path "${configPath}". Falling back to default prompts.`,
+        { configPath, fallbackTier: 'user-default' }
+      );
     }
   }
 
@@ -447,7 +454,7 @@ export async function assembleSystemPrompt(options: PromptAssemblyOptions): Prom
   const sections: string[] = [];
 
   // 1. Load base prompt
-  const basePrompt = await loadBasePrompt({ config, model, provider });
+  const basePrompt = await loadBasePrompt({ config, model, provider, onDebug });
   sections.push(basePrompt);
   onDebug?.('Loaded base prompt', { length: basePrompt.length });
 
@@ -506,7 +513,7 @@ export async function assembleSystemPrompt(options: PromptAssemblyOptions): Prom
  * @returns Processed system prompt string
  */
 export async function loadSystemPrompt(options: PromptOptions): Promise<string> {
-  const { config, model, provider } = options;
+  const { config, model, provider, onDebug } = options;
 
   let promptContent: string | null = null;
 
@@ -515,6 +522,11 @@ export async function loadSystemPrompt(options: PromptOptions): Promise<string> 
     const configPath = config.agent.systemPromptFile;
     if (await fileExists(configPath)) {
       promptContent = await readFile(configPath, 'utf-8');
+    } else {
+      onDebug?.(
+        `Configured system prompt file not found at path "${configPath}". Falling back to default prompts.`,
+        { configPath, fallbackTier: 'user-default' }
+      );
     }
   }
 
