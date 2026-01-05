@@ -29,8 +29,8 @@ import { createSpanContext, createChildSpanContext } from './callbacks.js';
 import { extractTokenUsage } from '../model/base.js';
 import { errorResponse, mapModelErrorCodeToAgentErrorCode } from '../errors/index.js';
 
-/** Default maximum iterations for tool execution loop */
-const DEFAULT_MAX_ITERATIONS = 10;
+/** Default maximum iterations for tool execution loop (safety valve, not a constraint) */
+const DEFAULT_MAX_ITERATIONS = 50;
 
 /**
  * Tool call structure from LangChain AIMessage.

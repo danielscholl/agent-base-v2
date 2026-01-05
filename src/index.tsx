@@ -46,13 +46,6 @@ const cli = meow(
     --model <name>         Override model name
     --continue             Resume last session
     --verbose              Show detailed execution
-
-  Interactive Commands
-    /help                  Show all available commands
-    /save [name]           Save current session
-    /history               Show conversation history
-    /clear                 Clear conversation
-    /exit                  Exit the agent
 `,
   {
     importMeta: import.meta,
