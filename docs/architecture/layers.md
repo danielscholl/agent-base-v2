@@ -201,10 +201,10 @@ The Utils layer provides shared infrastructure services.
 
 **Responsibilities:**
 - Load, validate, and merge configuration
-- Store and retrieve tool outputs (context)
 - Manage message history
 - Handle session persistence
 - Provide environment helpers
+ - Context storage (planned; ContextManager exists but is not wired into agent loop)
 
 **Key Files:**
 - `src/config/schema.ts` - Zod schemas for configuration

@@ -352,8 +352,8 @@ Falls back to camelCase variants (`promptTokens`, `completionTokens`).
 |----------|----------------|-------|
 | `openai` | API key | Standard OpenAI API |
 | `anthropic` | API key | Anthropic Claude API |
-| `azure` | API key or Azure CLI | Supports AzureCliCredential fallback |
-| `foundry` | Azure CLI (local) or API key (cloud) | Cloud mode is default |
+| `azure` | API key (Azure CLI planned) | Azure CLI fallback is planned; current implementation uses API keys |
+| `foundry` | API key (cloud) / foundry-local-sdk (local) | Azure CLI auth is planned; cloud mode is default |
 | `gemini` | API key | Vertex AI reserved, not implemented |
 | `github` | GitHub token | Falls back to `gh` CLI token |
 | `local` | None | Placeholder key used internally |

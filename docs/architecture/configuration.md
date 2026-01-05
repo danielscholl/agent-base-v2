@@ -28,7 +28,8 @@ The config directory is `.agent/` (matches Python for migration compatibility):
 | `~/.agent/config.yaml` | User config | Personal, never committed |
 | `~/.agent/sessions/` | Session storage | Persisted conversations |
 | `~/.agent/context/` | Context storage | Tool output persistence |
-| `~/.agent/skills/` | User skills | Installed plugins |
+| `~/.agent/skills/` | User skills | User-created skills |
+| `~/.agent/plugins/` | Plugin skills | Installed from git |
 
 ---
 
@@ -139,7 +140,8 @@ AppConfig
 |       +-- projectId?: string
 |
 |-- skills
-|   |-- plugins: string[]              # Default: []
+|   |-- plugins: PluginDefinition[]    # Default: [] (accepts legacy string URLs)
+|   |-- pluginsDir?: string            # Directory for installed plugins
 |   |-- disabledBundled: string[]      # Default: []
 |   |-- enabledBundled: string[]       # Default: []
 |   |-- userDir?: string               # Custom skill directory
@@ -329,6 +331,9 @@ Return validated AppConfig
 | `MEMORY_ENABLED` | `memory.enabled` | Boolean coercion |
 | `MEMORY_TYPE` | `memory.type` | Must be local/mem0 |
 | `MEMORY_HISTORY_LIMIT` | `memory.historyLimit` | Positive integer |
+
+**Note:** `AGENT_FILESYSTEM_WRITES_ENABLED` is read by write-capable tools at runtime.
+It is not part of the config merge pipeline, but it can override write behavior when set.
 
 ---
 

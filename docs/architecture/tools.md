@@ -36,7 +36,7 @@ src/tools/
 ├── grep.ts            # Content searching with regex
 ├── list.ts            # Directory listing
 ├── bash.ts            # Shell command execution
-├── task.ts            # Subagent spawning
+├── task.ts            # Subagent spawning (planned)
 ├── todo.ts            # Task tracking (todowrite, todoread)
 ├── webfetch.ts        # URL fetching with HTML sanitization
 │
@@ -320,12 +320,15 @@ src/tools/
 | `edit` | write | In-place file editing with search/replace patterns |
 | `glob` | read | Find files matching glob patterns |
 | `grep` | read | Search file contents with regex, context lines |
-| `list` | read | List directory contents with pagination |
+| `list` | read | List directory contents with entry limit (truncates) |
 | `bash` | execute | Execute shell commands with timeout/abort |
-| `task` | execute | Spawn subagent for complex tasks |
+| `task` | execute | Spawn subagent for complex tasks (planned) |
 | `todowrite` | read | Write/update task list for tracking |
 | `todoread` | read | Read current task list |
 | `webfetch` | network | Fetch URL contents with HTML sanitization |
+
+**Note:** Subagent execution is planned; current `task` tool returns an LLM_ASSIST_REQUIRED
+payload for the Agent layer to handle.
 
 ---
 

@@ -100,7 +100,7 @@ interface ToolPermissions {
 | `glob` | `read` | File pattern matching |
 | `grep` | `read` | Content searching |
 | `webfetch` | `network` | URL fetching |
-| `task` | `execute` | Subagent spawning |
+| `task` | `execute` | Subagent spawning (planned) |
 | `todowrite` | `read` | Write task list |
 | `todoread` | `read` | Read task list |
 
