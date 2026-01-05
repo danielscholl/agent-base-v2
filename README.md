@@ -59,18 +59,23 @@ Requires [Ollama](https://ollama.ai/) or [Docker Desktop](https://www.docker.com
 | Azure OpenAI | Azure CLI (`az login`) |
 | Azure AI Foundry | Azure CLI (`az login`) |
 
-## Quick Setup
-
+## Quick Start
 
 ```bash
 # 1. Install agent globally
-bun install -g github:danielscholl/agent-base-v2
+bun install -g --trust github:danielscholl/agent-base-v2
 
 # 2. Start agent
 agent config init
 
 # 3. Get help
 agent --help
+
+# Upgrade agent
+agent upgrade
+
+# Remove agent
+bun uninstall -g agent-base-v2
 ```
 
 ### Configuration
