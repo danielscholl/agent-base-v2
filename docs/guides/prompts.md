@@ -50,16 +50,14 @@ This approach provides provider-specific optimization without the maintenance bu
 ```
 src/prompts/
 ├── base.md                    # Core agent instructions (all providers)
-├── providers/                 # Provider-specific layers
-│   ├── anthropic.md          # Claude models
-│   ├── openai.md             # GPT and O1 models
-│   ├── gemini.md             # Google Gemini
-│   ├── azure.md              # Azure OpenAI
-│   ├── github.md             # GitHub Models
-│   ├── local.md              # Ollama/local models
-│   └── foundry.md            # Azure AI Foundry
-└── sections/                  # Composable sections
-    └── environment.template.md
+└── providers/                 # Provider-specific layers
+    ├── anthropic.md          # Claude models
+    ├── openai.md             # GPT and O1 models
+    ├── gemini.md             # Google Gemini
+    ├── azure.md              # Azure OpenAI
+    ├── github.md             # GitHub Models
+    ├── local.md              # Ollama/local models
+    └── foundry.md            # Azure AI Foundry
 ```
 
 ---
