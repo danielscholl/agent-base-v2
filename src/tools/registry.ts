@@ -457,9 +457,11 @@ export namespace ToolRegistry {
       initCacheKey = cacheKey;
     }
 
-    // If agent provides a callback, create fresh wrappers (not cached)
-    // to ensure proper callback scoping per-agent
-    const useAgentCallback = agentCallback !== undefined;
+    // Create fresh wrappers (not cached) when:
+    // 1. Agent provides a callback (onToolResult) - ensures callback scoping per-agent
+    // 2. Agent provides a createContext - ensures session/abort signal scoping per-agent
+    // This prevents stale closures when multiple Agent instances exist in the same process.
+    const needsFreshWrappers = agentCallback !== undefined || createContext !== undefined;
 
     // Initialize and convert to LangChain tools
     const result: StructuredToolInterface[] = [];
@@ -476,22 +478,22 @@ export namespace ToolRegistry {
 
       if (!entry.initialized) continue;
 
-      if (useAgentCallback) {
-        // Create fresh wrapper with agent-specific callback
+      if (needsFreshWrappers) {
+        // Create fresh wrapper with agent-specific context and/or callback
         const wrapper = createLangChainTool(
           entry.info.id,
           entry.initialized,
           createContext,
-          agentCallback
+          agentCallback ?? getResultCallback()
         );
         result.push(wrapper);
       } else {
-        // Use cached wrapper with global callback
+        // Use cached wrapper with global callback (no createContext provided)
         if (!entry.langchainTool) {
           entry.langchainTool = createLangChainTool(
             entry.info.id,
             entry.initialized,
-            createContext,
+            undefined, // No createContext for cached wrappers
             getResultCallback()
           );
         }
@@ -521,20 +523,21 @@ export namespace ToolRegistry {
 }
 
 /**
- * Type guard to check if metadata contains an error field.
- * Validates that metadata is an object and has a non-empty error property.
+ * Type guard to check if metadata contains an error field indicating failure.
+ * Validates that metadata is an object and has a truthy error property.
+ *
+ * Handles both string errors (e.g., "NOT_FOUND") and boolean errors (e.g., bash's error: true/false).
+ * A value of `false`, `null`, `undefined`, or `''` is NOT considered an error.
  *
  * @param metadata - Unknown metadata to validate
  * @returns true if metadata has error field with truthy value
  */
-function hasMetadataError(metadata: unknown): metadata is { error: string } {
+function hasMetadataError(metadata: unknown): metadata is { error: string | boolean } {
   return (
     typeof metadata === 'object' &&
     metadata !== null &&
     'error' in metadata &&
-    metadata.error !== undefined &&
-    metadata.error !== null &&
-    metadata.error !== ''
+    Boolean((metadata as { error: unknown }).error)
   );
 }
 

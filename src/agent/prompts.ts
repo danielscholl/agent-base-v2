@@ -267,8 +267,10 @@ export function replacePlaceholders(content: string, values: PlaceholderValues):
 // =============================================================================
 
 /**
- * Load the base prompt from src/prompts/base.md.
- * Falls back to legacy system.md then inline default.
+ * Load the base prompt using three-tier fallback:
+ * 1. config.agent.systemPromptFile (explicit override)
+ * 2. ~/.agent/system.md (user's default)
+ * 3. Package default (src/prompts/base.md or system.md)
  *
  * @param options - Prompt options
  * @returns Base prompt content with placeholders replaced
@@ -279,10 +281,28 @@ export async function loadBasePrompt(options: PromptOptions): Promise<string> {
 
   let promptContent: string | null = null;
 
-  // Try base.md first (new compositional system)
-  const basePath = join(promptsDir, 'base.md');
-  if (await fileExists(basePath)) {
-    promptContent = await readFile(basePath, 'utf-8');
+  // Tier 1: Explicit config override (config.agent.systemPromptFile)
+  if (config.agent.systemPromptFile !== undefined && config.agent.systemPromptFile !== '') {
+    const configPath = config.agent.systemPromptFile;
+    if (await fileExists(configPath)) {
+      promptContent = await readFile(configPath, 'utf-8');
+    }
+  }
+
+  // Tier 2: User's default (~/.agent/system.md)
+  if (promptContent === null) {
+    const userPath = getUserPromptPath();
+    if (await fileExists(userPath)) {
+      promptContent = await readFile(userPath, 'utf-8');
+    }
+  }
+
+  // Tier 3: Package default (try base.md first, then system.md)
+  if (promptContent === null) {
+    const basePath = join(promptsDir, 'base.md');
+    if (await fileExists(basePath)) {
+      promptContent = await readFile(basePath, 'utf-8');
+    }
   }
 
   // Fall back to legacy system.md
