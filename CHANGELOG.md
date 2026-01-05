@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.3.1](https://github.com/danielscholl/agent-base-v2/compare/v0.3.0...v0.3.1) (2026-01-05)
+
+
+### Features
+
+* **update:** add --no-absolute-names tar flag ([a4c5041](https://github.com/danielscholl/agent-base-v2/commit/a4c504148b72cb42622e85678b91d11a907cabc0))
+* **update:** add auto-update system with version checking ([0ded57e](https://github.com/danielscholl/agent-base-v2/commit/0ded57eceb57fb2ca40d043a772af5fa76855e99))
+* **update:** add GitHub token auth header for release fetch ([a4c5041](https://github.com/danielscholl/agent-base-v2/commit/a4c504148b72cb42622e85678b91d11a907cabc0))
+* **update:** implement multi-type updater with GitHub releases ([e0229d7](https://github.com/danielscholl/agent-base-v2/commit/e0229d7d1820988400d14771697cb5c33379fe0b))
+* **update:** improve update flow and checksum parsing ([08d86af](https://github.com/danielscholl/agent-base-v2/commit/08d86af8dac58a2a7f203fed4c85f3403c3177b5))
+* **updater:** improve updater reliability and status UI ([3f1647c](https://github.com/danielscholl/agent-base-v2/commit/3f1647cf08799edcac3822f74977eea190b4d832))
+* **update:** use provided token for authorization in releases request ([a4c5041](https://github.com/danielscholl/agent-base-v2/commit/a4c504148b72cb42622e85678b91d11a907cabc0))
+* **update:** use VERSION constant for current version checks ([4f06a15](https://github.com/danielscholl/agent-base-v2/commit/4f06a15f2f25f39f60d355a2226d4d1ccec948a0))
+* **update:** validate and sanitize update data from github ([dd582d0](https://github.com/danielscholl/agent-base-v2/commit/dd582d0d35024623749fd53f2bda21711bb87484))
+
+
+### Bug Fixes
+
+* **cli:** create temp dir early and remove it in finally ([bde0262](https://github.com/danielscholl/agent-base-v2/commit/bde0262a1c7c8d165baee943a46d7f1051690497))
+* **cli:** harden semver handling and temp cleanup in update ([bde0262](https://github.com/danielscholl/agent-base-v2/commit/bde0262a1c7c8d165baee943a46d7f1051690497))
+* **cli:** validate and sanitize semver; drop invalid cache files ([bde0262](https://github.com/danielscholl/agent-base-v2/commit/bde0262a1c7c8d165baee943a46d7f1051690497))
+
+
+### Documentation
+
+* **decisions:** add self-update strategy ADR ([207e244](https://github.com/danielscholl/agent-base-v2/commit/207e2441dda107d15a3a9c82a7295528b334a7df))
+* **readme:** update llm providers and installation sections ([844521f](https://github.com/danielscholl/agent-base-v2/commit/844521fb4e7a7b80cf63a0d2942322993615e854))
+
 ## [0.3.0](https://github.com/danielscholl/agent-base-v2/compare/v0.2.2...v0.3.0) (2026-01-05)
 
 
