@@ -4,6 +4,9 @@
   "description": "TypeScript agent framework with multi-provider LLM support",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "agent": "./dist/index.js"
+  },
   "files": [
     "dist",
     "README.md",

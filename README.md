@@ -13,21 +13,7 @@ Build conversational AI agents with enterprise-grade features: session persisten
 Supports Local (Ollama), GitHub Models, OpenAI, Anthropic, Google Gemini, Azure OpenAI, and Azure AI Foundry.
 
 ```bash
-bun run dev
-
-# First run: Provider Setup (if no provider configured)
-Provider Setup
-══════════════
-
-No providers configured. Select one to set up:
-
-  1. OpenAI           GPT-4, GPT-4o, o1, and other OpenAI models
-  2. Anthropic        Claude Sonnet, Claude Opus, and Claude Haiku models
-  3. Azure OpenAI     Azure-hosted OpenAI models with enterprise security
-  4. Azure AI Foundry Azure AI managed models (local or cloud)
-  5. Google Gemini    Gemini Pro and Gemini Flash models
-  6. GitHub Models    Models via GitHub Copilot infrastructure
-  7. Local            Local models via Ollama, Docker, or LM Studio
+agent
 
 # After provider configuration (or on subsequent runs)
 Agent - Conversational Assistant
@@ -49,37 +35,6 @@ You mentioned "Alice."
 ──────────────────────────────────────────────────────────────────────────────
 > exit
 Goodbye!
-```
-
-### Verbose Mode
-
-Use `--verbose` for detailed execution phases:
-
-```bash
-# Single prompt mode with verbose
-bun run dev -- -p "What is 2+2?" --verbose
-
-● Phase 1
-└── ● Thinking (2 messages)
-
-2 + 2 = 4
-
-# Interactive mode with verbose
-bun run dev --verbose
-
-Agent - Conversational Assistant
-Version 0.1.0 • OpenAI/gpt-4o
-──────────────────────────────────────────────────────────────────────────────
-> Say hello to Alice
-
-● Phase 1
-└── ● Thinking (2 messages)
-
-Hello, Alice!
-
-# After completion (verbose shows phase history)
-• Phase 1 (2.9s)
-└── • Thinking (1 messages) - Response received
 ```
 
 ## Prerequisites
@@ -106,53 +61,38 @@ Requires [Ollama](https://ollama.ai/) or [Docker Desktop](https://www.docker.com
 
 ## Quick Setup
 
-### Option 1: Install as Global Tool (Recommended)
 
 ```bash
 # 1. Install agent globally
 bun install -g github:danielscholl/agent-base-v2
 
-# 2. Configure provider (example: OpenAI)
-export OPENAI_API_KEY="your-api-key"
+# 2. Start agent
+agent config init
 
-# 3. Start agent
-agent
-
-# Update to latest version
-agent update
-```
-
-### Option 2: Run from Source (Development)
-
-```bash
-# 1. Clone and install
-git clone https://github.com/danielscholl/agent-base-v2.git
-cd agent-base-v2
-bun install
-
-# 2. Configure provider (example: OpenAI)
-export OPENAI_API_KEY="your-api-key"
-
-# 3. Start agent
-bun run dev
+# 3. Get help
+agent --help
 ```
 
 ### Configuration
 
 Agent uses a YAML configuration file at `~/.agent/config.yaml` for managing providers, memory, and observability settings.
 
-```yaml
-version: "1.0"
+**Configuration Commands:**
 
-providers:
-  default: openai
-  openai:
-    apiKey: ${OPENAI_API_KEY}
-    model: gpt-4o
+```bash
+# Interactive setup wizard
+agent config init
 
-telemetry:
-  enabled: true
-  otlpEndpoint: http://localhost:4318
+# View current configuration
+agent config show
+
+# Manage providers
+agent config provider local       # Enable/configure local (Docker)
+agent config provider github      # Enable/configure GitHub Models
+agent config provider openai      # Enable/configure OpenAI
+
+# Configure memory backend
+agent config memory               # Switch between in_memory and mem0
 ```
 
 See [docs/architecture/configuration.md](docs/architecture/configuration.md) for complete configuration options.
@@ -161,17 +101,28 @@ See [docs/architecture/configuration.md](docs/architecture/configuration.md) for
 
 ```bash
 # Interactive chat mode
-bun run dev
+agent
 
-# Type checking
-bun run typecheck
+# Check the agent configuration
+agent --check
 
-# Run tests
-bun run test
+# Check the tools being exposed to the agent
+agent --tools
 
-# Build
-bun run build
+# Single query (clean output for scripting)
+agent -p "Say hello to Alice"
+
+# Single query with verbose execution details
+agent -p "Analyze this text" --verbose
+
+# Switch providers on the fly
+agent --provider openai -p "Hello"
+
+# Switch models on the fly
+agent --provider anthropic --model claude-sonnet-4-5-20250929 -p "Hello"
 ```
+
+**Note:** Single prompt mode (`-p`) outputs clean text by default, perfect for piping or scripting. Use `--verbose` to see execution details.
 
 ## Contributing
 
