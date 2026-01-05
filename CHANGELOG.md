@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2](https://github.com/danielscholl/agent-base-v2/compare/v0.3.1...v0.3.2) (2026-01-05)
+
+
+### Continuous Integration
+
+* **release:** adjust release workflow fail-fast and publish condition ([a03677c](https://github.com/danielscholl/agent-base-v2/commit/a03677c673be2a9159fc513102d4118291f5ee73))
+* **release:** improve release workflow resilience and update docs ([8b15ede](https://github.com/danielscholl/agent-base-v2/commit/8b15ede0a8d63c34fd7cc62d8d09c1c1f740f792))
+
 ## [0.3.1](https://github.com/danielscholl/agent-base-v2/compare/v0.3.0...v0.3.1) (2026-01-05)
 
 
