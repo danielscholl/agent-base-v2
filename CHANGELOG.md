@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.2.1](https://github.com/danielscholl/agent-base-v2/compare/agent-base-v2-v0.2.0...agent-base-v2-v0.2.1) (2026-01-05)
+
+
+### Documentation
+
+* **prompts:** remove sections directory from prompts guide ([1b32057](https://github.com/danielscholl/agent-base-v2/commit/1b3205786d13f55f10fd479dea27cbaaee48c513))
+* **readme:** update quick start with install flag and new steps ([f278e27](https://github.com/danielscholl/agent-base-v2/commit/f278e27c0e36773f3a9734195b47bfae009098fb))
+* **readme:** update quick start with install improvements ([0cee5ed](https://github.com/danielscholl/agent-base-v2/commit/0cee5edd9bc500afa7fb455b91f6b1a71a75e5d8))
+
+
+### Code Refactoring
+
+* **prompts:** remove legacy system.md fallback ([bafd2db](https://github.com/danielscholl/agent-base-v2/commit/bafd2dbc41b98f0dc62bb7d3ea221c650ffd7119))
+* **prompts:** switch package default from system.md to base.md ([aed90f5](https://github.com/danielscholl/agent-base-v2/commit/aed90f53a1793e39fe1d6cd84700f341cc81c50a))
+
+
+### Build System
+
+* **cli:** add agent bin entry and update docs ([745ad68](https://github.com/danielscholl/agent-base-v2/commit/745ad684380498d8dfaecbe120909446d2513430))
+
 ## [0.2.0](https://github.com/danielscholl/agent-base-v2/compare/agent-base-v2-v0.1.0...agent-base-v2-v0.2.0) (2026-01-05)
 
 
