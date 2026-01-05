@@ -21,6 +21,21 @@ jest.unstable_mockModule('node:fs/promises', () => ({
   mkdir: mockMkdir,
 }));
 
+// Mock fs for realpathSync
+const mockRealpathSync = jest.fn();
+jest.unstable_mockModule('node:fs', () => ({
+  realpathSync: mockRealpathSync,
+}));
+
+// Mock VERSION constant - needs to be a separate variable that can be changed
+// Path is relative to the module being tested (update.ts), not the test file
+let mockVersion = '0.1.0';
+jest.unstable_mockModule('../../version', () => ({
+  get VERSION() {
+    return mockVersion;
+  },
+}));
+
 // Mock global fetch for GitHub API calls
 const mockFetch = jest.fn();
 globalThis.fetch = mockFetch;
@@ -59,8 +74,12 @@ describe('update command handler', () => {
     // Set default test argv
     process.argv = ['bun', '/Users/test/.bun/install/global/agent-base-v2/index.js'];
 
-    // Default mock for readFile - returns valid package.json
-    mockReadFile.mockResolvedValue(JSON.stringify({ version: '0.1.0' }));
+    // Default mock VERSION
+    mockVersion = '0.1.0';
+    // Default mock for realpathSync - return path as-is
+    mockRealpathSync.mockImplementation((path: string) => path);
+    // Default mock for readFile - used for version cache
+    mockReadFile.mockResolvedValue('{}');
     // Default mocks for write operations
     mockWriteFile.mockResolvedValue(undefined);
     mockMkdir.mockResolvedValue(undefined);
@@ -169,8 +188,8 @@ describe('update command handler', () => {
   });
 
   describe('getCurrentVersion', () => {
-    it('returns version from package.json', async () => {
-      mockReadFile.mockResolvedValue(JSON.stringify({ version: '0.2.5' }));
+    it('returns version from VERSION constant', async () => {
+      mockVersion = '0.2.5';
 
       const { updateHandler } = await import('../update.js');
       const context = createMockContext();
@@ -179,8 +198,8 @@ describe('update command handler', () => {
       expect(context.outputs.some((o) => o.content.includes('Current version: 0.2.5'))).toBe(true);
     });
 
-    it('returns unknown when package.json not found', async () => {
-      mockReadFile.mockRejectedValue(new Error('File not found'));
+    it('returns unknown when VERSION is empty', async () => {
+      mockVersion = '';
 
       const { updateHandler } = await import('../update.js');
       const context = createMockContext();
@@ -191,26 +210,70 @@ describe('update command handler', () => {
       );
     });
 
-    it('returns unknown when version field is missing', async () => {
-      mockReadFile.mockResolvedValue(JSON.stringify({ name: 'agent-base-v2' }));
+    it('allows updates when VERSION is unknown with --force', async () => {
+      mockVersion = '';
+      // Mock GitHub API to return a version
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            tag_name: 'v0.2.0',
+            html_url: 'https://github.com/danielscholl/agent-base-v2/releases/tag/v0.2.0',
+            assets: [],
+          }),
+      });
+
+      // Mock successful spawn
+      const mockProcess = {
+        stdout: { on: jest.fn(), removeListener: jest.fn() },
+        stderr: { on: jest.fn(), removeListener: jest.fn() },
+        once: jest.fn((event: string, callback: (arg: number | null | Error) => void) => {
+          if (event === 'close') {
+            setTimeout(() => {
+              callback(0);
+            }, 10);
+          }
+          return mockProcess;
+        }),
+      };
+      mockSpawn.mockReturnValue(mockProcess);
+
+      const { updateHandler } = await import('../update.js');
+      const context = createMockContext();
+      const result = await updateHandler('--force', context);
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('Update complete');
+    });
+  });
+
+  describe('symlink resolution', () => {
+    it('resolves symlinks to detect shell-binary installation', async () => {
+      // Symlink in ~/.local/bin/agent points to ~/.agent/bin/agent
+      process.argv = ['bun', '/Users/test/.local/bin/agent'];
+      mockRealpathSync.mockReturnValue('/Users/test/.agent/bin/agent');
 
       const { updateHandler } = await import('../update.js');
       const context = createMockContext();
       await updateHandler('--check', context);
 
-      expect(context.outputs.some((o) => o.content.includes('Current version: unknown'))).toBe(
-        true
-      );
+      expect(
+        context.outputs.some((o) => o.content.includes('Installation: Shell script (binary)'))
+      ).toBe(true);
     });
 
-    it('returns unknown when version field is empty string', async () => {
-      mockReadFile.mockResolvedValue(JSON.stringify({ version: '' }));
+    it('falls back to original path if realpath fails', async () => {
+      process.argv = ['bun', '/Users/test/.bun/install/global/agent-base-v2/index.js'];
+      mockRealpathSync.mockImplementation(() => {
+        throw new Error('ENOENT');
+      });
 
       const { updateHandler } = await import('../update.js');
       const context = createMockContext();
       await updateHandler('--check', context);
 
-      expect(context.outputs.some((o) => o.content.includes('Current version: unknown'))).toBe(
+      // Should still detect bun-global from the original path
+      expect(context.outputs.some((o) => o.content.includes('Installation: Bun global'))).toBe(
         true
       );
     });

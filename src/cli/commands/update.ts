@@ -8,7 +8,10 @@ import type { CommandHandler, CommandResult } from './types.js';
 import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { createHash } from 'node:crypto';
+import { VERSION } from '../version.js';
 
 /** GitHub repository info */
 const REPO_OWNER = 'danielscholl';
@@ -50,10 +53,20 @@ export interface VersionCheckResult {
 
 /**
  * Detect installation type based on executable path.
+ * Resolves symlinks to get the actual installation location.
  */
 function detectInstallationType(): InstallationType {
   const execPath = process.argv[1] ?? '';
-  const normalizedPath = execPath.replace(/\\/g, '/');
+
+  // Resolve symlinks to get the real path
+  let resolvedPath = execPath;
+  try {
+    resolvedPath = realpathSync(execPath);
+  } catch {
+    // If realpath fails, continue with original path
+  }
+
+  const normalizedPath = resolvedPath.replace(/\\/g, '/');
 
   // Shell script binary install: ~/.agent/bin/
   if (normalizedPath.includes('/.agent/bin/')) {
@@ -160,33 +173,11 @@ async function runCommand(
 }
 
 /**
- * Get current version from package.json or VERSION file.
+ * Get current version from the bundled VERSION constant.
+ * This is the single source of truth for the version.
  */
-async function getCurrentVersion(): Promise<string> {
-  try {
-    const execDir = dirname(process.argv[1] ?? '');
-    const possiblePaths = [
-      join(execDir, '..', 'package.json'),
-      join(execDir, '..', '..', 'package.json'),
-      join(INSTALL_DIR, 'repo', 'package.json'),
-      join(process.cwd(), 'package.json'),
-    ];
-
-    for (const pkgPath of possiblePaths) {
-      try {
-        const content = await readFile(pkgPath, 'utf-8');
-        const pkg = JSON.parse(content) as { version?: string };
-        if (pkg.version !== undefined && pkg.version !== '') {
-          return pkg.version;
-        }
-      } catch {
-        // File doesn't exist or isn't readable, try next path
-      }
-    }
-    return 'unknown';
-  } catch {
-    return 'unknown';
-  }
+function getCurrentVersion(): string {
+  return VERSION || 'unknown';
 }
 
 /**
@@ -243,12 +234,10 @@ function compareSemver(a: string, b: string): number {
 /**
  * Check for updates and return version info.
  * This is exported for use by other components (e.g., startup banner).
+ * Returns null only if we can't reach GitHub API.
  */
 export async function checkForUpdates(): Promise<VersionCheckResult | null> {
-  const currentVersion = await getCurrentVersion();
-  if (currentVersion === 'unknown') {
-    return null;
-  }
+  const currentVersion = getCurrentVersion();
 
   const release = await fetchLatestRelease();
   if (release === null) {
@@ -256,7 +245,9 @@ export async function checkForUpdates(): Promise<VersionCheckResult | null> {
   }
 
   const latestVersion = release.tag_name.replace(/^v/, '');
-  const updateAvailable = compareSemver(currentVersion, latestVersion) < 0;
+  // If version is unknown, assume update is available to allow --force updates
+  const updateAvailable =
+    currentVersion === 'unknown' || compareSemver(currentVersion, latestVersion) < 0;
 
   return {
     currentVersion,
@@ -310,7 +301,7 @@ export async function checkForUpdatesWithCache(
     const cached = await loadVersionCache();
     if (cached !== null && Date.now() - cached.checkedAt < CACHE_TTL_MS) {
       // Update currentVersion in case it changed (e.g., after update)
-      const currentVersion = await getCurrentVersion();
+      const currentVersion = getCurrentVersion();
       if (currentVersion !== 'unknown') {
         cached.currentVersion = currentVersion;
         cached.updateAvailable = compareSemver(currentVersion, cached.latestVersion) < 0;
@@ -328,11 +319,60 @@ export async function checkForUpdatesWithCache(
 
 /**
  * Detect platform for binary downloads.
+ * Returns null for unsupported platforms (Windows).
  */
-function detectPlatform(): string {
+function detectPlatform(): string | null {
+  // Windows doesn't support shell-binary installs
+  if (process.platform === 'win32') {
+    return null;
+  }
   const os = process.platform === 'darwin' ? 'darwin' : 'linux';
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
   return `${os}-${arch}`;
+}
+
+/**
+ * Verify SHA256 checksum of downloaded file.
+ */
+function verifyChecksum(data: Buffer, expectedHash: string): boolean {
+  const hash = createHash('sha256').update(data).digest('hex');
+  return hash.toLowerCase() === expectedHash.toLowerCase();
+}
+
+/**
+ * Fetch checksum file from GitHub releases.
+ */
+async function fetchChecksumFile(release: GitHubRelease): Promise<Map<string, string>> {
+  const checksums = new Map<string, string>();
+
+  // Look for checksums file (SHA256SUMS or similar)
+  const checksumAsset = release.assets.find(
+    (a) => a.name === 'SHA256SUMS' || a.name === 'checksums.txt' || a.name.endsWith('.sha256')
+  );
+
+  if (checksumAsset === undefined) {
+    return checksums;
+  }
+
+  try {
+    const response = await fetch(checksumAsset.browser_download_url);
+    if (!response.ok) {
+      return checksums;
+    }
+
+    const content = await response.text();
+    // Parse format: "hash  filename" or "hash filename"
+    for (const line of content.split('\n')) {
+      const match = line.match(/^([a-fA-F0-9]{64})\s+(.+)$/);
+      if (match !== null && match[1] !== undefined && match[2] !== undefined) {
+        checksums.set(match[2].trim(), match[1]);
+      }
+    }
+  } catch {
+    // Ignore checksum fetch failures
+  }
+
+  return checksums;
 }
 
 /** Output handler type for update functions */
@@ -347,6 +387,14 @@ async function updateShellBinary(
   release: GitHubRelease
 ): Promise<boolean> {
   const platform = detectPlatform();
+
+  // Windows is not supported for shell-binary installs
+  if (platform === null) {
+    context.onOutput('Binary installation not supported on Windows', 'warning');
+    context.onOutput('Falling back to source build...', 'info');
+    return updateShellSource(context);
+  }
+
   const archiveName = `agent-${platform}.tar.gz`;
 
   // Find the binary asset
@@ -367,11 +415,27 @@ async function updateShellBinary(
     }
 
     const arrayBuffer = await response.arrayBuffer();
+    const downloadedData = Buffer.from(arrayBuffer);
     const tmpDir = join(INSTALL_DIR, `tmp.${String(Date.now())}`);
     const archivePath = join(tmpDir, archiveName);
 
+    // Verify checksum if available
+    context.onOutput('Verifying checksum...', 'info');
+    const checksums = await fetchChecksumFile(release);
+    const expectedHash = checksums.get(archiveName);
+
+    if (expectedHash !== undefined) {
+      const isValid = verifyChecksum(downloadedData, expectedHash);
+      if (!isValid) {
+        throw new Error('Checksum verification failed - download may be corrupted');
+      }
+      context.onOutput('Checksum verified', 'success');
+    } else {
+      context.onOutput('No checksum available, skipping verification', 'warning');
+    }
+
     await mkdir(tmpDir, { recursive: true });
-    await writeFile(archivePath, Buffer.from(arrayBuffer));
+    await writeFile(archivePath, downloadedData);
 
     // Extract archive
     context.onOutput('Extracting...', 'info');
@@ -383,11 +447,30 @@ async function updateShellBinary(
       throw new Error(`Extraction failed: ${tarResult.output}`);
     }
 
-    // Update symlink
+    // Update symlink with proper error checking
     await mkdir(BIN_DIR, { recursive: true });
-    await runCommand('rm', ['-f', join(BIN_DIR, 'agent')]);
-    await runCommand('ln', ['-sf', join(extractDir, 'agent'), join(BIN_DIR, 'agent')]);
-    await runCommand('chmod', ['+x', join(extractDir, 'agent')]);
+
+    const rmResult = await runCommand('rm', ['-f', join(BIN_DIR, 'agent')]);
+    if (!rmResult.success) {
+      context.onOutput(`Warning: Failed to remove old symlink: ${rmResult.output}`, 'warning');
+    }
+
+    const lnResult = await runCommand('ln', [
+      '-sf',
+      join(extractDir, 'agent'),
+      join(BIN_DIR, 'agent'),
+    ]);
+    if (!lnResult.success) {
+      throw new Error(`Failed to create symlink: ${lnResult.output}`);
+    }
+
+    const chmodResult = await runCommand('chmod', ['+x', join(extractDir, 'agent')]);
+    if (!chmodResult.success) {
+      context.onOutput(
+        `Warning: Failed to set executable permission: ${chmodResult.output}`,
+        'warning'
+      );
+    }
 
     // Cleanup
     await runCommand('rm', ['-rf', tmpDir]);
@@ -467,7 +550,7 @@ export const updateHandler: CommandHandler = async (args, context): Promise<Comm
   const force = parts.includes('--force');
 
   const installType = detectInstallationType();
-  const currentVersion = await getCurrentVersion();
+  const currentVersion = getCurrentVersion();
 
   context.onOutput('', 'info');
   context.onOutput('Update Check', 'success');
