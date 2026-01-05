@@ -139,3 +139,4 @@ Publish pre-built package to npm registry.
 ### Related Decisions
 
 - [ADR-0003: Bun Runtime](0003-runtime-bun.md) - Bun's `--compile` flag enables this approach
+- [ADR-0010: Self-Update Strategy](0010-self-update-strategy.md) - How installations are kept current
