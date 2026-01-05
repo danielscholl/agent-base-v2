@@ -104,8 +104,8 @@ Re-run the installer to upgrade to the latest version:
 # macOS / Linux / WSL
 curl -fsSL https://raw.githubusercontent.com/danielscholl/agent-base-v2/main/install.sh | bash
 
-# Or use built-in upgrade
-agent upgrade
+# Or use built-in update (source installs only)
+agent update
 ```
 
 ## Uninstall
@@ -114,13 +114,14 @@ agent upgrade
 
 ```bash
 rm -f ~/.local/bin/agent
-rm -rf ~/.agent/repo
+rm -rf ~/.agent/repo ~/.agent/bin
 ```
 
 ### Windows PowerShell
 
 ```powershell
-Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\agent.cmd" -Force
+Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\agent.exe" -Force -ErrorAction SilentlyContinue
+Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\agent.cmd" -Force -ErrorAction SilentlyContinue
 Remove-Item "$env:LOCALAPPDATA\Programs\agent-base-v2" -Recurse -Force
 ```
 

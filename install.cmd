@@ -26,6 +26,14 @@ set "REPO=danielscholl/agent-base-v2"
 set "INSTALL_DIR=%LOCALAPPDATA%\Programs\agent-base-v2"
 set "BIN_DIR=%LOCALAPPDATA%\Microsoft\WindowsApps"
 
+REM Check for git
+where git >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+    echo Git not found. Please install Git for Windows first:
+    echo   https://git-scm.com/downloads/win
+    exit /b 1
+)
+
 REM Check for bun
 where bun >nul 2>&1
 if %ERRORLEVEL% neq 0 (

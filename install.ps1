@@ -32,28 +32,40 @@ function Test-Platform {
 
 function Get-LatestVersion {
     try {
-        $response = Invoke-WebRequest -Uri "$REPO_URL/releases/latest" -MaximumRedirection 0 -ErrorAction SilentlyContinue
+        # Use GitHub API for more reliable version detection
+        $apiUrl = "https://api.github.com/repos/$REPO/releases/latest"
+        $response = Invoke-RestMethod -Uri $apiUrl -ErrorAction Stop
+        $script:Version = $response.tag_name
+        Write-Info "Latest version: $Version"
     } catch {
-        $redirectUrl = $_.Exception.Response.Headers.Location
-        if ($redirectUrl -match 'v\d+\.\d+\.\d+') {
-            $script:Version = $matches[0]
+        # Fallback to redirect method
+        try {
+            $null = Invoke-WebRequest -Uri "$REPO_URL/releases/latest" -MaximumRedirection 0 -ErrorAction Stop
+        } catch {
+            if ($_.Exception.Response.Headers.Location -match 'v\d+\.\d+\.\d+') {
+                $script:Version = $matches[0]
+                Write-Info "Latest version: $Version"
+            } else {
+                Write-Warn "Could not determine latest version, will try source build"
+                $script:Version = ""
+            }
         }
     }
 }
 
 function Install-Binary {
-    $binaryName = "agent-$PLATFORM.exe"
-    $downloadUrl = "$REPO_URL/releases/download/$Version/$binaryName"
+    $archiveName = "agent-$PLATFORM.exe.zip"
+    $downloadUrl = "$REPO_URL/releases/download/$Version/$archiveName"
     $checksumUrl = "$downloadUrl.sha256"
     $tmpDir = "$INSTALL_DIR\tmp"
-    $binaryPath = "$tmpDir\$binaryName"
+    $archivePath = "$tmpDir\$archiveName"
 
     New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
 
     Write-Info "Downloading agent $Version for $PLATFORM..."
 
     try {
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $binaryPath -ErrorAction Stop
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $archivePath -ErrorAction Stop
     } catch {
         Remove-Item -Path $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
         return $false
@@ -61,11 +73,11 @@ function Install-Binary {
 
     # Download and verify checksum
     try {
-        Invoke-WebRequest -Uri $checksumUrl -OutFile "$binaryPath.sha256" -ErrorAction SilentlyContinue
-        if (Test-Path "$binaryPath.sha256") {
+        Invoke-WebRequest -Uri $checksumUrl -OutFile "$archivePath.sha256" -ErrorAction SilentlyContinue
+        if (Test-Path "$archivePath.sha256") {
             Write-Info "Verifying checksum..."
-            $expectedHash = (Get-Content "$binaryPath.sha256" | Select-Object -First 1).Split()[0]
-            $actualHash = (Get-FileHash $binaryPath -Algorithm SHA256).Hash.ToLower()
+            $expectedHash = (Get-Content "$archivePath.sha256" | Select-Object -First 1).Split()[0]
+            $actualHash = (Get-FileHash $archivePath -Algorithm SHA256).Hash.ToLower()
 
             if ($expectedHash -ne $actualHash) {
                 Write-Err "Checksum verification failed!"
@@ -76,8 +88,18 @@ function Install-Binary {
         # Checksum verification optional
     }
 
-    # Install binary
-    Move-Item -Path $binaryPath -Destination "$BIN_DIR\agent.exe" -Force
+    # Extract archive
+    Write-Info "Extracting..."
+    $extractDir = "$INSTALL_DIR\bin"
+    if (Test-Path $extractDir) {
+        Remove-Item -Path $extractDir -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+    Expand-Archive -Path $archivePath -DestinationPath $extractDir -Force
+
+    # Copy binary to WindowsApps
+    Copy-Item -Path "$extractDir\agent.exe" -Destination "$BIN_DIR\agent.exe" -Force
+
     Remove-Item -Path $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
 
     Write-Success "Binary installed successfully!"
@@ -118,14 +140,33 @@ function Build-FromSource {
         Write-Info "Updating existing installation..."
         Push-Location $repoPath
         try {
-            git fetch --quiet origin
-            git reset --hard origin/main --quiet
+            git fetch --quiet origin --tags
+            # Checkout specific version if provided, otherwise use main
+            if ($Version -and $Version -ne "latest") {
+                Write-Info "Checking out $Version..."
+                git checkout --quiet $Version 2>$null
+                if ($LASTEXITCODE -ne 0) {
+                    git checkout --quiet "tags/$Version"
+                }
+            } else {
+                git reset --hard origin/main --quiet
+            }
         } finally {
             Pop-Location
         }
     } else {
         Write-Info "Cloning repository..."
-        git clone --quiet --depth 1 "$REPO_URL.git" $repoPath
+        if ($Version -and $Version -ne "latest") {
+            git clone --quiet --branch $Version --depth 1 "$REPO_URL.git" $repoPath 2>$null
+            if ($LASTEXITCODE -ne 0) {
+                git clone --quiet "$REPO_URL.git" $repoPath
+                Push-Location $repoPath
+                git checkout --quiet $Version
+                Pop-Location
+            }
+        } else {
+            git clone --quiet --depth 1 "$REPO_URL.git" $repoPath
+        }
     }
 
     # Install and build

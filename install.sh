@@ -69,46 +69,46 @@ get_latest_version() {
   fi
 }
 
-# Download and verify binary
+# Download and verify binary package
 download_binary() {
-  local binary_name="agent-${PLATFORM}"
-  local download_url="${REPO_URL}/releases/download/${VERSION}/${binary_name}"
+  local archive_name="agent-${PLATFORM}.tar.gz"
+  local download_url="${REPO_URL}/releases/download/${VERSION}/${archive_name}"
   local checksum_url="${download_url}.sha256"
   local tmp_dir="${INSTALL_DIR}/tmp"
-  local binary_path="${tmp_dir}/${binary_name}"
+  local archive_path="${tmp_dir}/${archive_name}"
 
   mkdir -p "${tmp_dir}"
 
   info "Downloading agent ${VERSION} for ${PLATFORM}..."
 
-  # Download binary
+  # Download archive
   if command -v curl &> /dev/null; then
-    if ! curl -fsSL "$download_url" -o "$binary_path" 2>/dev/null; then
+    if ! curl -fsSL "$download_url" -o "$archive_path" 2>/dev/null; then
       rm -rf "${tmp_dir}"
       return 1
     fi
-    curl -fsSL "$checksum_url" -o "${binary_path}.sha256" 2>/dev/null || true
+    curl -fsSL "$checksum_url" -o "${archive_path}.sha256" 2>/dev/null || true
   elif command -v wget &> /dev/null; then
-    if ! wget -q "$download_url" -O "$binary_path" 2>/dev/null; then
+    if ! wget -q "$download_url" -O "$archive_path" 2>/dev/null; then
       rm -rf "${tmp_dir}"
       return 1
     fi
-    wget -q "$checksum_url" -O "${binary_path}.sha256" 2>/dev/null || true
+    wget -q "$checksum_url" -O "${archive_path}.sha256" 2>/dev/null || true
   else
     rm -rf "${tmp_dir}"
     return 1
   fi
 
   # Verify checksum if available
-  if [ -f "${binary_path}.sha256" ]; then
+  if [ -f "${archive_path}.sha256" ]; then
     info "Verifying checksum..."
     local expected_hash actual_hash
-    expected_hash=$(awk '{print $1}' "${binary_path}.sha256")
+    expected_hash=$(awk '{print $1}' "${archive_path}.sha256")
 
     if command -v shasum &> /dev/null; then
-      actual_hash=$(shasum -a 256 "$binary_path" | awk '{print $1}')
+      actual_hash=$(shasum -a 256 "$archive_path" | awk '{print $1}')
     elif command -v sha256sum &> /dev/null; then
-      actual_hash=$(sha256sum "$binary_path" | awk '{print $1}')
+      actual_hash=$(sha256sum "$archive_path" | awk '{print $1}')
     fi
 
     if [ -n "$actual_hash" ] && [ "$expected_hash" != "$actual_hash" ]; then
@@ -117,10 +117,19 @@ download_binary() {
     success "Checksum verified"
   fi
 
-  # Install binary
+  # Extract archive
+  info "Extracting..."
+  local extract_dir="${INSTALL_DIR}/bin"
+  rm -rf "${extract_dir}"
+  mkdir -p "${extract_dir}"
+  tar -xzf "$archive_path" -C "${extract_dir}"
+
+  # Create symlink to binary
   mkdir -p "${BIN_DIR}"
-  mv "$binary_path" "${BIN_DIR}/agent"
-  chmod +x "${BIN_DIR}/agent"
+  rm -f "${BIN_DIR}/agent"
+  ln -sf "${extract_dir}/agent" "${BIN_DIR}/agent"
+  chmod +x "${extract_dir}/agent"
+
   rm -rf "${tmp_dir}"
 
   success "Binary installed successfully!"
@@ -163,12 +172,24 @@ build_from_source() {
   if [ -d "${repo_path}" ]; then
     info "Updating existing installation..."
     pushd "${repo_path}" > /dev/null
-    git fetch --quiet origin
-    git reset --hard origin/main --quiet
+    git fetch --quiet origin --tags
+    # Checkout specific version if provided, otherwise use main
+    if [ -n "$VERSION" ] && [ "$VERSION" != "latest" ]; then
+      info "Checking out ${VERSION}..."
+      git checkout --quiet "${VERSION}" 2>/dev/null || git checkout --quiet "tags/${VERSION}"
+    else
+      git reset --hard origin/main --quiet
+    fi
     popd > /dev/null
   else
     info "Cloning repository..."
-    git clone --quiet --depth 1 "${REPO_URL}.git" "${repo_path}"
+    if [ -n "$VERSION" ] && [ "$VERSION" != "latest" ]; then
+      git clone --quiet --branch "${VERSION}" --depth 1 "${REPO_URL}.git" "${repo_path}" 2>/dev/null || \
+      git clone --quiet "${REPO_URL}.git" "${repo_path}" && \
+      (cd "${repo_path}" && git checkout --quiet "${VERSION}")
+    else
+      git clone --quiet --depth 1 "${REPO_URL}.git" "${repo_path}"
+    fi
   fi
 
   # Install and build

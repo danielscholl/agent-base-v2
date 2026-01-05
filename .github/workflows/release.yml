@@ -83,27 +83,51 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build assets
+        run: bun run build:assets
+
       - name: Build standalone binary
         run: bun build src/index.tsx --compile --outfile ${{ matrix.artifact }} --target ${{ matrix.target }}
 
-      - name: Generate checksum (Unix)
+      - name: Package with assets (Unix)
         if: runner.os != 'Windows'
-        run: shasum -a 256 ${{ matrix.artifact }} > ${{ matrix.artifact }}.sha256
+        run: |
+          mkdir -p package
+          cp ${{ matrix.artifact }} package/agent
+          cp -r dist/prompts package/
+          cp -r dist/_bundled_skills package/
+          tar -czf ${{ matrix.artifact }}.tar.gz -C package .
+          shasum -a 256 ${{ matrix.artifact }}.tar.gz > ${{ matrix.artifact }}.tar.gz.sha256
 
-      - name: Generate checksum (Windows)
+      - name: Package with assets (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $hash = (Get-FileHash ${{ matrix.artifact }} -Algorithm SHA256).Hash.ToLower()
-          "$hash  ${{ matrix.artifact }}" | Out-File -Encoding ASCII ${{ matrix.artifact }}.sha256
+          New-Item -ItemType Directory -Path package -Force
+          Copy-Item ${{ matrix.artifact }} package/agent.exe
+          Copy-Item -Recurse dist/prompts package/
+          Copy-Item -Recurse dist/_bundled_skills package/
+          Compress-Archive -Path package/* -DestinationPath ${{ matrix.artifact }}.zip
+          $hash = (Get-FileHash "${{ matrix.artifact }}.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  ${{ matrix.artifact }}.zip" | Out-File -Encoding ASCII "${{ matrix.artifact }}.zip.sha256"
 
-      - name: Upload artifact
+      - name: Upload artifact (Unix)
+        if: runner.os != 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: |
-            ${{ matrix.artifact }}
-            ${{ matrix.artifact }}.sha256
+            ${{ matrix.artifact }}.tar.gz
+            ${{ matrix.artifact }}.tar.gz.sha256
+
+      - name: Upload artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.artifact }}.zip
+            ${{ matrix.artifact }}.zip.sha256
 
   publish-release:
     needs: [release-please, build-binaries]

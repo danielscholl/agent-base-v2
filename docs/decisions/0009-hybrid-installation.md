@@ -115,9 +115,10 @@ Publish pre-built package to npm registry.
 1. Triggered by release-please tags
 2. Matrix build for 5 platforms
 3. Uses `bun build --compile` for standalone binaries
-4. Generates SHA256 checksums
-5. Creates manifest.json with version and checksums
-6. Uploads all artifacts to GitHub Release
+4. Packages binary with prompts/ and _bundled_skills/ assets
+5. Creates tar.gz (Unix) or zip (Windows) archives
+6. Generates SHA256 checksums
+7. Uploads all artifacts to GitHub Release
 
 **Container support** (`Dockerfile`):
 - Multi-stage build with binary and source options
