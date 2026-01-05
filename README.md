@@ -77,6 +77,8 @@ irm https://raw.githubusercontent.com/danielscholl/agent-base-v2/main/install.ps
 curl -fsSL https://raw.githubusercontent.com/danielscholl/agent-base-v2/main/install.cmd -o install.cmd && install.cmd && del install.cmd
 ```
 
+> **Note:** The above commands use the latest installer from the main branch. For production environments, you can pin to a specific release by replacing `main` with a version tag (e.g., `v0.2.0`).
+
 ### Alternative: Using Bun directly
 
 ```bash

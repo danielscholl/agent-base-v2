@@ -58,11 +58,24 @@ if exist "%REPO_PATH%" (
     echo Updating existing installation...
     pushd "%REPO_PATH%"
     git fetch --quiet origin
-    git reset --hard origin/main --quiet
+    if defined VERSION (
+        git fetch --quiet --tags origin
+        git reset --hard %VERSION% --quiet
+    ) else (
+        git reset --hard origin/main --quiet
+    )
     popd
 ) else (
     echo Cloning repository...
-    git clone --quiet --depth 1 "https://github.com/%REPO%.git" "%REPO_PATH%"
+    if defined VERSION (
+        git clone --quiet "https://github.com/%REPO%.git" "%REPO_PATH%"
+        pushd "%REPO_PATH%"
+        git fetch --quiet --tags origin
+        git checkout --quiet %VERSION%
+        popd
+    ) else (
+        git clone --quiet --depth 1 "https://github.com/%REPO%.git" "%REPO_PATH%"
+    )
 )
 
 pushd "%REPO_PATH%"
@@ -77,8 +90,10 @@ call bun run build
 popd
 
 REM Create batch wrapper
-echo @echo off > "%BIN_DIR%\agent.cmd"
-echo bun "%INSTALL_DIR%\repo\dist\index.js" %%* >> "%BIN_DIR%\agent.cmd"
+(
+    echo @echo off
+    echo bun "%INSTALL_DIR%\repo\dist\index.js" %%*
+) > "%BIN_DIR%\agent.cmd"
 
 echo.
 echo Installation complete!

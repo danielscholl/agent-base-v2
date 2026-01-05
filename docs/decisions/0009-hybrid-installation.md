@@ -42,7 +42,7 @@ Chosen option: **"Hybrid: Pre-built with source fallback"**, because it provides
 
 - Good, because users without Bun can install via single binary download
 - Good, because CI/CD pipelines need only `curl + chmod + run` (~5 seconds)
-- Good, because container images can be minimal (~60MB with just binary)
+- Good, because container images can be minimal with just binary
 - Good, because developers can still use `--source` for latest main branch
 - Good, because fallback ensures installation works even before first release
 - Neutral, because release process now includes multi-platform builds
@@ -123,7 +123,7 @@ Publish pre-built package to npm registry.
 **Container support** (`Dockerfile`):
 - Multi-stage build with binary and source options
 - `--build-arg SOURCE=true` forces source build
-- Final image based on Alpine (~60MB)
+- Final image based on Alpine, optimized for minimal size
 - Non-root user for security
 
 ### Platform Matrix

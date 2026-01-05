@@ -109,7 +109,7 @@ jobs:
           Copy-Item -Recurse dist/_bundled_skills package/
           Compress-Archive -Path package/* -DestinationPath ${{ matrix.artifact }}.zip
           $hash = (Get-FileHash "${{ matrix.artifact }}.zip" -Algorithm SHA256).Hash.ToLower()
-          "$hash  ${{ matrix.artifact }}.zip" | Out-File -Encoding ASCII "${{ matrix.artifact }}.zip.sha256"
+          "$hash  ${{ matrix.artifact }}.zip" | Out-File -Encoding UTF8 -NoNewline "${{ matrix.artifact }}.zip.sha256"
 
       - name: Upload artifact (Unix)
         if: runner.os != 'Windows'
@@ -145,6 +145,13 @@ jobs:
       - name: Create manifest
         run: |
           cd artifacts
+
+          # Verify at least one .sha256 file exists
+          if ! ls *.sha256 1> /dev/null 2>&1; then
+            echo "Error: No .sha256 files found in artifacts directory"
+            exit 1
+          fi
+
           VERSION="${{ needs.release-please.outputs.tag_name }}"
           cat > manifest.json << EOF
           {
@@ -165,6 +172,7 @@ jobs:
             fi
 
             printf '    "%s": {"file": "%s", "sha256": "%s"}' "$platform" "$name" "$sha" >> manifest.json
+            echo "" >> manifest.json
           done
 
           cat >> manifest.json << EOF

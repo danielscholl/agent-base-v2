@@ -36,6 +36,9 @@ function Get-LatestVersion {
         $apiUrl = "https://api.github.com/repos/$REPO/releases/latest"
         $response = Invoke-RestMethod -Uri $apiUrl -ErrorAction Stop
         $script:Version = $response.tag_name
+        if (-not $script:Version -or $script:Version -eq "latest") {
+            Write-Err "Failed to extract version from GitHub API response"
+        }
         Write-Info "Latest version: $Version"
     } catch {
         # Fallback to redirect method
@@ -44,6 +47,9 @@ function Get-LatestVersion {
         } catch {
             if ($_.Exception.Response.Headers.Location -match 'v\d+\.\d+\.\d+') {
                 $script:Version = $matches[0]
+                if (-not $script:Version -or $script:Version -eq "latest") {
+                    Write-Err "Failed to extract version from redirect location"
+                }
                 Write-Info "Latest version: $Version"
             } else {
                 Write-Warn "Could not determine latest version, will try source build"
@@ -117,6 +123,8 @@ function Build-FromSource {
     # Check for bun
     if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
         Write-Info "Bun not found. Installing Bun..."
+        # Note: This downloads and executes the official Bun installer from bun.sh
+        # Users should be aware this introduces a supply chain dependency on bun.sh
         try {
             irm bun.sh/install.ps1 | iex
             $env:BUN_INSTALL = "$env:USERPROFILE\.bun"
@@ -189,7 +197,7 @@ function Build-FromSource {
     @"
 @echo off
 bun "$INSTALL_DIR\repo\dist\index.js" %*
-"@ | Out-File -FilePath $wrapperPath -Encoding ASCII -NoNewline
+"@ | Out-File -FilePath $wrapperPath -Encoding ASCII
 
     Write-Success "Built from source successfully!"
 }
@@ -205,9 +213,12 @@ function Test-Installation {
             } else {
                 $version = & bun "$INSTALL_DIR\repo\dist\index.js" --version 2>$null
             }
+            if (-not $version) {
+                Write-Err "Agent binary found but failed to execute"
+            }
             Write-Success "Agent v$version installed successfully!"
         } catch {
-            Write-Success "Agent installed successfully!"
+            Write-Err "Installation verification failed: $($_.Exception.Message)"
         }
     } else {
         Write-Err "Installation verification failed"

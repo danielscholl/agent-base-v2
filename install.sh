@@ -66,6 +66,12 @@ get_latest_version() {
     VERSION=$(curl -fsSL -o /dev/null -w '%{url_effective}' "$url" 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' || echo "")
   elif command -v wget &> /dev/null; then
     VERSION=$(wget -q -O /dev/null --server-response "$url" 2>&1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | tail -1 || echo "")
+  else
+    error "Neither curl nor wget found. Cannot fetch latest version. Please install curl or wget."
+  fi
+
+  if [ -z "$VERSION" ]; then
+    error "Failed to resolve latest version. Please specify version with --version flag or install curl/wget."
   fi
 }
 
@@ -74,10 +80,9 @@ download_binary() {
   local archive_name="agent-${PLATFORM}.tar.gz"
   local download_url="${REPO_URL}/releases/download/${VERSION}/${archive_name}"
   local checksum_url="${download_url}.sha256"
-  local tmp_dir="${INSTALL_DIR}/tmp"
+  local tmp_dir
+  tmp_dir=$(mktemp -d "${INSTALL_DIR}/tmp.XXXXXX")
   local archive_path="${tmp_dir}/${archive_name}"
-
-  mkdir -p "${tmp_dir}"
 
   info "Downloading agent ${VERSION} for ${PLATFORM}..."
 
@@ -111,10 +116,13 @@ download_binary() {
       actual_hash=$(sha256sum "$archive_path" | awk '{print $1}')
     fi
 
-    if [ -n "$actual_hash" ] && [ "$expected_hash" != "$actual_hash" ]; then
+    if [ -z "$actual_hash" ]; then
+      warn "Checksum file found but no shasum/sha256sum available; skipping verification."
+    elif [ "$expected_hash" != "$actual_hash" ]; then
       error "Checksum verification failed! Expected: ${expected_hash}, Got: ${actual_hash}"
+    else
+      success "Checksum verified"
     fi
-    success "Checksum verified"
   fi
 
   # Extract archive
@@ -148,6 +156,8 @@ build_from_source() {
   # Check for bun, install if missing
   if ! command -v bun &> /dev/null; then
     info "Bun not found. Installing Bun..."
+    # Note: This downloads and executes the official Bun installer from https://bun.sh/install
+    # Supply chain risk: Trusts bun.sh infrastructure and official installer script
     if command -v curl &> /dev/null; then
       curl -fsSL https://bun.sh/install | bash
     elif command -v wget &> /dev/null; then
@@ -156,6 +166,8 @@ build_from_source() {
       error "Neither curl nor wget found. Please install Bun manually: https://bun.sh"
     fi
 
+    # Export Bun environment for current script session
+    # These exports only persist for the duration of this script's execution
     export BUN_INSTALL="${HOME}/.bun"
     export PATH="${BUN_INSTALL}/bin:${PATH}"
 
@@ -230,7 +242,10 @@ check_path() {
 verify_install() {
   if [ -x "${BIN_DIR}/agent" ] || [ -L "${BIN_DIR}/agent" ]; then
     local version
-    version=$("${BIN_DIR}/agent" --version 2>/dev/null || echo "unknown")
+    if ! version="$("${BIN_DIR}/agent" --version 2>/dev/null)"; then
+      error "Agent binary found but failed to execute. Please reinstall or build from source."
+      return 1
+    fi
     success "Agent v${version} installed successfully!"
   else
     error "Installation verification failed"
@@ -242,6 +257,11 @@ main() {
   echo ""
   info "Agent Base v2 Installer"
   echo ""
+
+  # Early PATH check - warn user before installation if BIN_DIR not in PATH
+  if [[ ":${PATH}:" != *":${BIN_DIR}:"* ]]; then
+    warn "Warning: ${BIN_DIR} is not in your PATH. Installation will continue, but you'll need to add it to your shell profile."
+  fi
 
   detect_platform
   mkdir -p "${INSTALL_DIR}" "${BIN_DIR}"
