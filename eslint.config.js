@@ -79,6 +79,6 @@ export default tseslint.config(
   },
   {
     // Ignore patterns
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**', '*.config.js'],
+    ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'scripts/**', '*.config.js'],
   }
 );

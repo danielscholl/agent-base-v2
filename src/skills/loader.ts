@@ -4,6 +4,7 @@
  */
 
 import { readFile, readdir, stat, access, constants, realpath } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join, dirname, relative, isAbsolute, basename } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -19,10 +20,15 @@ import { extractRepoName } from './installer.js';
 
 // Default directories
 // Bundled skills location depends on execution context:
+// - Compiled binary: assets next to process.execPath (~/.agent/bin/_bundled_skills)
 // - In bundled dist: dist/index.js -> look for dist/_bundled_skills (same dir)
 // - In source dev: src/skills/loader.ts -> look for src/_bundled_skills (parent dir)
 function getBundledDir(): string {
   const moduleDir = dirname(fileURLToPath(import.meta.url));
+
+  // For compiled binaries, assets are packaged next to the executable
+  const execDir = dirname(process.execPath);
+  const compiledSkillsDir = join(execDir, '_bundled_skills');
 
   // Try same directory first (for bundled dist/index.js)
   const sameDirPath = join(moduleDir, '_bundled_skills');
@@ -32,8 +38,16 @@ function getBundledDir(): string {
 
   // Check if the module directory itself is named 'dist' to detect bundled execution
   // This avoids false positives when 'dist' appears elsewhere in the path
-  // The loader will handle missing directories gracefully
-  return basename(moduleDir) === 'dist' ? sameDirPath : parentDirPath;
+  const isBundled = basename(moduleDir) === 'dist';
+  const standardSkillsDir = isBundled ? sameDirPath : parentDirPath;
+
+  // Prefer compiled binary location if the standard location doesn't exist
+  // This handles the case where we're running as a standalone compiled binary
+  if (!existsSync(standardSkillsDir) && existsSync(compiledSkillsDir)) {
+    return compiledSkillsDir;
+  }
+
+  return standardSkillsDir;
 }
 
 const DEFAULT_BUNDLED_DIR = getBundledDir();

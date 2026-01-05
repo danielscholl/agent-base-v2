@@ -59,6 +59,7 @@
  */
 
 import { readFile, access, constants } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
@@ -165,18 +166,35 @@ async function fileExists(path: string): Promise<boolean> {
 
 /**
  * Get the prompts directory path.
- * Handles both source and bundled execution.
+ * Handles source, bundled dist, and compiled binary execution.
+ *
+ * Resolution order:
+ * 1. Compiled binary: Assets next to process.execPath (~/.agent/bin/prompts/)
+ * 2. Bundled dist: dist/prompts/ (same dir as index.js)
+ * 3. Source dev: src/prompts/ (sibling to agent/)
  */
 function getPromptsDir(): string {
   const currentFile = fileURLToPath(import.meta.url);
   const moduleDir = dirname(currentFile);
 
+  // For compiled binaries, assets are packaged next to the executable
+  // Check if prompts exist relative to process.execPath first
+  const execDir = dirname(process.execPath);
+  const compiledPromptsDir = join(execDir, 'prompts');
+
   // In bundled dist, prompts are at dist/prompts/ (same dir as index.js)
   // In source, prompts are at src/prompts/ (sibling to agent/)
   const isBundled = basename(moduleDir) === 'dist';
   const baseDir = isBundled ? moduleDir : join(moduleDir, '..');
+  const standardPromptsDir = join(baseDir, 'prompts');
 
-  return join(baseDir, 'prompts');
+  // Prefer compiled binary location if the standard location doesn't exist
+  // This handles the case where we're running as a standalone compiled binary
+  if (!existsSync(standardPromptsDir) && existsSync(compiledPromptsDir)) {
+    return compiledPromptsDir;
+  }
+
+  return standardPromptsDir;
 }
 
 /**

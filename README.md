@@ -10,8 +10,6 @@ A TypeScript agent framework for building AI agents with multi-provider LLM supp
 
 Build conversational AI agents with enterprise-grade features: session persistence, conversation memory, observability, and extensible toolsets.
 
-Supports Local (Ollama), GitHub Models, OpenAI, Anthropic, Google Gemini, Azure OpenAI, and Azure AI Foundry.
-
 ```bash
 agent
 
@@ -59,23 +57,81 @@ Requires [Ollama](https://ollama.ai/) or [Docker Desktop](https://www.docker.com
 | Azure OpenAI | Azure CLI (`az login`) |
 | Azure AI Foundry | Azure CLI (`az login`) |
 
+## Installation
+
+### macOS / Linux / WSL
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/danielscholl/agent-base-v2/main/install.sh | bash
+```
+
+### Windows PowerShell
+
+```powershell
+irm https://raw.githubusercontent.com/danielscholl/agent-base-v2/main/install.ps1 | iex
+```
+
+### Windows CMD
+
+```batch
+curl -fsSL https://raw.githubusercontent.com/danielscholl/agent-base-v2/main/install.cmd -o install.cmd && install.cmd && del install.cmd
+```
+
+> **Note:** The above commands use the latest installer from the main branch. For production environments, you can pin to a specific release by replacing `main` with a version tag (e.g., `v0.2.0`).
+
+### Alternative: Using Bun directly
+
+```bash
+bun install -g --trust github:danielscholl/agent-base-v2
+```
+
 ## Quick Start
 
 ```bash
-# 1. Install agent globally
-bun install -g --trust github:danielscholl/agent-base-v2
-
-# 2. Start agent
+# Initialize configuration (first run)
 agent config init
 
-# 3. Get help
+# Start interactive mode
+agent
+
+# Get help
 agent --help
+```
 
-# Upgrade agent
-agent upgrade
+## Upgrade
 
-# Remove agent
-bun uninstall -g agent-base-v2
+Re-run the installer to upgrade to the latest version:
+
+```bash
+# macOS / Linux / WSL
+curl -fsSL https://raw.githubusercontent.com/danielscholl/agent-base-v2/main/install.sh | bash
+
+# Or use built-in update (source installs only)
+agent update
+```
+
+## Uninstall
+
+### macOS / Linux / WSL
+
+```bash
+rm -f ~/.local/bin/agent
+rm -rf ~/.agent/repo ~/.agent/bin
+```
+
+### Windows PowerShell
+
+```powershell
+Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\agent.exe" -Force -ErrorAction SilentlyContinue
+Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\agent.cmd" -Force -ErrorAction SilentlyContinue
+Remove-Item "$env:LOCALAPPDATA\Programs\agent-base-v2" -Recurse -Force
+```
+
+### Clean up configuration (optional)
+
+```bash
+# Remove all settings and state
+rm -rf ~/.agent
 ```
 
 ### Configuration

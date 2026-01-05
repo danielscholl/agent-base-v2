@@ -49,27 +49,142 @@ jobs:
           git diff --staged --quiet || git commit -m "chore: update bun.lock"
           git push
 
-  build-artifacts:
-    runs-on: ubuntu-latest
+  build-binaries:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: bun-darwin-arm64
+            artifact: agent-darwin-arm64
+          - os: macos-13
+            target: bun-darwin-x64
+            artifact: agent-darwin-x64
+          - os: ubuntu-latest
+            target: bun-linux-x64
+            artifact: agent-linux-x64
+          - os: ubuntu-24.04-arm
+            target: bun-linux-arm64
+            artifact: agent-linux-arm64
+          - os: windows-latest
+            target: bun-windows-x64
+            artifact: agent-windows-x64.exe
+
+    runs-on: ${{ matrix.os }}
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build package
-        run: bun run build
+      - name: Build assets
+        run: bun run build:assets
 
-      - name: Create npm package tarball
-        run: npm pack
+      - name: Build standalone binary
+        run: bun build src/index.tsx --compile --outfile ${{ matrix.artifact }} --target ${{ matrix.target }}
+
+      - name: Package with assets (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p package
+          cp ${{ matrix.artifact }} package/agent
+          cp -r dist/prompts package/
+          cp -r dist/_bundled_skills package/
+          tar -czf ${{ matrix.artifact }}.tar.gz -C package .
+          shasum -a 256 ${{ matrix.artifact }}.tar.gz > ${{ matrix.artifact }}.tar.gz.sha256
+
+      - name: Package with assets (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package -Force
+          Copy-Item ${{ matrix.artifact }} package/agent.exe
+          Copy-Item -Recurse dist/prompts package/
+          Copy-Item -Recurse dist/_bundled_skills package/
+          Compress-Archive -Path package/* -DestinationPath ${{ matrix.artifact }}.zip
+          $hash = (Get-FileHash "${{ matrix.artifact }}.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  ${{ matrix.artifact }}.zip" | Out-File -Encoding UTF8 -NoNewline "${{ matrix.artifact }}.zip.sha256"
+
+      - name: Upload artifact (Unix)
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.artifact }}.tar.gz
+            ${{ matrix.artifact }}.tar.gz.sha256
+
+      - name: Upload artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.artifact }}.zip
+            ${{ matrix.artifact }}.zip.sha256
+
+  publish-release:
+    needs: [release-please, build-binaries]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create manifest
+        run: |
+          cd artifacts
+
+          # Verify at least one .sha256 file exists
+          if ! ls *.sha256 1> /dev/null 2>&1; then
+            echo "Error: No .sha256 files found in artifacts directory"
+            exit 1
+          fi
+
+          VERSION="${{ needs.release-please.outputs.tag_name }}"
+          cat > manifest.json << EOF
+          {
+            "version": "$VERSION",
+            "binaries": {
+          EOF
+
+          first=true
+          for f in *.sha256; do
+            name="${f%.sha256}"
+            sha=$(awk '{print $1}' "$f")
+            # Strip agent- prefix, .exe suffix, and archive extensions (.tar.gz, .zip)
+            platform=$(echo "$name" | sed 's/agent-//' | sed 's/\.exe//' | sed 's/\.tar\.gz//' | sed 's/\.zip//')
+
+            if [ "$first" = true ]; then
+              first=false
+            else
+              echo "," >> manifest.json
+            fi
+
+            printf '    "%s": {"file": "%s", "sha256": "%s"}' "$platform" "$name" "$sha" >> manifest.json
+            echo "" >> manifest.json
+          done
+
+          cat >> manifest.json << EOF
+
+            }
+          }
+          EOF
+          cat manifest.json
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
-          files: "*.tgz"
+          files: artifacts/*
