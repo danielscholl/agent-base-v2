@@ -163,7 +163,8 @@ jobs:
           for f in *.sha256; do
             name="${f%.sha256}"
             sha=$(awk '{print $1}' "$f")
-            platform=$(echo "$name" | sed 's/agent-//' | sed 's/\.exe//')
+            # Strip agent- prefix, .exe suffix, and archive extensions (.tar.gz, .zip)
+            platform=$(echo "$name" | sed 's/agent-//' | sed 's/\.exe//' | sed 's/\.tar\.gz//' | sed 's/\.zip//')
 
             if [ "$first" = true ]; then
               first=false

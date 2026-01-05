@@ -154,7 +154,10 @@ function Build-FromSource {
                 Write-Info "Checking out $Version..."
                 git checkout --quiet $Version 2>$null
                 if ($LASTEXITCODE -ne 0) {
-                    git checkout --quiet "tags/$Version"
+                    git checkout --quiet "tags/$Version" 2>$null
+                    if ($LASTEXITCODE -ne 0) {
+                        throw "Failed to checkout version $Version. Verify the version exists."
+                    }
                 }
             } else {
                 git reset --hard origin/main --quiet
@@ -169,8 +172,17 @@ function Build-FromSource {
             if ($LASTEXITCODE -ne 0) {
                 git clone --quiet "$REPO_URL.git" $repoPath
                 Push-Location $repoPath
-                git checkout --quiet $Version
-                Pop-Location
+                try {
+                    git checkout --quiet $Version 2>$null
+                    if ($LASTEXITCODE -ne 0) {
+                        git checkout --quiet "tags/$Version" 2>$null
+                        if ($LASTEXITCODE -ne 0) {
+                            throw "Failed to checkout version $Version. Verify the version exists."
+                        }
+                    }
+                } finally {
+                    Pop-Location
+                }
             }
         } else {
             git clone --quiet --depth 1 "$REPO_URL.git" $repoPath
