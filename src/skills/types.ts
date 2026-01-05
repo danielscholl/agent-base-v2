@@ -48,7 +48,7 @@ export interface DiscoveredSkill {
   path: string;
   /** Parent directory path */
   directory: string;
-  /** Source type (bundled, user, project) */
+  /** Source type (bundled, user, project, plugin) */
   source: SkillSource;
   /** Whether the skill is disabled by configuration */
   disabled?: boolean;

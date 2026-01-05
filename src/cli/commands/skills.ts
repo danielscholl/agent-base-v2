@@ -24,6 +24,10 @@ const DESCRIPTION_MAX_LENGTH = 60;
 /**
  * Find a plugin by name, supporting both named plugins and legacy string-only plugins.
  * Legacy plugins (created from string URLs) have no name field, so we derive name from URL.
+ *
+ * @param plugins - Array of plugin definitions to search
+ * @param skillName - Name of the skill to find
+ * @returns Object containing the plugin and its index, or undefined if not found
  */
 function findPluginByName(
   plugins: PluginDefinition[],
@@ -41,7 +45,9 @@ function findPluginByName(
     return false;
   });
 
+  // findIndex returns -1 if no match is found
   if (index >= 0) {
+    // TypeScript knows plugins[index] exists because index is valid, but we check defensively
     const plugin = plugins[index];
     if (plugin !== undefined) {
       return { plugin, index };
@@ -224,7 +230,7 @@ export const skillInstallHandler: CommandHandler = async (
   let ref: string | undefined;
 
   for (let i = 1; i < parts.length; i++) {
-    const nextPart = parts[i + 1] ?? '';
+    const nextPart = i + 1 < parts.length ? (parts[i + 1] ?? '') : '';
     if (parts[i] === '--name' && nextPart !== '' && !nextPart.startsWith('--')) {
       name = nextPart;
       i++;
@@ -254,10 +260,13 @@ export const skillInstallHandler: CommandHandler = async (
 
   // Update config to track the plugin
   if (configResult.success && config) {
-    // Check if already in plugins list
-    const existingIndex = config.skills.plugins.findIndex(
-      (p) => p.url === url || p.name === result.skillName
-    );
+    // Find existing plugin entry by URL first (most reliable), then by name (fallback)
+    // Priority: URL match > name match, to avoid false matches when names collide
+    let existingIndex = config.skills.plugins.findIndex((p) => p.url === url);
+    if (existingIndex === -1) {
+      // No URL match, check if name matches (for legacy string-only plugins)
+      existingIndex = config.skills.plugins.findIndex((p) => p.name === result.skillName);
+    }
 
     const pluginEntry: PluginDefinition = {
       url,
@@ -388,8 +397,50 @@ export const skillManageHandler: CommandHandler = async (args, context): Promise
         return { success: false, message: saveResult.message };
       }
 
-      // Assume it's a bundled skill
-      if (!config.skills.disabledBundled.includes(skillName)) {
+      // Not a plugin - verify the skill exists and determine its source
+      const loader = new SkillLoader({
+        userDir: config.skills.userDir,
+        pluginsDir: config.skills.pluginsDir,
+        plugins: config.skills.plugins,
+        disabledBundled: config.skills.disabledBundled,
+        enabledBundled: config.skills.enabledBundled,
+        includeDisabled: true,
+      });
+      const { skills } = await loader.discover();
+      const skill = skills.find((s) => s.manifest.name === skillName);
+
+      if (skill === undefined) {
+        context.onOutput(`Skill "${skillName}" not found`, 'error');
+        context.onOutput('Use "agent skill show" to see available skills', 'info');
+        return { success: false, message: 'Skill not found' };
+      }
+
+      // Check skill source
+      if (skill.source === 'user') {
+        context.onOutput(`Cannot disable user skill: ${skillName}`, 'error');
+        context.onOutput(
+          'User skills are always enabled. Remove the skill directory to disable it.',
+          'info'
+        );
+        return { success: false, message: 'Cannot disable user skills' };
+      }
+
+      if (skill.source === 'project') {
+        context.onOutput(`Cannot disable project skill: ${skillName}`, 'error');
+        context.onOutput(
+          'Project skills are always enabled. Remove the skill directory to disable it.',
+          'info'
+        );
+        return { success: false, message: 'Cannot disable project skills' };
+      }
+
+      // Must be a bundled skill
+      if (skill.source === 'bundled') {
+        if (config.skills.disabledBundled.includes(skillName)) {
+          context.onOutput(`Skill "${skillName}" is already disabled`, 'warning');
+          return { success: false, message: 'Skill already disabled' };
+        }
+
         config.skills.disabledBundled.push(skillName);
         const saveResult = await manager.save(config);
         if (saveResult.success) {
@@ -400,8 +451,9 @@ export const skillManageHandler: CommandHandler = async (args, context): Promise
         return { success: false, message: saveResult.message };
       }
 
-      context.onOutput(`Skill "${skillName}" is already disabled`, 'warning');
-      return { success: false, message: 'Skill already disabled' };
+      // Fallback for unexpected source type
+      context.onOutput(`Cannot disable ${skill.source} skill: ${skillName}`, 'error');
+      return { success: false, message: 'Unsupported skill source' };
     }
 
     case 'update': {

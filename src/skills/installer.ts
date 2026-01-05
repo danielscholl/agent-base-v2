@@ -90,6 +90,12 @@ async function pathExists(path: string): Promise<boolean> {
  * Validate URL format.
  * Only HTTPS URLs are supported to ensure config schema compatibility.
  * SSH URLs (git@) are not supported because z.url() validation rejects them.
+ *
+ * NOTE: This validation is intentionally minimal by design. The goal is to catch
+ * obvious non-URLs (e.g., local paths, malformed strings), not to fully validate
+ * git repository URLs. Git clone itself will fail on invalid URLs, and since we
+ * use execFile (not shell), there's no shell injection risk. A more restrictive
+ * pattern would need to support various git hosting providers and URL formats.
  */
 function isValidGitUrl(url: string): boolean {
   // Only allow https:// URLs (SSH git@ URLs don't pass z.url() schema validation)
@@ -168,6 +174,9 @@ export async function installSkill(options: InstallOptions): Promise<InstallResu
     if (ref !== undefined && ref !== '') {
       // For tags and branches, use --branch
       // For commit SHAs, we'll checkout after clone
+      // Note: This pattern may incorrectly classify hex-like branch names (e.g., 'deadbeef') as SHAs.
+      // This is acceptable because: (1) such branch names are rare, (2) fetch will fail gracefully
+      // if the SHA doesn't exist, and (3) full 40-char SHA detection is highly reliable.
       const isCommitSha = /^[a-f0-9]{7,40}$/i.test(ref);
       if (!isCommitSha) {
         cloneArgs.push('--branch', ref);
@@ -178,6 +187,9 @@ export async function installSkill(options: InstallOptions): Promise<InstallResu
     await execFileAsync('git', cloneArgs, { timeout: 60000 });
 
     // If ref is a commit SHA, checkout after clone
+    // Note: This pattern may incorrectly classify hex-like branch names (e.g., 'deadbeef') as SHAs.
+    // This is acceptable because: (1) such branch names are rare, (2) fetch will fail gracefully
+    // if the SHA doesn't exist, and (3) full 40-char SHA detection is highly reliable.
     if (ref !== undefined && ref !== '' && /^[a-f0-9]{7,40}$/i.test(ref)) {
       // Need to fetch the specific commit first (shallow clone may not have it)
       await execFileAsync('git', ['fetch', '--depth', '1', 'origin', ref], {
@@ -200,7 +212,11 @@ export async function installSkill(options: InstallOptions): Promise<InstallResu
       };
     }
 
-    // Validate SKILL.md content (skip name match - we'll rename if needed)
+    // Validate SKILL.md content and structure
+    // We skip name validation here because:
+    // 1. The directory will be renamed to match the manifest name (lines 233-249)
+    // 2. repoName is only used for fallback error messages if parsing fails
+    // 3. The actual skill name comes from the manifest and is validated separately (line 222)
     const content = await readFile(skillMdPath, 'utf-8');
     const parseResult = parseSkillMd(content, repoName, { skipNameValidation: true });
 
@@ -243,7 +259,10 @@ export async function installSkill(options: InstallOptions): Promise<InstallResu
           error: `Skill "${actualName}" already exists. Choose a different name with '--name' option.`,
         };
       }
+      // Note: Race condition possible between exists check and rename.
+      // Acceptable for single-user CLI - concurrent installs of same skill are unlikely.
       // Use fs.rename instead of shell mv for portability
+      // Rename errors are caught by the outer try-catch block and handled with cleanup
       await rename(targetDir, newTargetDir);
       return {
         success: true,
@@ -279,7 +298,7 @@ export async function installSkill(options: InstallOptions): Promise<InstallResu
  * Update an installed skill plugin by pulling latest changes.
  *
  * @param skillName - Name of the skill to update
- * @param baseDir - Base directory for plugins
+ * @param baseDir - Base directory for plugins (optional, defaults to ~/.agent/plugins)
  * @returns Update result
  */
 export async function updateSkill(skillName: string, baseDir?: string): Promise<UpdateResult> {
@@ -319,6 +338,9 @@ export async function updateSkill(skillName: string, baseDir?: string): Promise<
     }
 
     // Check if we're on a detached HEAD (tag/commit install)
+    // Note: symbolic-ref exits non-zero for detached HEAD. We intentionally catch all errors
+    // and treat them as detached HEAD - even if there's an actual git error, the result is
+    // the same: we report "pinned to a specific ref" and skip the pull operation.
     const { stdout: headRef } = await execFileAsync('git', ['symbolic-ref', '-q', 'HEAD'], {
       cwd: targetDir,
     }).catch(() => ({ stdout: '' }));
@@ -368,7 +390,7 @@ export async function updateSkill(skillName: string, baseDir?: string): Promise<
  * Remove an installed skill plugin.
  *
  * @param skillName - Name of the skill to remove
- * @param baseDir - Base directory for plugins
+ * @param baseDir - Base directory for plugins (optional, defaults to ~/.agent/plugins)
  * @returns Whether removal succeeded
  */
 export async function removeSkill(skillName: string, baseDir?: string): Promise<boolean> {
@@ -397,7 +419,7 @@ export async function removeSkill(skillName: string, baseDir?: string): Promise<
 /**
  * List installed plugin skills (git-tracked only).
  *
- * @param baseDir - Base directory for plugins
+ * @param baseDir - Base directory for plugins (optional, defaults to ~/.agent/plugins)
  * @returns Array of installed skill names
  */
 export async function listInstalledPlugins(baseDir?: string): Promise<string[]> {

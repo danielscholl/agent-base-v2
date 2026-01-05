@@ -130,19 +130,15 @@ export class SkillLoader {
             return { ...skill, disabled: true };
           }
         }
-        // Preserve disabled status for plugins (already set in scanPlugins)
-        // This prevents line 137 from incorrectly resetting disabled plugins to false
-        // when includeDisabled is true
-        if (skill.source === 'plugin' && skill.disabled === true) {
-          return skill;
-        }
-        return { ...skill, disabled: false };
+        // Preserve disabled status if already set (e.g., for plugins from scanPlugins)
+        // Otherwise default to enabled
+        return { ...skill, disabled: skill.disabled ?? false };
       })
       .filter((skill) => {
         // If includeDisabled is true, keep all skills
         if (this.includeDisabled) return true;
         // Otherwise, filter out disabled skills
-        return skill.disabled !== true;
+        return !skill.disabled;
       });
 
     // Check for duplicate skill names - effective priority: plugin > project > user > bundled
@@ -173,6 +169,11 @@ export class SkillLoader {
   /**
    * Scan installed plugins from config.
    * Loads plugins and marks disabled ones appropriately.
+   *
+   * Plugin disabled flag handling:
+   * - If plugin.enabled === false AND includeDisabled === false: skip entirely (not loaded)
+   * - If plugin.enabled === false AND includeDisabled === true: load with disabled: true
+   * - If plugin.enabled !== false: load normally with disabled: false
    */
   private async scanPlugins(): Promise<SkillDiscoveryResult> {
     const skills: DiscoveredSkill[] = [];
@@ -186,6 +187,7 @@ export class SkillLoader {
       const isDisabled = plugin.enabled === false;
 
       // Skip disabled plugins unless includeDisabled is true
+      // This implements the first case: plugin.enabled === false AND includeDisabled === false
       if (isDisabled && !this.includeDisabled) {
         this.debug(`Plugin disabled, skipping`, { name: plugin.name, url: plugin.url });
         continue;
@@ -211,7 +213,8 @@ export class SkillLoader {
       // Load skill from directory
       const result = await this.loadSkill(skillMdPath, skillName, 'plugin');
       if (result.success) {
-        // Mark disabled status
+        // Mark disabled status based on plugin.enabled flag
+        // If we reached here, either plugin is enabled OR includeDisabled is true
         skills.push({ ...result.skill, disabled: isDisabled });
       } else {
         errors.push(result.error);

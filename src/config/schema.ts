@@ -305,8 +305,19 @@ export const PluginDefinitionSchema = z.object({
 export type PluginDefinition = z.infer<typeof PluginDefinitionSchema>;
 
 /**
- * Transform legacy string URL to PluginDefinition.
- * Supports backward compatibility with old configs that used string arrays.
+ * Plugin item schema supporting both object and legacy string formats.
+ *
+ * This schema uses z.union with a transform to maintain backward compatibility
+ * with older configuration files:
+ *
+ * 1. Object format (PluginDefinition): Full plugin configuration with url, ref,
+ *    name, enabled, and installedAt fields
+ * 2. Legacy string format: Plain URL strings are automatically transformed to
+ *    PluginDefinition objects with { url: string, enabled: true }
+ *
+ * The transform ensures that older configs using string arrays (e.g.,
+ * `plugins: ["https://github.com/user/skill.git"]`) continue to work
+ * without requiring manual migration.
  */
 const PluginItemSchema = z.union([
   PluginDefinitionSchema,
