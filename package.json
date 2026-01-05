@@ -16,6 +16,8 @@
     "dev": "bun run src/index.tsx",
     "build": "bun build src/index.tsx --outdir dist --target bun && bun run build:assets",
     "build:assets": "bun run scripts/copy-assets.ts",
+    "prepack": "bun run build",
+    "postinstall": "[ -d src ] && [ ! -d dist ] && bun run build || true",
     "typecheck": "tsc --noEmit",
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
     "lint": "eslint src/",
