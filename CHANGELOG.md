@@ -1,5 +1,52 @@
 # Changelog
 
+## [0.3.8](https://github.com/danielscholl/agent-base-v2/compare/v0.3.7...v0.3.8) (2026-01-06)
+
+
+### Features
+
+* **cli:** enforce https and trusted-domain checks for downloads ([efa3278](https://github.com/danielscholl/agent-base-v2/commit/efa327879cd11ebe97f6f0886f609f25fa0f4d75))
+* **update:** add trusted-domain URL validation for downloads ([c47dbd1](https://github.com/danielscholl/agent-base-v2/commit/c47dbd18fd8865dd9ddcf1ded3992aba07e9d6f0))
+* **workspace:** add workspace root CLI management ([45e87c7](https://github.com/danielscholl/agent-base-v2/commit/45e87c7e549a78763a39de0652639ea7ad920963))
+* **workspace:** add workspace root management (show/set/clear) ([760854d](https://github.com/danielscholl/agent-base-v2/commit/760854d942694f73568160601aec22c76700fc66))
+* **workspace:** strengthen workspace root narrowing with symlink safety ([3982bbe](https://github.com/danielscholl/agent-base-v2/commit/3982bbe1cd6508e05ec52568a33f879c3a9124e3))
+
+
+### Bug Fixes
+
+* **security:** resolve CodeQL network data validation and add dependabot ([c297b60](https://github.com/danielscholl/agent-base-v2/commit/c297b6041a0e3f099f691fecda3e57bbce2ad4d1))
+
+
+### Code Refactoring
+
+* **update:** use validated data copy before writing archive ([487c0c9](https://github.com/danielscholl/agent-base-v2/commit/487c0c94b0e02b812e6d8f098fd30dbfc92d97ac))
+
+
+### Tests
+
+* **workspace:** add tests for getWorkspaceInfo resolution logic ([c6b3a85](https://github.com/danielscholl/agent-base-v2/commit/c6b3a8538bb0deb7d0dd586caa06b67713446439))
+
+
+### Build System
+
+* **bun:** update bun.lock dependencies ([c3e315a](https://github.com/danielscholl/agent-base-v2/commit/c3e315a589e094f632dfad8fbb9f8c938e5f2e3c))
+
+
+### Continuous Integration
+
+* auto-regenerate bun.lock for Dependabot PRs ([610f4a8](https://github.com/danielscholl/agent-base-v2/commit/610f4a8e28f682cdfae74db18bc617240851c65e))
+* **dependabot:** update bun workflow and lockfile handling ([689a5c9](https://github.com/danielscholl/agent-base-v2/commit/689a5c9f641cec8b9257cd30617bb22a2c6d6c8d))
+* **deps:** bump the actions group with 5 updates ([eb20432](https://github.com/danielscholl/agent-base-v2/commit/eb204324525c632af8948bc730793d778270fa2d))
+* **deps:** bump the actions group with 5 updates ([8bea399](https://github.com/danielscholl/agent-base-v2/commit/8bea399e43dbb76343a5f0c8fd7a2e4769185245))
+* **workflow:** add dependabot bun lockfile workflow ([80a31d5](https://github.com/danielscholl/agent-base-v2/commit/80a31d5d09233fa5594889b9a1889499c094286b))
+
+
+### Miscellaneous
+
+* **deps:** bump the dev-dependencies group with 3 updates ([ac4452f](https://github.com/danielscholl/agent-base-v2/commit/ac4452f4ba11162be76f261206d7e036d87add65))
+* **deps:** bump the dev-dependencies group with 3 updates ([1d2bd1e](https://github.com/danielscholl/agent-base-v2/commit/1d2bd1e44b206918e5c4fecf4d0c11eaebe151db))
+* update dependabot to allow major updates across groups ([efa3278](https://github.com/danielscholl/agent-base-v2/commit/efa327879cd11ebe97f6f0886f609f25fa0f4d75))
+
 ## [0.3.7](https://github.com/danielscholl/agent-base-v2/compare/v0.3.6...v0.3.7) (2026-01-06)
 
 
