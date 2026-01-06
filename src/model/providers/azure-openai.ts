@@ -37,10 +37,19 @@ const RESPONSES_API_MODELS = ['gpt-5-codex', 'o1', 'o3', 'o1-preview', 'o1-mini'
 
 /**
  * Check if a deployment/model requires the Responses API.
+ * Uses specific matching to prevent false positives from substring matches.
+ * Matches exact name or names that start with the model name followed by - or _.
  */
 function requiresResponsesApi(deployment: string): boolean {
   const lowerDeployment = deployment.toLowerCase();
-  return RESPONSES_API_MODELS.some((model) => lowerDeployment.includes(model.toLowerCase()));
+  return RESPONSES_API_MODELS.some((model) => {
+    const lowerModel = model.toLowerCase();
+    return (
+      lowerDeployment === lowerModel ||
+      lowerDeployment.startsWith(`${lowerModel}-`) ||
+      lowerDeployment.startsWith(`${lowerModel}_`)
+    );
+  });
 }
 
 /**

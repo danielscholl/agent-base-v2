@@ -459,6 +459,85 @@ Hello {{MODEL}}!`);
 
       expect(result).toBe('');
     });
+
+    it('loads mode-specific provider file when mode is provided', async () => {
+      // Mode-specific file exists (foundry.local.md)
+      mockAccess.mockResolvedValueOnce(undefined);
+      mockReadFile.mockResolvedValue(
+        '---\nprovider: foundry\nmode: local\n---\n# Local Foundry Instructions\nUse local endpoint.'
+      );
+
+      const result = await loadProviderLayer('foundry', 'local');
+
+      expect(result).toBe('# Local Foundry Instructions\nUse local endpoint.');
+    });
+
+    it('falls back to generic provider file when mode-specific file does not exist', async () => {
+      // Mode-specific file (foundry.cloud.md) does not exist
+      mockAccess
+        .mockRejectedValueOnce(new Error('ENOENT')) // foundry.cloud.md not found
+        .mockResolvedValueOnce(undefined); // foundry.md exists
+
+      mockReadFile.mockResolvedValue(
+        '---\nprovider: foundry\n---\n# Generic Foundry Instructions\nFoundry provider guidance.'
+      );
+
+      const result = await loadProviderLayer('foundry', 'cloud');
+
+      expect(result).toBe('# Generic Foundry Instructions\nFoundry provider guidance.');
+    });
+
+    it('returns empty string when both mode-specific and generic files do not exist', async () => {
+      // Both files do not exist
+      mockAccess
+        .mockRejectedValueOnce(new Error('ENOENT')) // foundry.local.md not found
+        .mockRejectedValueOnce(new Error('ENOENT')); // foundry.md not found
+
+      const result = await loadProviderLayer('foundry', 'local');
+
+      expect(result).toBe('');
+    });
+
+    it('loads generic provider file when mode is undefined', async () => {
+      mockAccess.mockResolvedValueOnce(undefined);
+      mockReadFile.mockResolvedValue(
+        '---\nprovider: foundry\n---\n# Generic Foundry Instructions\nNo mode specified.'
+      );
+
+      const result = await loadProviderLayer('foundry', undefined);
+
+      expect(result).toBe('# Generic Foundry Instructions\nNo mode specified.');
+    });
+
+    it('loads generic provider file when mode is empty string', async () => {
+      mockAccess.mockResolvedValueOnce(undefined);
+      mockReadFile.mockResolvedValue(
+        '---\nprovider: foundry\n---\n# Generic Foundry Instructions\nEmpty mode.'
+      );
+
+      const result = await loadProviderLayer('foundry', '');
+
+      expect(result).toBe('# Generic Foundry Instructions\nEmpty mode.');
+    });
+
+    it('strips YAML front matter from mode-specific provider layer', async () => {
+      mockAccess.mockResolvedValueOnce(undefined);
+      mockReadFile.mockResolvedValue(`---
+provider: foundry
+mode: local
+version: 2.0.0
+---
+
+# Mode-Specific Provider Layer
+This is mode-specific guidance.`);
+
+      const result = await loadProviderLayer('foundry', 'local');
+
+      expect(result).toBe('# Mode-Specific Provider Layer\nThis is mode-specific guidance.');
+      expect(result).not.toContain('provider:');
+      expect(result).not.toContain('mode:');
+      expect(result).not.toContain('version:');
+    });
   });
 
   describe('assembleSystemPrompt', () => {

@@ -475,6 +475,164 @@ describe('createAzureOpenAIClient', () => {
         expect(result.result._llmType()).toBe('azure-responses');
       }
     });
+
+    it('uses Responses API for deployment with dash suffix (o1-2024)', async () => {
+      const result = await createAzureOpenAIClient({
+        endpoint: 'https://my-resource.openai.azure.com/',
+        deployment: 'o1-2024',
+        apiKey: 'test-key',
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.message).toContain('Responses');
+      }
+      expect(mockAzureOpenAI).toHaveBeenCalled();
+    });
+
+    it('uses Responses API for deployment with underscore suffix (o1_prod)', async () => {
+      const result = await createAzureOpenAIClient({
+        endpoint: 'https://my-resource.openai.azure.com/',
+        deployment: 'o1_prod',
+        apiKey: 'test-key',
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.message).toContain('Responses');
+      }
+      expect(mockAzureOpenAI).toHaveBeenCalled();
+    });
+  });
+
+  describe('Model detection false positive prevention', () => {
+    it('does NOT use Responses API for deployment containing o1 in the middle', async () => {
+      mockAzureChatOpenAI.mockClear();
+      mockAzureOpenAI.mockClear();
+
+      const result = await createAzureOpenAIClient({
+        endpoint: 'https://my-resource.openai.azure.com/',
+        deployment: 'my-custom-o1-based-model',
+        apiKey: 'test-key',
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.message).toContain('Chat Completions');
+        expect(result.message).not.toContain('Responses');
+      }
+      // Should use AzureChatOpenAI (Chat Completions), not AzureOpenAI (Responses)
+      expect(mockAzureChatOpenAI).toHaveBeenCalled();
+      expect(mockAzureOpenAI).not.toHaveBeenCalled();
+    });
+
+    it('does NOT use Responses API for deployment containing gpt-5-codex in the middle', async () => {
+      mockAzureChatOpenAI.mockClear();
+      mockAzureOpenAI.mockClear();
+
+      const result = await createAzureOpenAIClient({
+        endpoint: 'https://my-resource.openai.azure.com/',
+        deployment: 'my-gpt-5-codex-wrapper',
+        apiKey: 'test-key',
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.message).toContain('Chat Completions');
+      }
+      expect(mockAzureChatOpenAI).toHaveBeenCalled();
+      expect(mockAzureOpenAI).not.toHaveBeenCalled();
+    });
+
+    it('does NOT use Responses API for deployment ending with o3', async () => {
+      mockAzureChatOpenAI.mockClear();
+      mockAzureOpenAI.mockClear();
+
+      const result = await createAzureOpenAIClient({
+        endpoint: 'https://my-resource.openai.azure.com/',
+        deployment: 'custom-gpt4o3',
+        apiKey: 'test-key',
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.message).toContain('Chat Completions');
+      }
+      expect(mockAzureChatOpenAI).toHaveBeenCalled();
+      expect(mockAzureOpenAI).not.toHaveBeenCalled();
+    });
+
+    it('does NOT use Responses API for deployment with dot separator (model.o1)', async () => {
+      mockAzureChatOpenAI.mockClear();
+      mockAzureOpenAI.mockClear();
+
+      const result = await createAzureOpenAIClient({
+        endpoint: 'https://my-resource.openai.azure.com/',
+        deployment: 'model.o1',
+        apiKey: 'test-key',
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.message).toContain('Chat Completions');
+      }
+      expect(mockAzureChatOpenAI).toHaveBeenCalled();
+      expect(mockAzureOpenAI).not.toHaveBeenCalled();
+    });
+
+    it('DOES use Responses API for exact match (o1)', async () => {
+      mockAzureChatOpenAI.mockClear();
+      mockAzureOpenAI.mockClear();
+
+      const result = await createAzureOpenAIClient({
+        endpoint: 'https://my-resource.openai.azure.com/',
+        deployment: 'o1',
+        apiKey: 'test-key',
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.message).toContain('Responses');
+      }
+      expect(mockAzureOpenAI).toHaveBeenCalled();
+      expect(mockAzureChatOpenAI).not.toHaveBeenCalled();
+    });
+
+    it('DOES use Responses API for dash-prefixed variant (o3-mini)', async () => {
+      mockAzureChatOpenAI.mockClear();
+      mockAzureOpenAI.mockClear();
+
+      const result = await createAzureOpenAIClient({
+        endpoint: 'https://my-resource.openai.azure.com/',
+        deployment: 'o3-mini',
+        apiKey: 'test-key',
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.message).toContain('Responses');
+      }
+      expect(mockAzureOpenAI).toHaveBeenCalled();
+      expect(mockAzureChatOpenAI).not.toHaveBeenCalled();
+    });
+
+    it('DOES use Responses API for underscore-prefixed variant (gpt-5-codex_v2)', async () => {
+      mockAzureChatOpenAI.mockClear();
+      mockAzureOpenAI.mockClear();
+
+      const result = await createAzureOpenAIClient({
+        endpoint: 'https://my-resource.openai.azure.com/',
+        deployment: 'gpt-5-codex_v2',
+        apiKey: 'test-key',
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.message).toContain('Responses');
+      }
+      expect(mockAzureOpenAI).toHaveBeenCalled();
+      expect(mockAzureChatOpenAI).not.toHaveBeenCalled();
+    });
   });
 });
 
