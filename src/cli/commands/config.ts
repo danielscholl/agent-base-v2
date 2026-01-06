@@ -10,6 +10,7 @@ import { getDefaultConfig, type AppConfig } from '../../config/schema.js';
 import { getProviderWizards } from '../../config/providers/index.js';
 import { PROVIDER_NAMES, type ProviderName } from '../../config/constants.js';
 import { isProviderConfigured } from '../../utils/index.js';
+import { getWorkspaceInfo } from '../../tools/workspace.js';
 
 /**
  * Type guard to check if a string is a valid provider name.
@@ -56,6 +57,10 @@ export const configHandler: CommandHandler = async (args, context): Promise<Comm
         };
       }
       return configProviderHandler(subArgs, context);
+    case 'workspace':
+      // Workspace command - read-only operations allowed in interactive mode
+      // Set/clear operations will check isInteractive inside the handler
+      return configWorkspaceHandler(subArgs, context);
     default:
       context.onOutput(`Unknown subcommand: ${subcommand ?? ''}`, 'warning');
       context.onOutput('Run "agent config --help" for usage.', 'info');
@@ -255,6 +260,31 @@ export const configShowHandler: CommandHandler = async (_args, context): Promise
     value: config.agent.dataDir,
   });
 
+  // Workspace Root row - get effective workspace and source (read-only, no env mutation)
+  const workspaceResult = await getWorkspaceInfo(fileConfig.agent.workspaceRoot);
+  rows.push({
+    setting: 'Workspace Root',
+    value: workspaceResult.workspaceRoot,
+  });
+
+  // Source indicator - map source to human-readable string
+  const sourceLabels: Record<'env' | 'config' | 'cwd', string> = {
+    env: 'env variable',
+    config: 'config file',
+    cwd: 'current directory',
+  };
+  let sourceValue = sourceLabels[workspaceResult.source];
+
+  // If there's a warning (config was overridden by env), show indicator
+  if (workspaceResult.warning !== undefined) {
+    sourceValue = `${sourceValue} (⚠ config overridden)`;
+  }
+
+  rows.push({
+    setting: '  Source',
+    value: sourceValue,
+  });
+
   // Calculate column widths
   const settingWidth = Math.max(...rows.map((r) => r.setting.length), 'Setting'.length);
   const valueWidth = Math.max(...rows.map((r) => r.value.length), 'Value'.length);
@@ -414,6 +444,203 @@ export const configEditHandler: CommandHandler = async (_args, context): Promise
 
   context.onOutput('Configuration file opened in editor.', 'success');
   return { success: true, message: 'Opened config in editor' };
+};
+
+/**
+ * Handler for /config workspace command.
+ * Manages workspace root configuration.
+ *
+ * Usage:
+ *   config workspace           - Show current workspace root with source
+ *   config workspace set <path> - Set workspace root in config
+ *   config workspace clear      - Remove workspace root from config
+ */
+export const configWorkspaceHandler: CommandHandler = async (
+  args,
+  context
+): Promise<CommandResult> => {
+  const parts = args.trim().split(/\s+/).filter(Boolean);
+  const [action, ...rest] = parts;
+
+  // Load file-only config (not env vars)
+  const fileConfigResult = await loadConfigFromFiles();
+  const fileConfig: AppConfig = fileConfigResult.success
+    ? (fileConfigResult.result as AppConfig)
+    : getDefaultConfig();
+
+  // Get effective workspace root with source information (read-only, no env mutation)
+  const workspaceResult = await getWorkspaceInfo(fileConfig.agent.workspaceRoot);
+
+  // Human-readable source labels
+  const sourceLabels: Record<'env' | 'config' | 'cwd', string> = {
+    env: 'env variable (AGENT_WORKSPACE_ROOT)',
+    config: 'config file (~/.agent/config.yaml)',
+    cwd: 'current directory',
+  };
+
+  // No action - display current workspace
+  if (action === undefined || action === '') {
+    context.onOutput('');
+    context.onOutput(`${ansi.yellow}Workspace Configuration${ansi.reset}`);
+    context.onOutput('');
+    context.onOutput(`  Current:  ${ansi.cyan}${workspaceResult.workspaceRoot}${ansi.reset}`);
+    context.onOutput(`  Source:   ${sourceLabels[workspaceResult.source]}`);
+
+    // Show warning if config was overridden
+    if (workspaceResult.warning !== undefined) {
+      context.onOutput('');
+      context.onOutput(`  ${ansi.yellow}⚠ Warning:${ansi.reset} ${workspaceResult.warning}`);
+    }
+
+    // Show configured value if different from effective
+    if (fileConfig.agent.workspaceRoot !== undefined && fileConfig.agent.workspaceRoot !== '') {
+      if (workspaceResult.source === 'env') {
+        context.onOutput('');
+        context.onOutput(
+          `  Config value: ${ansi.cyan}${fileConfig.agent.workspaceRoot}${ansi.reset} (not used)`
+        );
+      }
+    }
+
+    context.onOutput('');
+    return { success: true, data: workspaceResult };
+  }
+
+  // Handle 'set' action
+  if (action === 'set') {
+    let pathArg = rest.join(' ');
+
+    // If no path provided and we have prompts, ask interactively
+    if (pathArg === '' && context.onPrompt !== undefined) {
+      context.onOutput('');
+      pathArg = await context.onPrompt('Enter workspace root path:');
+      if (pathArg.trim() === '') {
+        context.onOutput('No path provided, operation cancelled.', 'warning');
+        return { success: false, message: 'No path provided' };
+      }
+    } else if (pathArg === '') {
+      context.onOutput('Usage: agent config workspace set <path>', 'error');
+      context.onOutput('Examples:', 'info');
+      context.onOutput('  agent config workspace set ~/projects', 'info');
+      context.onOutput('  agent config workspace set ./myproject', 'info');
+      context.onOutput('  agent config workspace set /absolute/path', 'info');
+      return { success: false, message: 'Path required' };
+    }
+
+    // Expand ~ and resolve to absolute path
+    const expandedPath = pathArg.startsWith('~')
+      ? pathArg.replace('~', process.env.HOME ?? process.env.USERPROFILE ?? '')
+      : pathArg;
+    const absolutePath = expandedPath.startsWith('/')
+      ? expandedPath
+      : (await import('node:path')).resolve(process.cwd(), expandedPath);
+
+    // Check if path exists
+    const fs = await import('node:fs/promises');
+    let pathExists = false;
+    let isDirectory = false;
+    try {
+      const stat = await fs.stat(absolutePath);
+      pathExists = true;
+      isDirectory = stat.isDirectory();
+    } catch {
+      pathExists = false;
+    }
+
+    if (pathExists && !isDirectory) {
+      context.onOutput(`Warning: ${absolutePath} is not a directory`, 'warning');
+    }
+
+    // If path doesn't exist and we have prompts, offer to create it
+    if (!pathExists && context.onPrompt !== undefined) {
+      const create = await context.onPrompt(
+        `Directory ${absolutePath} does not exist. Create it? (y/N):`
+      );
+      if (create.toLowerCase().startsWith('y')) {
+        try {
+          await fs.mkdir(absolutePath, { recursive: true });
+          context.onOutput(`Created directory: ${absolutePath}`, 'success');
+        } catch (err) {
+          context.onOutput(
+            `Failed to create directory: ${err instanceof Error ? err.message : String(err)}`,
+            'error'
+          );
+          return { success: false, message: 'Failed to create directory' };
+        }
+      } else {
+        context.onOutput(`Note: ${absolutePath} does not exist yet`, 'warning');
+      }
+    } else if (!pathExists) {
+      context.onOutput(`Note: ${absolutePath} does not exist yet`, 'warning');
+    }
+
+    // Update config
+    const newConfig: AppConfig = {
+      ...fileConfig,
+      agent: {
+        ...fileConfig.agent,
+        workspaceRoot: absolutePath,
+      },
+    };
+
+    const manager = new ConfigManager();
+    const saveResult = await manager.save(newConfig);
+
+    if (!saveResult.success) {
+      context.onOutput(`Failed to save: ${saveResult.message}`, 'error');
+      return { success: false, message: saveResult.message };
+    }
+
+    context.onOutput(
+      `${ansi.cyan}✓${ansi.reset} Workspace root set to: ${absolutePath}`,
+      'success'
+    );
+
+    // Warn if env var will override this
+    const envRoot = process.env['AGENT_WORKSPACE_ROOT'];
+    if (envRoot !== undefined && envRoot !== '') {
+      context.onOutput('');
+      context.onOutput(
+        `${ansi.yellow}⚠ Note:${ansi.reset} AGENT_WORKSPACE_ROOT env var is set and will override this config`,
+        'warning'
+      );
+    }
+
+    return { success: true, message: `Workspace set to ${absolutePath}` };
+  }
+
+  // Handle 'clear' action
+  if (action === 'clear') {
+    // Remove workspaceRoot from config
+    const newConfig: AppConfig = {
+      ...fileConfig,
+      agent: {
+        ...fileConfig.agent,
+        workspaceRoot: undefined,
+      },
+    };
+
+    const manager = new ConfigManager();
+    const saveResult = await manager.save(newConfig);
+
+    if (!saveResult.success) {
+      context.onOutput(`Failed to save: ${saveResult.message}`, 'error');
+      return { success: false, message: saveResult.message };
+    }
+
+    context.onOutput(`${ansi.cyan}✓${ansi.reset} Workspace root cleared from config`, 'success');
+    context.onOutput('  Will use current directory or AGENT_WORKSPACE_ROOT env var', 'info');
+
+    return { success: true, message: 'Workspace cleared' };
+  }
+
+  // Unknown action
+  context.onOutput(`Unknown workspace command: ${action}`, 'error');
+  context.onOutput('Usage:', 'info');
+  context.onOutput('  agent config workspace           Show current workspace', 'info');
+  context.onOutput('  agent config workspace set <path>  Set workspace root', 'info');
+  context.onOutput('  agent config workspace clear       Clear workspace from config', 'info');
+  return { success: false, message: 'Unknown command' };
 };
 
 /**

@@ -60,7 +60,7 @@ const [command, ...restArgs] = cli.input;
 const wantsHelp = process.argv.includes('--help') || process.argv.includes('-h');
 
 if (command === 'config') {
-  // Check for nested provider subcommand first
+  // Check for nested subcommands first
   if (restArgs[0] === 'provider') {
     // Pass --help to subcommand meow if requested
     const providerArgv = wantsHelp ? ['--help'] : restArgs.slice(1);
@@ -81,6 +81,33 @@ if (command === 'config') {
 `,
       { importMeta: import.meta, argv: providerArgv, description: false }
     );
+  } else if (restArgs[0] === 'workspace') {
+    // Pass --help to subcommand meow if requested
+    const workspaceArgv = wantsHelp ? ['--help'] : restArgs.slice(1);
+    meow(
+      `
+  Usage: agent config workspace [command]
+
+    Manage workspace root configuration
+
+  Commands
+    (none)              Show current workspace root and source
+    set <path>          Set workspace root in config file
+    clear               Remove workspace root from config
+
+  Examples
+    agent config workspace                 Show workspace info
+    agent config workspace set ~/projects  Set workspace to ~/projects
+    agent config workspace set ./myapp     Set workspace to relative path
+    agent config workspace clear           Clear workspace (use cwd)
+
+  Notes
+    - AGENT_WORKSPACE_ROOT env var takes precedence over config
+    - Relative paths are resolved from current directory
+    - ~ is expanded to home directory
+`,
+      { importMeta: import.meta, argv: workspaceArgv, description: false }
+    );
   } else {
     // Show help if --help requested OR no subcommand provided (like osdu-agent)
     const configArgv = wantsHelp || restArgs.length === 0 ? ['--help'] : restArgs;
@@ -95,8 +122,9 @@ if (command === 'config') {
     init             Interactive configuration wizard
     edit             Open config file in text editor
     provider         Manage provider configurations
+    workspace        Manage workspace root setting
 
-  Run 'agent config provider --help' for provider subcommands.
+  Run 'agent config <command> --help' for subcommand details.
 `,
       { importMeta: import.meta, argv: configArgv, description: false }
     );

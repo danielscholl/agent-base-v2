@@ -251,6 +251,88 @@ export async function initializeWorkspaceRoot(
 }
 
 /**
+ * Get workspace info without mutating process.env.
+ *
+ * This is a read-only version of initializeWorkspaceRoot() for display purposes.
+ * Use this in commands that only need to show the current workspace configuration
+ * without affecting runtime state.
+ *
+ * @param configWorkspaceRoot - The config.agent.workspaceRoot value
+ * @returns The effective workspace root and source (includes warning if config would be rejected)
+ */
+export async function getWorkspaceInfo(configWorkspaceRoot?: string): Promise<WorkspaceInitResult> {
+  const envRoot = process.env['AGENT_WORKSPACE_ROOT'];
+  const hasEnvRoot = envRoot !== undefined && envRoot !== '';
+  const hasConfigRoot = configWorkspaceRoot !== undefined && configWorkspaceRoot !== '';
+
+  // Case 1: Only env var set - use it (authoritative)
+  if (hasEnvRoot && !hasConfigRoot) {
+    const resolved = path.resolve(expandPath(envRoot));
+    return { workspaceRoot: resolved, source: 'env' };
+  }
+
+  // Case 2: Only config set - would use it
+  if (!hasEnvRoot && hasConfigRoot) {
+    const resolved = path.resolve(expandPath(configWorkspaceRoot));
+    return { workspaceRoot: resolved, source: 'config' };
+  }
+
+  // Case 3: Both set - config must be within env root (narrow only)
+  if (hasEnvRoot && hasConfigRoot) {
+    const resolvedEnv = path.resolve(expandPath(envRoot));
+    const resolvedConfig = path.resolve(expandPath(configWorkspaceRoot));
+
+    // Get real path of env root
+    const realEnv = await safeRealpath(resolvedEnv);
+
+    // Check if config path is within env root
+    let realConfig: string;
+    try {
+      realConfig = await fs.realpath(resolvedConfig);
+    } catch {
+      // Path doesn't exist - walk parents to check
+      let checkPath = resolvedConfig;
+      let parentReal: string | null = null;
+
+      while (checkPath !== realEnv && checkPath !== path.dirname(checkPath)) {
+        const parentPath = path.dirname(checkPath);
+        try {
+          parentReal = await fs.realpath(parentPath);
+          if (!isPathWithin(parentReal, realEnv)) {
+            const warning = `config.agent.workspaceRoot parent (${parentPath} → ${parentReal}) is a symlink that resolves outside AGENT_WORKSPACE_ROOT (${realEnv}). Config ignored for security.`;
+            return { workspaceRoot: resolvedEnv, source: 'env', warning };
+          }
+          break;
+        } catch {
+          checkPath = parentPath;
+        }
+      }
+
+      // Valid narrowing - would use config
+      const effectiveRoot =
+        parentReal !== null
+          ? path.join(parentReal, path.relative(path.dirname(checkPath), resolvedConfig))
+          : resolvedConfig;
+      return { workspaceRoot: effectiveRoot, source: 'config' };
+    }
+
+    // Config path exists - check if within env root
+    if (isPathWithin(realConfig, realEnv)) {
+      return { workspaceRoot: realConfig, source: 'config' };
+    } else {
+      const warning =
+        realConfig !== resolvedConfig
+          ? `config.agent.workspaceRoot (${resolvedConfig} → ${realConfig}) is a symlink that resolves outside AGENT_WORKSPACE_ROOT (${realEnv}). Config ignored for security.`
+          : `config.agent.workspaceRoot (${resolvedConfig}) is outside AGENT_WORKSPACE_ROOT (${resolvedEnv}). Config ignored for security.`;
+      return { workspaceRoot: resolvedEnv, source: 'env', warning };
+    }
+  }
+
+  // Case 4: Neither set - use cwd
+  return { workspaceRoot: process.cwd(), source: 'cwd' };
+}
+
+/**
  * Get workspace root resolved to its real path (follows symlinks).
  * Async version needed because realpath is async.
  */
