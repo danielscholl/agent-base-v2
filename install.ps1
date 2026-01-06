@@ -20,7 +20,7 @@ $BIN_DIR = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
 function Write-Info { param($msg) Write-Host $msg -ForegroundColor Cyan }
 function Write-Success { param($msg) Write-Host $msg -ForegroundColor Green }
 function Write-Warn { param($msg) Write-Host $msg -ForegroundColor Yellow }
-function Write-Err { param($msg) Write-Host "Error: $msg" -ForegroundColor Red; exit 1 }
+function Write-Err { param($msg) Write-Host "Error: $msg" -ForegroundColor Red; throw $msg }
 
 function Test-Platform {
     if ([Environment]::Is64BitOperatingSystem -eq $false) {
@@ -268,7 +268,7 @@ function Main {
             Write-Host ""
             Write-Success "Run 'agent' to start!"
             Write-Host ""
-            exit 0
+            return
         } else {
             Write-Warn "Binary not available, falling back to source build..."
         }
