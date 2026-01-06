@@ -186,7 +186,7 @@ rm -rf ~/.agent  # optional: remove config
 Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\agent.exe" -Force -ErrorAction SilentlyContinue
 Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\agent.cmd" -Force -ErrorAction SilentlyContinue
 Remove-Item "$env:LOCALAPPDATA\Programs\agent-base-v2" -Recurse -Force
-Remove-Item "$HOME\.agent" -Recurse -Force -ErrorAction SilentlyContinue  # optional: remove config
+Remove-Item "$env:USERPROFILE\.agent" -Recurse -Force -ErrorAction SilentlyContinue  # optional: remove config
 ```
 
 ---
