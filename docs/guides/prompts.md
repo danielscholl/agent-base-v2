@@ -4,17 +4,203 @@ This guide covers the compositional system prompt architecture and customization
 
 ---
 
-## Overview
+## Design Philosophy
 
-The prompt system uses a **compositional architecture** that assembles prompts from modular layers:
+The prompt system is designed around a **specificity gradient**—from universal instructions down to personal preferences:
 
-1. **Base prompt**: Core agent instructions (model-agnostic)
-2. **Provider layer**: Optional provider-specific guidance
-3. **Environment section**: Runtime context (working dir, git status, etc.)
-4. **Skills section**: Progressive skill disclosure
-5. **User override**: Custom instructions from config or user files
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     SPECIFICITY GRADIENT                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   UNIVERSAL ──────────────────────────────────────► PERSONAL    │
+│                                                                 │
+│   Base        Provider     Environment   Project      User      │
+│   Prompt   →  Layer     →  Context    →  (AGENTS.md)→ Override  │
+│                                                                 │
+│   "Be concise" "Use XML"  "On macOS"   "Run bun test" "I prefer │
+│                                                       functional│
+│                                                       patterns" │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-This approach provides provider-specific optimization without the maintenance burden of fully duplicated prompts.
+### Why Compositional?
+
+| Problem | Solution |
+|---------|----------|
+| Duplicating prompts per provider is unmaintainable | Single base prompt + thin provider layers |
+| Static prompts can't know runtime context | Dynamic environment section injected at startup |
+| Generic agents don't know project conventions | AGENTS.md provides repository-specific guidance |
+| Users have personal preferences | User override layer has final say |
+| Loading all capabilities wastes tokens | Skills use progressive disclosure |
+
+### Mental Model
+
+Think of prompt assembly as **layered refinement**:
+
+1. **Base** establishes defaults everyone agrees on
+2. **Provider** optimizes for the specific LLM's strengths
+3. **Environment** grounds the agent in reality (where am I? what date?)
+4. **Project** teaches local conventions (how do I build? test? deploy?)
+5. **Skills** add capabilities on-demand (not everything, just what's relevant)
+6. **User** gets the final word on preferences
+
+Each layer **adds context** later layers don't replace earlier ones, they refine them.
+
+---
+
+## Layer Reference
+
+| Layer | Source | Size | Purpose |
+|-------|--------|------|---------|
+| **Base** | `src/prompts/base.md` | ~85 tokens | Agent identity, universal rules |
+| **Provider** | `src/prompts/providers/{provider}.md` | ~10-25 tokens | Format/reasoning hints for specific LLMs |
+| **Environment** | Generated at runtime | ~50 tokens | Working dir, git status, platform, date |
+| **AGENTS.md** | `{workspaceRoot}/AGENTS.md` | varies | Project-specific conventions |
+| **Skills** | Discovered from skill directories | varies | On-demand capabilities |
+| **User** | `~/.agent/system.md` | varies | Personal preferences |
+
+---
+
+### 1. Base Prompt
+
+**What it is:** Core instructions that apply to all providers and all projects.
+
+**Why it exists:** Without a shared base, every provider would need its own complete prompt, leading to duplication and drift. When you fix a bug or add a guideline, it should propagate everywhere.
+
+**Contains:**
+- Agent role and identity
+- Universal behavioral rules (be concise, no secrets, read before edit)
+- Tool usage preferences (prefer Read over cat, Edit over sed)
+
+**Source priority:**
+1. `config.agent.systemPromptFile` (explicit override)
+2. `~/.agent/system.md` (user's global default)
+3. `src/prompts/base.md` (package default)
+
+---
+
+### 2. Provider Layer
+
+**What it is:** Minimal additions (1-2 sentences) that optimize for a specific LLM's behavior.
+
+**Why it exists:** Different LLMs respond better to different formats and reasoning styles. Claude handles XML well; GPT prefers JSON. Local models need simpler instructions.
+
+**Contains only:**
+- Format preferences (XML vs JSON)
+- Reasoning hints (step-by-step for some models)
+- Constraint awareness (for limited models)
+
+**Current provider layers:**
+- **Anthropic:** "Use XML tags for structured data. Think step-by-step for complex problems."
+- **OpenAI:** "Prefer JSON for structured data."
+- **Local:** "Context and tool support varies by model. Keep instructions simple. Break complex tasks into steps."
+
+**Guidelines:**
+- **Minimal:** 1-2 sentences, under 30 tokens
+- **Behavioral:** Only include what changes model behavior
+- **No redundancy:** Don't repeat what's in base prompt
+- **Optional:** Missing layer = graceful fallback (Azure, GitHub, Gemini use underlying model defaults)
+
+---
+
+### 3. Environment Section
+
+**What it is:** Runtime context dynamically generated when the agent starts.
+
+**Why it exists:** Static prompts can't include information that's only known at runtime. The agent needs to know where it's operating, what platform it's on, and what the current state is.
+
+**Contains:**
+- Working directory (absolute path)
+- Git repository status (branch, clean/dirty)
+- Platform and OS version
+- Current date
+
+**Output example:**
+```markdown
+# Environment
+
+Working directory: /Users/dev/my-project
+Git repository: Yes (branch: main, clean)
+Platform: macOS (Darwin 25.2.0)
+Date: 2026-01-06
+```
+
+**Why each field matters:**
+| Field | Why the agent needs it |
+|-------|------------------------|
+| Working directory | Absolute paths for file operations |
+| Git status | Informs commit, branch, and PR decisions |
+| Platform | Determines valid commands (macOS vs Windows) |
+| Date | Temporal awareness for docs, logging, time-sensitive tasks |
+
+---
+
+### 4. AGENTS.md (Project Context)
+
+**What it is:** A standardized file where repositories provide AI-specific instructions.
+
+**Why it exists:** README.md is for humans. AGENTS.md is for AI agents. Every project has unique conventions—build commands, test patterns, coding standards—that a generic agent can't know.
+
+**Spec:** [agents.md](https://agents.md/)
+
+**Discovery order:**
+1. `{workspaceRoot}/AGENTS.md`
+2. `{workspaceRoot}/.agent/AGENTS.md`
+
+**Example:**
+```markdown
+# Build & Test
+- Run tests: `bun run test`
+- Type check: `bun run typecheck`
+
+# Conventions
+- Use conventional commits
+- 85% test coverage minimum
+- No `any` types without justification
+```
+
+**Key behavior:** Always loads from **workspace root**, not current directory. This ensures AGENTS.md is found even when invoked from a subdirectory.
+
+---
+
+### 5. Skills Section
+
+**What it is:** XML listing of available capabilities, injected based on relevance.
+
+**Why it exists:** Loading full documentation for every possible skill wastes context tokens. Progressive disclosure means: load GitHub CLI docs only when the user mentions PRs or issues.
+
+**Output example:**
+```xml
+<available_skills>
+<skill>
+<name>gh</name>
+<description>GitHub CLI integration</description>
+</skill>
+</available_skills>
+```
+
+See the [Skills documentation](../architecture/skills.md) for details on trigger matching.
+
+---
+
+### 6. User Override
+
+**What it is:** Personal customizations that apply across all projects.
+
+**Why it exists:** Users have preferences the agent should respect. They shouldn't need to fork the agent or modify core prompts to express "I prefer functional patterns" or "always run tests first."
+
+**Location:** `~/.agent/system.md`
+
+**Example:**
+```markdown
+## My Preferences
+- Prefer functional programming patterns
+- Always run tests before suggesting commits
+- Use TypeScript strict mode
+```
+
+**Comes last:** User instructions are appended at the end, giving them effective priority.
 
 ---
 
@@ -22,24 +208,27 @@ This approach provides provider-specific optimization without the maintenance bu
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    PROMPT ASSEMBLY ORDER                         │
+│                    PROMPT ASSEMBLY ORDER                        │
 ├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
+│                                                                 │
 │  1. BASE PROMPT (src/prompts/base.md)                           │
 │     └─ Core identity, role, guidelines                          │
-│                                                                  │
+│                                                                 │
 │  2. PROVIDER LAYER (src/prompts/providers/{provider}.md)        │
 │     └─ Provider-specific preferences (optional)                 │
-│                                                                  │
+│                                                                 │
 │  3. ENVIRONMENT SECTION (dynamically generated)                 │
 │     └─ Working directory, git status, platform, date            │
-│                                                                  │
-│  4. SKILLS SECTION (<available_skills> XML)                     │
+│                                                                 │
+│  4. AGENTS.md ({workspaceRoot}/AGENTS.md)                       │
+│     └─ Project-specific agent instructions (optional)           │
+│                                                                 │
+│  5. SKILLS SECTION (<available_skills> XML)                     │
 │     └─ Progressive skill disclosure                             │
-│                                                                  │
-│  5. USER OVERRIDE (config or ~/.agent/system.md)                │
+│                                                                 │
+│  6. USER OVERRIDE (config or ~/.agent/system.md)                │
 │     └─ Custom user instructions                                 │
-│                                                                  │
+│                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -50,15 +239,14 @@ This approach provides provider-specific optimization without the maintenance bu
 ```
 src/prompts/
 ├── base.md                    # Core agent instructions (all providers)
-└── providers/                 # Provider-specific layers
-    ├── anthropic.md          # Claude models
-    ├── openai.md             # GPT and O1 models
-    ├── gemini.md             # Google Gemini
-    ├── azure.md              # Azure OpenAI
-    ├── github.md             # GitHub Models
-    ├── local.md              # Ollama/local models
-    └── foundry.md            # Azure AI Foundry
+└── providers/                 # Provider-specific layers (minimal)
+    ├── anthropic.md          # Claude: XML tags, step-by-step reasoning
+    ├── foundry.local.md      # Foundry local: simpler instructions
+    ├── local.md              # Ollama/Docker: context constraints
+    └── openai.md             # OpenAI: JSON preference
 ```
+
+**Note:** Azure OpenAI, GitHub Models, and Gemini use their underlying model behaviors and don't require separate provider layers. The framework gracefully falls back when no provider layer exists.
 
 ---
 
@@ -123,86 +311,6 @@ Platform: {{PLATFORM}}
 
 ---
 
-## Provider Layers
-
-Provider layers are small, focused files that address provider-specific characteristics:
-
-### When to Use Provider Layers
-
-- **Format preferences**: Claude handles XML well; GPT prefers JSON
-- **Tool calling quirks**: Different providers handle function calling differently
-- **Capability hints**: Some models need simpler instructions
-- **Model-specific notes**: O1 models process system prompts differently than chat models
-
-### Example Provider Layer (anthropic.md)
-
-```markdown
----
-provider: anthropic
-models: [claude-3-opus, claude-3-sonnet, claude-3-haiku]
----
-
-# Claude-Specific Guidelines
-
-## Format Preferences
-
-- Use XML tags for structured data
-- Think step-by-step for complex problems
-
-## Strengths to Leverage
-
-- Long context understanding
-- Nuanced instruction following
-```
-
-### Provider Layer Guidelines
-
-- **Additive**: Enhance, don't contradict the base prompt
-- **Focused**: Address provider-specific quirks only
-- **Small**: Typically 50-200 tokens
-- **Optional**: Missing layer = no provider customization
-
----
-
-## Environment Section
-
-The environment section is generated dynamically at runtime:
-
-```markdown
-# Environment
-
-Working directory: /Users/dev/project
-Git repository: Yes (branch: main, clean)
-Platform: macOS (Darwin 24.1.0)
-Date: 2025-12-24
-```
-
-This provides the model with context about:
-- Current working directory
-- Git repository status (branch, clean/dirty)
-- Platform and OS version
-- Current date
-
----
-
-## Skills Integration
-
-When skills are enabled, the framework appends skill documentation as XML:
-
-```xml
-<available_skills>
-<skill>
-<name>gh</name>
-<description>GitHub CLI integration</description>
-<location>/path/to/gh/SKILL.md</location>
-</skill>
-</available_skills>
-```
-
-See the [Skills documentation](../architecture/skills.md) for details.
-
----
-
 ## YAML Front Matter
 
 Prompt files can include YAML front matter for metadata:
@@ -218,110 +326,6 @@ You are a helpful assistant...
 ```
 
 The front matter is automatically stripped before use.
-
----
-
-## API Reference
-
-### assembleSystemPrompt(options)
-
-Assemble a complete system prompt from all layers (recommended for new code):
-
-```typescript
-import { assembleSystemPrompt } from './agent/prompts.js';
-
-const prompt = await assembleSystemPrompt({
-  config: appConfig,
-  model: 'claude-3-opus',
-  provider: 'anthropic',
-  includeEnvironment: true,
-  includeProviderLayer: true,
-  workingDir: process.cwd(),
-});
-```
-
-**Options:**
-- `config` - Application configuration
-- `model` - LLM model name
-- `provider` - Provider name
-- `includeEnvironment` - Include environment section (default: true)
-- `includeProviderLayer` - Include provider layer (default: true)
-- `workingDir` - Working directory (default: process.cwd())
-- `userOverride` - Custom user instructions to append
-- `onDebug` - Debug callback for logging
-
-### loadSystemPrompt(options)
-
-Legacy function for loading system prompt with three-tier fallback:
-
-```typescript
-import { loadSystemPrompt } from './agent/prompts.js';
-
-const prompt = await loadSystemPrompt({
-  config: appConfig,
-  model: 'gpt-4o',
-  provider: 'openai',
-});
-```
-
-**Note:** This function is maintained for backward compatibility. New code should prefer `assembleSystemPrompt()`.
-
-### loadSystemPromptWithSkills(options)
-
-Load system prompt with full composition and skills integration:
-
-```typescript
-import { loadSystemPromptWithSkills } from './agent/prompts.js';
-
-const { prompt, skills } = await loadSystemPromptWithSkills({
-  config: appConfig,
-  model: 'claude-3-opus',
-  provider: 'anthropic',
-  includeSkills: true,
-  includeEnvironment: true,
-  includeProviderLayer: true,
-});
-
-console.log(`Loaded ${skills.length} skills`);
-```
-
-### loadBasePrompt(options)
-
-Load only the base prompt (without provider layer or environment):
-
-```typescript
-import { loadBasePrompt } from './agent/prompts.js';
-
-const basePrompt = await loadBasePrompt({
-  config: appConfig,
-  model: 'gpt-4o',
-  provider: 'openai',
-});
-```
-
-### loadProviderLayer(provider)
-
-Load provider-specific layer (returns empty string if not found):
-
-```typescript
-import { loadProviderLayer } from './agent/prompts.js';
-
-const layer = await loadProviderLayer('anthropic');
-if (layer) {
-  console.log('Loaded Anthropic-specific guidance');
-}
-```
-
-### replacePlaceholders(content, values)
-
-Replace placeholders in text:
-
-```typescript
-import { replacePlaceholders } from './agent/prompts.js';
-
-const result = replacePlaceholders('Hello, {{NAME}}!', { NAME: 'World' });
-// Result: 'Hello, World!'
-```
 
 ---
 
@@ -370,26 +374,21 @@ You are a development assistant.
 - Explain reasoning
 ```
 
-### Provider Layers Are Additive
+### Provider Layers Are Minimal
 
-Provider layers should enhance, not replace, base prompt instructions:
+Provider layers should be 1-2 sentences that change behavior, not documentation:
 
 ```markdown
-# Good (additive)
-## Format Preferences
-- Use XML tags for structured data
+# Good (minimal, behavioral)
+Use XML tags for structured data. Think step-by-step for complex problems.
 
-# Avoid (contradictory)
-Ignore all previous instructions...
+# Avoid (verbose, redundant with base)
+## Format Preferences
+- Use XML tags for structured data when organizing complex information
+- Prefer explicit section markers for multi-part responses
+
+## Tool Usage
+- Execute independent tool calls in parallel in a single response
+- For file operations, always prefer dedicated tools over bash commands
 ```
 
----
-
-## Migration from Legacy System
-
-If you're upgrading from a single-file prompt approach:
-
-1. **No action required**: The legacy `loadSystemPrompt()` function still works
-2. **Opt-in to composition**: Use `assembleSystemPrompt()` for new features
-3. **Custom prompts**: Create `~/.agent/system.md` for user overrides
-4. **Provider-specific**: Create `providers/{provider}.md` files as needed
