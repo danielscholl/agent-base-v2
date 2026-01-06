@@ -25,6 +25,7 @@ interface AssetMapping {
 const assets: AssetMapping[] = [
   { src: 'src/_bundled_skills', dest: 'dist/_bundled_skills' },
   { src: 'src/prompts', dest: 'dist/prompts' },
+  { src: 'src/commands', dest: 'dist/commands' },
 ];
 
 console.log('Copying static assets to dist...');

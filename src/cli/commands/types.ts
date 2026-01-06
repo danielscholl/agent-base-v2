@@ -36,6 +36,10 @@ export interface CommandResult {
   availableSessions?: SessionMetadata[];
   /** Additional data from command */
   data?: unknown;
+  /** Custom command prompt to inject as user input to the agent */
+  customCommandPrompt?: string;
+  /** Custom command name (for display in history) */
+  customCommandName?: string;
 }
 
 /** Context passed to command handlers */

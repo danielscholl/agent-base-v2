@@ -29,15 +29,36 @@ jest.unstable_mockModule('../../config/manager.js', () => ({
   deepMerge: jest.fn(),
 }));
 
+// Mock commands for autocomplete
+const mockCommands = [
+  { name: 'help', description: 'Show help message' },
+  { name: 'clear', description: 'Clear screen and history' },
+  { name: 'exit', description: 'Exit the shell' },
+];
+
+// Mock async functions need to be defined with mockResolvedValue for proper Promise handling
+const mockGetAutocompleteCommandsAsync = jest
+  .fn<() => Promise<typeof mockCommands>>()
+  .mockResolvedValue(mockCommands);
+
 // Mock CLI commands module
 jest.unstable_mockModule('../../cli/commands/index.js', () => ({
   executeCommand: jest.fn(),
   isCommand: jest.fn(() => false),
-  getAutocompleteCommands: jest.fn(() => [
-    { name: 'help', description: 'Show help message' },
-    { name: 'clear', description: 'Clear screen and history' },
-    { name: 'exit', description: 'Exit the shell' },
-  ]),
+  getAutocompleteCommands: jest.fn(() => mockCommands),
+  // New exports required by InteractiveShell for custom commands feature
+  getAutocompleteCommandsAsync: mockGetAutocompleteCommandsAsync,
+  extractArgs: jest.fn((input: string) => {
+    const trimmed = input.trim();
+    const firstSpace = trimmed.indexOf(' ');
+    return firstSpace > 0 ? trimmed.slice(firstSpace + 1).trim() : '';
+  }),
+}));
+
+// Mock update check module - function must be defined before the mock
+const mockCheckForUpdatesWithCache = jest.fn<() => Promise<null>>().mockResolvedValue(null);
+jest.unstable_mockModule('../../cli/commands/update.js', () => ({
+  checkForUpdatesWithCache: mockCheckForUpdatesWithCache,
 }));
 
 // Mock config command handler for setup flow
@@ -187,6 +208,9 @@ describe('InteractiveShell', () => {
       // Return success: false to stay in the shell (simulating user needs to configure)
       return Promise.resolve({ success: false, message: 'Setup cancelled' });
     });
+    // Reset async mocks that get cleared by jest.clearAllMocks()
+    mockCheckForUpdatesWithCache.mockResolvedValue(null);
+    mockGetAutocompleteCommandsAsync.mockResolvedValue(mockCommands);
   });
 
   it('shows spinner while loading config', () => {

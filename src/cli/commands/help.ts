@@ -28,6 +28,13 @@ GENERAL
 SHELL COMMANDS
   !<command>           Execute shell command (e.g., !ls -la)
 
+CUSTOM COMMANDS
+  Create .agent/commands/*.md files to define custom slash commands.
+  - Project commands: ./.agent/commands/*.md (shown with 'project' suffix)
+  - User commands: ~/.agent/commands/*.md (shown with 'user' suffix)
+  Project commands take precedence over user commands with the same name.
+  See documentation for format: description, argument-hint in YAML front matter.
+
 KEYBOARD SHORTCUTS
   ESC                  Clear current input
   Ctrl+C               Cancel current operation / Exit

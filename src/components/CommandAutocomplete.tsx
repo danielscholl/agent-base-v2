@@ -14,6 +14,8 @@ export interface AutocompleteCommand {
   name: string;
   /** Brief description */
   description: string;
+  /** Optional argument hint (e.g., "[filepath]" or "<required-arg>") */
+  argumentHint?: string;
 }
 
 /**
@@ -69,6 +71,20 @@ export function CommandAutocomplete({
   const maxNameWidth = Math.max(...displayed.map((cmd) => cmd.name.length)) + 1;
   const nameColWidth = Math.max(maxNameWidth, 12); // Minimum 12 chars
 
+  // Check if we should show argument hint:
+  // - Single match OR exact match with the selected command
+  const selectedCommand = filtered[selectedIndex];
+  const isExactMatch =
+    selectedCommand !== undefined && filter.toLowerCase() === selectedCommand.name.toLowerCase();
+
+  // Determine if hint should be shown and extract hint info
+  const hintCommand =
+    (filtered.length === 1 || isExactMatch) &&
+    selectedCommand !== undefined &&
+    selectedCommand.argumentHint !== undefined
+      ? selectedCommand
+      : null;
+
   return (
     <Box flexDirection="column" marginTop={1} marginBottom={1}>
       {displayed.map((cmd, index) => {
@@ -85,6 +101,14 @@ export function CommandAutocomplete({
           </Box>
         );
       })}
+      {hintCommand !== null && (
+        <Box marginTop={0}>
+          <Text dimColor>{'  Usage: /'}</Text>
+          <Text color="cyan">{hintCommand.name}</Text>
+          <Text dimColor> </Text>
+          <Text color="yellow">{hintCommand.argumentHint}</Text>
+        </Box>
+      )}
       {filtered.length > maxItems && (
         <Text dimColor>... and {String(filtered.length - maxItems)} more</Text>
       )}

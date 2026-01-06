@@ -133,4 +133,63 @@ describe('CommandAutocomplete', () => {
 
     expect(lastFrame()).toContain('/help');
   });
+
+  it('shows argument hint for single matching command with hint', () => {
+    const commandsWithHint: AutocompleteCommand[] = [
+      { name: 'prime', description: 'Prime understanding', argumentHint: '[service-or-repo]' },
+      { name: 'help', description: 'Show help' },
+    ];
+
+    const { lastFrame } = render(
+      <CommandAutocomplete commands={commandsWithHint} filter="prime" selectedIndex={0} />
+    );
+
+    expect(lastFrame()).toContain('/prime');
+    expect(lastFrame()).toContain('Usage:');
+    expect(lastFrame()).toContain('[service-or-repo]');
+  });
+
+  it('shows argument hint on exact match', () => {
+    const commandsWithHint: AutocompleteCommand[] = [
+      { name: 'prime', description: 'Prime understanding', argumentHint: '<target>' },
+      { name: 'primed', description: 'Different command' },
+    ];
+
+    const { lastFrame } = render(
+      <CommandAutocomplete commands={commandsWithHint} filter="prime" selectedIndex={0} />
+    );
+
+    // Both commands match filter 'prime', but exact match should show hint
+    expect(lastFrame()).toContain('/prime');
+    expect(lastFrame()).toContain('/primed');
+    expect(lastFrame()).toContain('Usage:');
+    expect(lastFrame()).toContain('<target>');
+  });
+
+  it('does not show argument hint when no hint defined', () => {
+    const commandsNoHint: AutocompleteCommand[] = [{ name: 'help', description: 'Show help' }];
+
+    const { lastFrame } = render(
+      <CommandAutocomplete commands={commandsNoHint} filter="help" selectedIndex={0} />
+    );
+
+    expect(lastFrame()).toContain('/help');
+    expect(lastFrame()).not.toContain('Usage:');
+  });
+
+  it('does not show argument hint for multiple non-exact matches', () => {
+    const commandsWithHint: AutocompleteCommand[] = [
+      { name: 'clear', description: 'Clear screen', argumentHint: '[options]' },
+      { name: 'continue', description: 'Continue session', argumentHint: '[id]' },
+    ];
+
+    const { lastFrame } = render(
+      <CommandAutocomplete commands={commandsWithHint} filter="c" selectedIndex={0} />
+    );
+
+    // Multiple matches for 'c', neither is exact, so no hint shown
+    expect(lastFrame()).toContain('/clear');
+    expect(lastFrame()).toContain('/continue');
+    expect(lastFrame()).not.toContain('Usage:');
+  });
 });

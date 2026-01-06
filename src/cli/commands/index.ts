@@ -22,6 +22,7 @@ import { exitHandler } from './exit.js';
 import { telemetryHandler } from './telemetry.js';
 import { shellHandler } from './shell.js';
 import { saveHandler, resumeHandler } from './session.js';
+import { getCustomCommands, findAndExecuteCustomCommand } from './custom/index.js';
 
 // CLI-only handlers (not interactive commands)
 export { sessionsHandler, purgeHandler } from './session.js';
@@ -115,7 +116,7 @@ export async function executeCommand(
     return shellHandler(command, context);
   }
 
-  // Find matching command
+  // Find matching built-in command
   const command = findCommand(input);
   if (command !== undefined) {
     // Extract arguments and execute
@@ -123,11 +124,35 @@ export async function executeCommand(
     return command.handler(args, context);
   }
 
-  // Handle unknown slash commands - don't pass to agent
+  // Handle slash commands - try custom commands before showing unknown error
   if (isSlashCommand(input)) {
-    const cmdName = input.trim().split(/\s+/)[0] ?? input.trim();
-    context.onOutput(`Unknown command: ${cmdName}. Type /help for available commands.`, 'warning');
-    return { success: false, message: `Unknown command: ${cmdName}` };
+    const cmdName = input.trim().split(/\s+/)[0]?.slice(1) ?? ''; // Remove leading /
+    const args = extractArgs(input);
+
+    // Try to execute as custom command
+    const customResult = await findAndExecuteCustomCommand(cmdName, args);
+
+    if (customResult.success) {
+      // Return the prompt to be injected into the agent
+      return {
+        success: true,
+        customCommandPrompt: customResult.prompt,
+        customCommandName: customResult.commandName,
+      };
+    }
+
+    // Custom command not found - show error
+    if (customResult.type === 'NOT_FOUND') {
+      context.onOutput(
+        `Unknown command: /${cmdName}. Type /help for available commands.`,
+        'warning'
+      );
+      return { success: false, message: `Unknown command: /${cmdName}` };
+    }
+
+    // Custom command execution error
+    context.onOutput(`Command error: ${customResult.error}`, 'error');
+    return { success: false, message: customResult.error };
   }
 
   // Not a command - let caller pass to agent
@@ -152,11 +177,14 @@ export interface AutocompleteCommandInfo {
   name: string;
   /** Brief description */
   description: string;
+  /** Optional argument hint (e.g., "[filepath]" or "<required-arg>") */
+  argumentHint?: string;
 }
 
 /**
- * Get all commands formatted for autocomplete.
+ * Get all commands formatted for autocomplete (sync version).
  * Returns unique command names (using first alias that starts with /).
+ * Does NOT include custom commands - use getAutocompleteCommandsAsync for that.
  */
 export function getAutocompleteCommands(): AutocompleteCommandInfo[] {
   const commands: AutocompleteCommandInfo[] = [];
@@ -176,3 +204,31 @@ export function getAutocompleteCommands(): AutocompleteCommandInfo[] {
   // Sort alphabetically by name
   return commands.sort((a, b) => a.name.localeCompare(b.name));
 }
+
+/**
+ * Get all commands formatted for autocomplete (async version).
+ * Includes both built-in commands and custom commands from .agent/commands/.
+ *
+ * @param workspaceRoot - Optional workspace root override
+ * @returns Promise resolving to sorted array of autocomplete command info
+ */
+export async function getAutocompleteCommandsAsync(
+  workspaceRoot?: string
+): Promise<AutocompleteCommandInfo[]> {
+  // Get built-in commands
+  const builtIn = getAutocompleteCommands();
+
+  // Get custom commands
+  const custom = await getCustomCommands(workspaceRoot);
+
+  // Merge and deduplicate (built-in commands take priority)
+  const builtInNames = new Set(builtIn.map((c) => c.name));
+  const uniqueCustom = custom.filter((c) => !builtInNames.has(c.name));
+
+  // Combine and sort
+  const all = [...builtIn, ...uniqueCustom];
+  return all.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Re-export custom command utilities for external use
+export { clearCustomCommandCache, getCustomCommands } from './custom/index.js';

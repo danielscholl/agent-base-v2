@@ -11,7 +11,13 @@ import { loadConfig, configFileExists } from '../config/manager.js';
 import { validateProviderCredentials } from '../config/schema.js';
 import { createCallbacks, wrapWithTelemetry } from '../cli/callbacks.js';
 import { VERSION } from '../cli/version.js';
-import { executeCommand, isCommand, getAutocompleteCommands } from '../cli/commands/index.js';
+import {
+  executeCommand,
+  isCommand,
+  getAutocompleteCommands,
+  getAutocompleteCommandsAsync,
+  extractArgs,
+} from '../cli/commands/index.js';
 import { CommandAutocomplete, filterCommands } from './CommandAutocomplete.js';
 import type { AutocompleteCommand } from './CommandAutocomplete.js';
 import { configInitHandler } from '../cli/commands/config.js';
@@ -205,8 +211,9 @@ export function InteractiveShell({
   // Track if config loading has been initiated to prevent duplicate loads
   const configLoadInitiatedRef = useRef(false);
 
-  // Get autocomplete commands once
+  // Get autocomplete commands - start with built-in, load custom async
   const autocompleteCommandsRef = useRef<AutocompleteCommand[]>(getAutocompleteCommands());
+  const customCommandsLoadedRef = useRef(false);
 
   const [state, setState] = useState<ShellState>({
     input: '',
@@ -397,6 +404,29 @@ export function InteractiveShell({
 
     void loadConfiguration();
   }, [resumeSession]);
+
+  // Load custom commands after config is loaded
+  useEffect(() => {
+    if (!state.configLoaded || state.needsSetup || customCommandsLoadedRef.current) return;
+
+    customCommandsLoadedRef.current = true;
+
+    // Load custom commands asynchronously
+    getAutocompleteCommandsAsync()
+      .then((commands) => {
+        autocompleteCommandsRef.current = commands;
+        // Force a re-render to update autocomplete
+        setState((s) => ({ ...s }));
+      })
+      .catch((err: unknown) => {
+        // Log but don't fail - custom commands are optional
+        if (process.env.AGENT_DEBUG !== undefined) {
+          process.stderr.write(
+            `[DEBUG] Failed to load custom commands: ${err instanceof Error ? err.message : String(err)}\n`
+          );
+        }
+      });
+  }, [state.configLoaded, state.needsSetup]);
 
   // Run config init when setup is needed (no config.yaml)
   useEffect(() => {
@@ -790,37 +820,91 @@ export function InteractiveShell({
           });
           return;
         }
+
+        // Handle custom command - inject prompt into agent
+        if (result.customCommandPrompt !== undefined) {
+          // Remove the placeholder system message
+          setState((s) => {
+            const messagesWithoutPlaceholder =
+              s.messages.length > 0 && s.messages[s.messages.length - 1]?.role === 'system'
+                ? s.messages.slice(0, -1)
+                : s.messages;
+            return { ...s, messages: messagesWithoutPlaceholder };
+          });
+
+          // Use the custom command prompt as the query
+          // Update query variable to fall through to regular agent execution
+          const displayMessage =
+            `/${result.customCommandName ?? 'custom'} ${extractArgs(query)}`.trim();
+          query = result.customCommandPrompt;
+
+          // Store current query for message history tracking
+          currentQueryRef.current = query;
+
+          // Add user message showing the custom command invocation
+          setState((s) => ({
+            ...s,
+            input: '',
+            messages: [
+              ...s.messages,
+              { role: 'user' as const, content: displayMessage, timestamp: new Date() },
+            ],
+            isProcessing: true,
+            spinnerMessage: 'Thinking...',
+            streamingOutput: '',
+            error: null,
+            activeTasks: [],
+            completedTasks: [],
+            messageCount: 0,
+            executionStartTime: Date.now(),
+            lastExecutionToolNodes: [],
+            phaseState: {
+              currentPhase: 0,
+              phaseStartTimes: [],
+              phaseMessageCounts: [],
+            },
+          }));
+
+          // Sync filesystem writes and fall through to agent execution
+          syncFilesystemWritesEnvVar(currentState.config);
+        } else {
+          // Non-custom command result - return as before
+          return;
+        }
+      } else {
+        // No result from command execution
+        return;
       }
-      return;
+    } else {
+      // Not a command - set up state for regular agent execution
+      // Store current query for message history tracking
+      currentQueryRef.current = query;
+
+      // Add user message and clear tasks from previous query
+      setState((s) => ({
+        ...s,
+        input: '',
+        messages: [...s.messages, { role: 'user' as const, content: query, timestamp: new Date() }],
+        isProcessing: true,
+        spinnerMessage: 'Thinking...',
+        streamingOutput: '',
+        error: null,
+        activeTasks: [],
+        completedTasks: [],
+        messageCount: 0,
+        executionStartTime: Date.now(),
+        lastExecutionToolNodes: [], // Clear previous execution history
+        phaseState: {
+          currentPhase: 0,
+          phaseStartTimes: [],
+          phaseMessageCounts: [],
+        },
+      }));
+
+      // Synchronize filesystem writes config to env var before each run
+      // This ensures config changes (e.g., via /config command) are propagated
+      syncFilesystemWritesEnvVar(currentState.config);
     }
-
-    // Store current query for message history tracking
-    currentQueryRef.current = query;
-
-    // Add user message and clear tasks from previous query
-    setState((s) => ({
-      ...s,
-      input: '',
-      messages: [...s.messages, { role: 'user' as const, content: query, timestamp: new Date() }],
-      isProcessing: true,
-      spinnerMessage: 'Thinking...',
-      streamingOutput: '',
-      error: null,
-      activeTasks: [],
-      completedTasks: [],
-      messageCount: 0,
-      executionStartTime: Date.now(),
-      lastExecutionToolNodes: [], // Clear previous execution history
-      phaseState: {
-        currentPhase: 0,
-        phaseStartTimes: [],
-        phaseMessageCounts: [],
-      },
-    }));
-
-    // Synchronize filesystem writes config to env var before each run
-    // This ensures config changes (e.g., via /config command) are propagated
-    syncFilesystemWritesEnvVar(currentState.config);
 
     // Initialize agent lazily with callbacks wired to state
     if (agentRef.current === null && currentState.config !== null) {

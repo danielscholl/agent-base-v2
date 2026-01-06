@@ -116,3 +116,46 @@ export function getBundledSkillsDir(): string {
   // Fallback to installed path (will fail but gives meaningful error)
   return installedPath;
 }
+
+/**
+ * Get the bundled commands directory.
+ *
+ * Resolution order:
+ * 1. $AGENT_HOME/_bundled_commands or ~/.agent/_bundled_commands (installed)
+ * 2. Next to executable (legacy compiled binary)
+ * 3. Same dir as module (bundled dist/)
+ * 4. Parent dir of module (development src/)
+ *
+ * @returns Path to bundled commands directory
+ */
+export function getBundledCommandsDir(): string {
+  // 1. Installed location (~/.agent/_bundled_commands/)
+  const installedPath = join(getAgentHome(), '_bundled_commands');
+  if (existsSync(installedPath)) {
+    return installedPath;
+  }
+
+  // 2. Next to executable (compiled binary with bundled assets)
+  const execRelativePath = join(dirname(process.execPath), 'commands');
+  if (existsSync(execRelativePath)) {
+    return execRelativePath;
+  }
+
+  // 3. Relative to module (dev/bundled)
+  const moduleDir = dirname(fileURLToPath(import.meta.url));
+
+  // Bundled: dist/index.js -> dist/commands/
+  const sameDirPath = join(moduleDir, 'commands');
+  if (existsSync(sameDirPath)) {
+    return sameDirPath;
+  }
+
+  // Dev: src/utils/paths.ts -> src/commands/
+  const parentDirPath = join(moduleDir, '..', 'commands');
+  if (existsSync(parentDirPath)) {
+    return parentDirPath;
+  }
+
+  // Fallback to installed path (will fail but gives meaningful error)
+  return installedPath;
+}
