@@ -1,6 +1,6 @@
 # Agent Base v2
 
-A TypeScript agent framework + CLI for building conversational AI agents with **multi-provider LLM support**, **memory**, and **built-in observability**.
+A TypeScript agent framework + CLI for building conversational AI agents.
 
 [![Bun 1.3.4+](https://img.shields.io/badge/bun-1.3.4+-black.svg)](https://bun.sh/)
 [![TypeScript 5.x](https://img.shields.io/badge/typescript-5.x-blue.svg)](https://www.typescriptlang.org/)
@@ -15,8 +15,6 @@ A TypeScript agent framework + CLI for building conversational AI agents with **
 - **Observability built in** — trace execution, tools, and timing
 - **Extensible toolsets** — add agent capabilities easily
 - **CLI-first workflow** — interactive use and scripting
-
-> Run the same agent across OpenAI, Anthropic, Azure, GitHub Models, or local providers with consistent memory and tracing.
 
 ---
 
@@ -48,13 +46,6 @@ Goodbye!
 
 ---
 
-## Requirements
-
-- **Bun 1.3.4+**
-- **Supported OS:** macOS, Linux, WSL, Windows
-
----
-
 ## Install
 
 **macOS / Linux / WSL**
@@ -67,12 +58,6 @@ curl -fsSL https://raw.githubusercontent.com/danielscholl/agent-base-v2/main/ins
 
 ```powershell
 irm https://raw.githubusercontent.com/danielscholl/agent-base-v2/main/install.ps1 | iex
-```
-
-Verify installation:
-
-```bash
-agent --help
 ```
 
 ---
@@ -97,7 +82,7 @@ agent
 agent -p "Say hello to Alice"
 ```
 
-> **Tip:** `-p` prints clean text by default. Add `--verbose` for traces and execution detail or `-s` for silent.
+> **Tip:** `-p` prints clean text by default. Add `--verbose` for traces and execution detail.
 
 ---
 
@@ -137,9 +122,6 @@ agent --tools
 # Single prompt
 agent -p "Analyze this text"
 
-# Single prompt with silent execution
-agent -p "Analyze this text" --silent
-
 # Switch providers/models on the fly
 agent --provider openai -p "Hello"
 agent --provider anthropic --model claude-sonnet-4-5-20250929 -p "Hello"
@@ -153,20 +135,12 @@ agent --provider anthropic --model claude-sonnet-4-5-20250929 -p "Hello"
 |----------|------|-------------|
 | Ollama | Local | None |
 | Docker | Local | None |
+| Azure AI Foundry | Both | Azure CLI (`az login`) |
 | GitHub Models | Cloud | GitHub CLI (`gh auth login`) |
+| Azure OpenAI | Cloud | Azure CLI (`az login`) |
 | OpenAI | Cloud | API Key |
 | Anthropic | Cloud | API Key |
 | Google Gemini | Cloud | API Key |
-| Azure OpenAI | Cloud | Azure CLI (`az login`) |
-| Azure AI Foundry | Both | Azure CLI (`az login`) |
-
----
-
-## Upgrade
-
-```bash
-agent update
-```
 
 ---
 
@@ -188,6 +162,12 @@ Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\agent.cmd" -Force -ErrorAct
 Remove-Item "$env:LOCALAPPDATA\Programs\agent-base-v2" -Recurse -Force
 Remove-Item "$env:USERPROFILE\.agent" -Recurse -Force -ErrorAction SilentlyContinue  # optional: remove config
 ```
+
+---
+
+## Architecture
+
+See [Architecture](docs/architecture/README.md).
 
 ---
 
