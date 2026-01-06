@@ -96,15 +96,25 @@ describe('isProviderConfigured', () => {
       expect(result).toBe(true);
     });
 
-    it('should return false when only endpoint is set', () => {
+    it('should return true when only endpoint is set', () => {
       const result = isProviderConfigured('azure', {
         endpoint: 'https://my-azure.openai.azure.com',
       });
+      expect(result).toBe(true);
+    });
+
+    it('should return true when only deployment is set (endpoint from env var)', () => {
+      const result = isProviderConfigured('azure', { deployment: 'gpt-4' });
+      expect(result).toBe(true);
+    });
+
+    it('should return false when only apiVersion is set', () => {
+      const result = isProviderConfigured('azure', { apiVersion: '2024-06-01' });
       expect(result).toBe(false);
     });
 
-    it('should return false when only deployment is set', () => {
-      const result = isProviderConfigured('azure', { deployment: 'gpt-4' });
+    it('should return false when no Azure fields are set', () => {
+      const result = isProviderConfigured('azure', {});
       expect(result).toBe(false);
     });
   });
