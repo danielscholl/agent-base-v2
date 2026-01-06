@@ -22,18 +22,19 @@ src/
 │
 ├── model/                    # Model layer (LLM providers)
 │   ├── llm.ts                # LLMClient orchestrator
-│   ├── types.ts              # ModelResponse, ModelErrorCode
-│   ├── base.ts               # Response helpers, error mapping
+│   ├── types.ts              # ModelResponse, ModelErrorCode, callbacks
+│   ├── base.ts               # Response helpers, error mapping, token extraction
 │   ├── registry.ts           # Provider registry
 │   ├── retry.ts              # Exponential backoff
+│   ├── index.ts              # Public exports
 │   └── providers/            # Provider implementations
-│       ├── openai.ts
-│       ├── anthropic.ts
-│       ├── azure-openai.ts
-│       ├── gemini.ts
-│       ├── github.ts
-│       ├── local.ts
-│       └── foundry.ts
+│       ├── openai.ts         # OpenAI ChatOpenAI
+│       ├── anthropic.ts      # Anthropic ChatAnthropic
+│       ├── azure-openai.ts   # Azure (Chat Completions + Responses API)
+│       ├── gemini.ts         # Google Gemini
+│       ├── github.ts         # GitHub Models
+│       ├── local.ts          # Ollama/Docker/OpenAI-compatible
+│       └── foundry.ts        # Azure AI Foundry (local + cloud)
 │
 ├── cli/                      # CLI layer
 │   ├── callbacks.ts          # Callback implementations

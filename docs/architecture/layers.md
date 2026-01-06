@@ -172,22 +172,27 @@ The Model layer provides a unified interface to multiple LLM providers.
 **Responsibilities:**
 - Route to correct provider based on configuration
 - Create and cache LangChain chat clients
-- Handle streaming responses
+- Handle streaming responses with callback semantics
 - Implement retry with exponential backoff
 - Extract token usage across provider formats
 - Return structured `ModelResponse` (never throw)
+- Auto-detect API variants (e.g., Azure Chat Completions vs Responses API)
 
 **Key Patterns:**
 - Provider registry with factory functions
 - Lazy client initialization with caching
 - `ModelResponse<T>` discriminated union for results
 - Retry-aware error classification
+- Dual API support for reasoning models (Azure Responses API)
+- Provider-aware model name resolution
 
 **Key Files:**
 - `src/model/llm.ts` - LLMClient orchestrator
 - `src/model/registry.ts` - Provider registry
 - `src/model/retry.ts` - Exponential backoff logic
-- `src/model/providers/` - Provider-specific factories
+- `src/model/base.ts` - Response factories, error mapping, token extraction
+- `src/model/types.ts` - ModelResponse, ModelErrorCode, callbacks
+- `src/model/providers/` - Provider-specific factories (7 providers)
 
 See [Providers Architecture](./providers.md) for details.
 

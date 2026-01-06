@@ -47,7 +47,7 @@ See [System Layers](./layers.md) for the detailed diagram.
 | CLI (React/Ink) | Terminal UI, React state, user input, command routing |
 | Agent | Orchestration, Query→LLM→Tool→Response loop, callbacks |
 | Tools | Zod validation, Tool.Result output, permissions |
-| Model | Provider routing, streaming, retry with backoff |
+| Model | Provider routing (7 providers), streaming with callbacks, retry with backoff, dual API support |
 | Utils | Configuration, session persistence, message history; context storage planned |
 
 ---

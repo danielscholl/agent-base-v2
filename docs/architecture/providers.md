@@ -127,19 +127,41 @@ getSupportedProviders(): ProviderName[]
 
 ### Azure OpenAI Provider
 
-**Package:** `@langchain/openai` (AzureChatOpenAI)
+**Package:** `@langchain/openai` (AzureChatOpenAI) + `openai` (AzureOpenAI for Responses API)
 
 ```typescript
 {
   endpoint?: string,               // Required - Azure endpoint URL
   deployment?: string,             // Required - Deployment name (NOT model)
   apiVersion: string,              // Default: "2024-06-01"
-  apiKey?: string,                 // Falls back to AZURE_OPENAI_API_KEY
+  apiKey?: string,                 // Falls back to AZURE_OPENAI_API_KEY or Azure CLI
   supportsFunctionCalling?: boolean // Optional (undefined = assume true)
 }
 ```
 
 **Note:** Azure uses `deployment` not `model`. The deployment name maps to a model in Azure portal.
+
+**Dual API Support:**
+
+The Azure provider auto-detects which API to use based on the deployment name:
+
+| API | Models | Implementation |
+|-----|--------|----------------|
+| **Chat Completions** | gpt-4o, gpt-4, gpt-35-turbo, etc. | `AzureChatOpenAI` from @langchain/openai |
+| **Responses API** | o1, o1-preview, o1-mini, o3, gpt-5-codex | Custom `AzureResponsesChatModel` |
+
+**Reasoning Models (Responses API):**
+- Detected by deployment name containing: `o1`, `o3`, or `gpt-5-codex` (case-insensitive)
+- Uses stateful conversation with `previous_response_id` for multi-turn tool use
+- Custom `BaseChatModel` wrapper converts Zod schemas to JSON Schema for tool binding
+- Returns `azure-responses` as `_llmType()`
+
+**Authentication:**
+```
+config.apiKey → AZURE_OPENAI_API_KEY env var → Azure CLI token → ERROR
+```
+
+Azure CLI token is obtained via: `az account get-access-token --resource https://cognitiveservices.azure.com`
 
 ### Azure AI Foundry Provider
 
@@ -245,12 +267,29 @@ async invoke(input: string | BaseMessage[]): Promise<ModelResponse<InvokeResult>
 // Streaming response with retry
 async stream(input: string | BaseMessage[]): Promise<ModelResponse<StreamResult>>
 
+// Get underlying LangChain client (creates if needed)
+async getModel(): Promise<ModelResponse<BaseChatModel>>
+
 // Get current provider name
 getProviderName(): ProviderName
 
-// Get current model name (handles Azure deployment)
+// Get current model name (provider-aware resolution)
 getModelName(): string
+
+// Get provider mode (for Foundry: 'local' | 'cloud')
+getProviderMode(): string | undefined
 ```
+
+### Model Name Resolution
+
+`getModelName()` uses provider-specific logic:
+
+| Provider | Returns |
+|----------|---------|
+| `azure` | `deployment` from config |
+| `foundry` (local) | `modelAlias` from config |
+| `foundry` (cloud) | `modelDeployment` from config |
+| All others | `model` from config |
 
 ### Client Lifecycle
 
@@ -346,16 +385,38 @@ Falls back to camelCase variants (`promptTokens`, `completionTokens`).
 
 ---
 
+## Streaming Callbacks
+
+LLMClient supports callbacks for streaming operations with specific retry semantics:
+
+```typescript
+interface LLMCallbacks {
+  onStreamStart?(model: string): void;       // Fires ONCE before any retry attempts
+  onStreamChunk?(chunk: string): void;       // Fires for each chunk on successful attempt
+  onStreamEnd?(response: string, usage?: TokenUsage): void;  // Fires on success
+  onError?(error: ModelErrorResponse): void; // Fires ONCE after all retries exhausted
+  onRetry?(attempt: number, delay: number, error: string): void; // Fires for each retry
+}
+```
+
+**Retry Semantics:**
+- `onStreamStart` signals operation initiation (not per-attempt)
+- `onRetry` provides visibility into retry attempts with delay and error context
+- `onStreamChunk`/`onStreamEnd` only fire for the successful attempt
+- `onError` fires once if all retry attempts fail
+
+---
+
 ## Provider-Specific Notes
 
 | Provider | Authentication | Notes |
 |----------|----------------|-------|
 | `openai` | API key | Standard OpenAI API |
 | `anthropic` | API key | Anthropic Claude API |
-| `azure` | API key (Azure CLI planned) | Azure CLI fallback is planned; current implementation uses API keys |
-| `foundry` | API key (cloud) / foundry-local-sdk (local) | Azure CLI auth is planned; cloud mode is default |
+| `azure` | API key or Azure CLI | Auto-detects Chat Completions vs Responses API by model |
+| `foundry` | API key (cloud) / foundry-local-sdk (local) | Cloud mode is default; local mode uses on-device inference |
 | `gemini` | API key | Vertex AI reserved, not implemented |
-| `github` | GitHub token | Falls back to `gh` CLI token |
+| `github` | GitHub token | Falls back to `gh` CLI token; auto-detects org |
 | `local` | None | Placeholder key used internally |
 
 ---
