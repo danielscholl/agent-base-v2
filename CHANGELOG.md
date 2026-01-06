@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.6](https://github.com/danielscholl/agent-base-v2/compare/v0.3.5...v0.3.6) (2026-01-06)
+
+
+### Features
+
+* **cli:** use platform-aware tar flags and detect prebuilt binaries ([95355b6](https://github.com/danielscholl/agent-base-v2/commit/95355b69a93a544b338538782e3d745b27b8c250))
+
+
+### Bug Fixes
+
+* **update:** use linux-only --no-absolute-names for tar extraction ([e275684](https://github.com/danielscholl/agent-base-v2/commit/e275684f02fc4248cf6d2b0badc06e166192d994))
+* **update:** use platform-aware tar flags for macOS compatibility ([f55888c](https://github.com/danielscholl/agent-base-v2/commit/f55888cf6bd186035998bd1d75b524f5bce4515e))
+
 ## [0.3.5](https://github.com/danielscholl/agent-base-v2/compare/v0.3.4...v0.3.5) (2026-01-06)
 
 
