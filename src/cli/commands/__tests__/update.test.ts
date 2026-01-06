@@ -31,11 +31,13 @@ jest.unstable_mockModule('node:fs', () => ({
   realpathSync: mockRealpathSync,
 }));
 
-// Mock crypto module for randomUUID
+// Mock crypto module for randomUUID and createHash
+// Use a valid 64-character hex hash so checksum parsing works
+const MOCK_HASH = 'a'.repeat(64);
 jest.unstable_mockModule('node:crypto', () => ({
   createHash: jest.fn(() => ({
     update: jest.fn().mockReturnThis(),
-    digest: jest.fn(() => 'mockhash'),
+    digest: jest.fn(() => MOCK_HASH),
   })),
   randomUUID: jest.fn(() => 'test-uuid-1234'),
 }));
@@ -765,13 +767,29 @@ describe('update command handler', () => {
         configurable: true,
       });
 
+      // Mock execPath to trigger shell-binary detection
+      const originalExecPath = process.execPath;
+      Object.defineProperty(process, 'execPath', {
+        value: '/home/user/.agent/bin/agent',
+        writable: true,
+        configurable: true,
+      });
+      // Also set argv[1] to internal bun path so execPath is used
+      process.argv = ['bun', '/$bunfs/root/index.js'];
+
       // Mock file system operations to succeed
       mockMkdir.mockResolvedValue(undefined);
       mockWriteFile.mockResolvedValue(undefined);
       // Mock access to fail (no repo directory for binary installations)
       mockAccess.mockRejectedValue(new Error('ENOENT'));
 
-      // Mock fetch for GitHub API and binary download
+      // Mock fetch for GitHub API, checksum file, and binary download
+      // SHA256 of empty ArrayBuffer(100) filled with zeros
+      const mockBinaryData = new ArrayBuffer(100);
+      const mockBinaryBuffer = Buffer.from(mockBinaryData);
+      const crypto = await import('node:crypto');
+      const expectedHash = crypto.createHash('sha256').update(mockBinaryBuffer).digest('hex');
+
       mockFetch.mockImplementation((url: string) => {
         // GitHub API call
         if (url.includes('/releases/latest')) {
@@ -787,14 +805,26 @@ describe('update command handler', () => {
                     browser_download_url:
                       'https://github.com/danielscholl/agent-base-v2/releases/download/v0.2.0/agent-linux-x64.tar.gz',
                   },
+                  {
+                    name: 'SHA256SUMS',
+                    browser_download_url:
+                      'https://github.com/danielscholl/agent-base-v2/releases/download/v0.2.0/SHA256SUMS',
+                  },
                 ],
               }),
+          });
+        }
+        // SHA256SUMS checksum file
+        if (url.includes('SHA256SUMS')) {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(`${expectedHash}  agent-linux-x64.tar.gz\n`),
           });
         }
         // Binary download
         return Promise.resolve({
           ok: true,
-          arrayBuffer: () => Promise.resolve(new ArrayBuffer(100)),
+          arrayBuffer: () => Promise.resolve(mockBinaryData),
         });
       });
 
@@ -826,9 +856,14 @@ describe('update command handler', () => {
       expect(tarCall).toBeDefined();
       expect(tarCall?.args).toContain('--no-absolute-names');
 
-      // Restore arch
+      // Restore arch and execPath
       Object.defineProperty(process, 'arch', {
         value: originalArch,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(process, 'execPath', {
+        value: originalExecPath,
         writable: true,
         configurable: true,
       });
@@ -850,13 +885,29 @@ describe('update command handler', () => {
         configurable: true,
       });
 
+      // Mock execPath to trigger shell-binary detection
+      const originalExecPath = process.execPath;
+      Object.defineProperty(process, 'execPath', {
+        value: '/Users/test/.agent/bin/agent',
+        writable: true,
+        configurable: true,
+      });
+      // Also set argv[1] to internal bun path so execPath is used
+      process.argv = ['bun', '/$bunfs/root/index.js'];
+
       // Mock file system operations to succeed
       mockMkdir.mockResolvedValue(undefined);
       mockWriteFile.mockResolvedValue(undefined);
       // Mock access to fail (no repo directory for binary installations)
       mockAccess.mockRejectedValue(new Error('ENOENT'));
 
-      // Mock fetch for GitHub API and binary download
+      // Mock fetch for GitHub API, checksum file, and binary download
+      // SHA256 of empty ArrayBuffer(100) filled with zeros
+      const mockBinaryData = new ArrayBuffer(100);
+      const mockBinaryBuffer = Buffer.from(mockBinaryData);
+      const crypto = await import('node:crypto');
+      const expectedHash = crypto.createHash('sha256').update(mockBinaryBuffer).digest('hex');
+
       mockFetch.mockImplementation((url: string) => {
         // GitHub API call
         if (url.includes('/releases/latest')) {
@@ -872,14 +923,26 @@ describe('update command handler', () => {
                     browser_download_url:
                       'https://github.com/danielscholl/agent-base-v2/releases/download/v0.2.0/agent-darwin-arm64.tar.gz',
                   },
+                  {
+                    name: 'SHA256SUMS',
+                    browser_download_url:
+                      'https://github.com/danielscholl/agent-base-v2/releases/download/v0.2.0/SHA256SUMS',
+                  },
                 ],
               }),
+          });
+        }
+        // SHA256SUMS checksum file
+        if (url.includes('SHA256SUMS')) {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(`${expectedHash}  agent-darwin-arm64.tar.gz\n`),
           });
         }
         // Binary download
         return Promise.resolve({
           ok: true,
-          arrayBuffer: () => Promise.resolve(new ArrayBuffer(100)),
+          arrayBuffer: () => Promise.resolve(mockBinaryData),
         });
       });
 
@@ -911,9 +974,14 @@ describe('update command handler', () => {
       expect(tarCall).toBeDefined();
       expect(tarCall?.args).not.toContain('--no-absolute-names');
 
-      // Restore arch
+      // Restore arch and execPath
       Object.defineProperty(process, 'arch', {
         value: originalArch,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(process, 'execPath', {
+        value: originalExecPath,
         writable: true,
         configurable: true,
       });

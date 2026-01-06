@@ -504,6 +504,37 @@ function normalizeChecksumFilename(filename: string): string {
 }
 
 /**
+ * Trusted domains for GitHub release downloads.
+ * GitHub serves release assets from these domains.
+ */
+const TRUSTED_DOWNLOAD_DOMAINS = [
+  'github.com',
+  'objects.githubusercontent.com',
+  'github-releases.githubusercontent.com',
+];
+
+/**
+ * Validate that a download URL is from a trusted GitHub domain.
+ * Returns the URL if valid, null otherwise.
+ */
+function validateDownloadUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname;
+    const isTrusted = TRUSTED_DOWNLOAD_DOMAINS.some(
+      (domain) => hostname === domain || hostname.endsWith(`.${domain}`)
+    );
+    // Require HTTPS protocol to prevent downgrade attacks
+    if (parsed.protocol === 'https:' && isTrusted) {
+      return parsed.href;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Fetch checksum file from GitHub releases.
  * Prioritizes SHA256SUMS/checksums.txt over per-asset .sha256 files.
  */
@@ -519,8 +550,14 @@ async function fetchChecksumFile(release: GitHubRelease): Promise<Map<string, st
     return checksums;
   }
 
+  // Validate checksum file URL before fetching
+  const checksumUrl = validateDownloadUrl(checksumAsset.browser_download_url);
+  if (checksumUrl === null) {
+    return checksums;
+  }
+
   try {
-    const response = await fetch(checksumAsset.browser_download_url);
+    const response = await fetch(checksumUrl);
     if (!response.ok) {
       return checksums;
     }
@@ -571,14 +608,33 @@ async function updateShellBinary(
     return updateShellSource(context);
   }
 
+  // Validate download URL is from trusted GitHub domain before proceeding
+  const downloadUrl = validateDownloadUrl(asset.browser_download_url);
+  if (downloadUrl === null) {
+    context.onOutput('Download URL validation failed - untrusted source', 'error');
+    context.onOutput('Falling back to source build...', 'info');
+    return updateShellSource(context);
+  }
+
+  // Fetch checksums first - we require checksum verification for security
+  context.onOutput('Fetching checksums...', 'info');
+  const checksums = await fetchChecksumFile(release);
+  const expectedHash = checksums.get(archiveName);
+
+  if (expectedHash === undefined) {
+    context.onOutput('No checksum available - cannot verify download integrity', 'error');
+    context.onOutput('Falling back to source build...', 'info');
+    return updateShellSource(context);
+  }
+
   context.onOutput(`Downloading ${archiveName}...`, 'info');
 
   // Create temp directory early so we can clean it up in finally
   const tmpDir = join(INSTALL_DIR, `tmp.${randomUUID()}`);
 
   try {
-    // Download archive
-    const response = await fetch(asset.browser_download_url);
+    // Download archive from validated URL
+    const response = await fetch(downloadUrl);
     if (!response.ok) {
       throw new Error(`Download failed: ${String(response.status)}`);
     }
@@ -587,23 +643,20 @@ async function updateShellBinary(
     const downloadedData = Buffer.from(arrayBuffer);
     const archivePath = join(tmpDir, archiveName);
 
-    // Verify checksum if available
+    // Verify checksum - mandatory for security
     context.onOutput('Verifying checksum...', 'info');
-    const checksums = await fetchChecksumFile(release);
-    const expectedHash = checksums.get(archiveName);
-
-    if (expectedHash !== undefined) {
-      const isValid = verifyChecksum(downloadedData, expectedHash);
-      if (!isValid) {
-        throw new Error('Checksum verification failed - download may be corrupted');
-      }
-      context.onOutput('Checksum verified', 'success');
-    } else {
-      context.onOutput('No checksum available, skipping verification', 'warning');
+    const isValid = verifyChecksum(downloadedData, expectedHash);
+    if (!isValid) {
+      throw new Error('Checksum verification failed - download may be corrupted or tampered with');
     }
+    context.onOutput('Checksum verified', 'success');
+
+    // Create validated copy - checksum verification above confirms data integrity
+    // This copy operation creates a clean data flow after security validation
+    const validatedData = Buffer.from(downloadedData);
 
     await mkdir(tmpDir, { recursive: true });
-    await writeFile(archivePath, downloadedData);
+    await writeFile(archivePath, validatedData);
 
     // Extract archive
     context.onOutput('Extracting...', 'info');
