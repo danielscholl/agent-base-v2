@@ -57,10 +57,26 @@ export interface VersionCheckResult {
  * Falls back to process.execPath if argv[1] doesn't look like a path.
  */
 function detectInstallationType(): InstallationType {
-  // Try argv[1] first (script path), then execPath (binary path)
-  // For compiled binaries, argv[1] may be the subcommand, not a path
+  // For compiled Bun binaries:
+  // - argv[0] = "bun"
+  // - argv[1] = "/$bunfs/root/..." (internal Bun filesystem)
+  // - execPath = actual binary path (correct!)
+  //
+  // For non-compiled (bun run):
+  // - argv[1] = script path (e.g., src/index.tsx)
+  // - execPath = bun binary path
   const argv1 = process.argv[1] ?? '';
-  const execPath = argv1.includes('/') || argv1.includes('\\') ? argv1 : process.execPath;
+
+  // Use argv[1] only if it's a real filesystem path (not internal Bun path)
+  // Otherwise use process.execPath which is correct for compiled binaries
+  let execPath: string;
+  if ((argv1.includes('/') || argv1.includes('\\')) && !argv1.includes('/$bunfs/')) {
+    // Non-compiled: argv[1] is the script path
+    execPath = argv1;
+  } else {
+    // Compiled binary: process.execPath has the actual binary location
+    execPath = process.execPath;
+  }
 
   // Resolve symlinks to get the real path
   let resolvedPath = execPath;
