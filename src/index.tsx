@@ -15,6 +15,7 @@ import { configHandler } from './cli/commands/config.js';
 import { skillHandler } from './cli/commands/skills.js';
 import { updateHandler } from './cli/commands/update.js';
 import { telemetryHandler } from './cli/commands/telemetry.js';
+import { VERSION } from './cli/version.js';
 
 const cli = meow(
   `
@@ -40,11 +41,11 @@ const cli = meow(
 `,
   {
     importMeta: import.meta,
+    version: VERSION,
     flags: {
       prompt: { type: 'string', shortFlag: 'p' },
       check: { type: 'boolean', default: false },
       tools: { type: 'boolean', default: false },
-      version: { type: 'boolean', default: false },
       provider: { type: 'string' },
       model: { type: 'string' },
       continue: { type: 'boolean', default: false },
@@ -230,7 +231,6 @@ const flags: CLIFlags = {
   prompt: cli.flags.prompt,
   check: cli.flags.check,
   tools: cli.flags.tools,
-  version: cli.flags.version,
   provider: cli.flags.provider,
   model: cli.flags.model,
   continue: cli.flags.continue,

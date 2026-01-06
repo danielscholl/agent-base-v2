@@ -16,8 +16,6 @@ export interface CLIFlags {
   check?: boolean;
   /** Show available tools */
   tools?: boolean;
-  /** Show version information */
-  version?: boolean;
   /** Override LLM provider */
   provider?: string;
   /** Override model name */
