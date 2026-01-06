@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.5](https://github.com/danielscholl/agent-base-v2/compare/v0.3.4...v0.3.5) (2026-01-06)
+
+
+### Bug Fixes
+
+* **model:** correct Azure provider detection in --check ([06f1eef](https://github.com/danielscholl/agent-base-v2/commit/06f1eefb23e32cd2dde3ff286a744c8e4a3b7672))
+* **model:** treat azure as configured if endpoint or deployment or apiVersion is set ([365ed28](https://github.com/danielscholl/agent-base-v2/commit/365ed28849e12581e60bc209fbbdb1189fdf6482))
+* **utils:** restrict azure config to endpoint or deployment only ([8e5f1b4](https://github.com/danielscholl/agent-base-v2/commit/8e5f1b4dfaeb90ba71a69b14e1db6882da509eee))
+
 ## [0.3.4](https://github.com/danielscholl/agent-base-v2/compare/v0.3.3...v0.3.4) (2026-01-06)
 
 
