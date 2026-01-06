@@ -58,9 +58,13 @@ jest.unstable_mockModule('node:fs/promises', () => ({
 }));
 
 // Mock node:path for path resolution
-jest.unstable_mockModule('node:path', () => ({
-  resolve: jest.fn((base: string, p: string) => (p.startsWith('/') ? p : `${base}/${p}`)),
-}));
+jest.unstable_mockModule('node:path', () => {
+  const actualPath = jest.requireActual<typeof import('node:path')>('node:path');
+  return {
+    ...actualPath,
+    resolve: jest.fn((...segments: string[]) => actualPath.resolve(...segments)),
+  };
+});
 
 interface OutputEntry {
   content: string;

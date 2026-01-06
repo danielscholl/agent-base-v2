@@ -4,6 +4,8 @@
  */
 
 import { spawn } from 'node:child_process';
+import * as path from 'node:path';
+import * as os from 'node:os';
 import type { CommandHandler, CommandResult, CommandContext } from './types.js';
 import { loadConfig, loadConfigFromFiles, ConfigManager } from '../../config/manager.js';
 import { getDefaultConfig, type AppConfig } from '../../config/schema.js';
@@ -269,8 +271,8 @@ export const configShowHandler: CommandHandler = async (_args, context): Promise
 
   // Source indicator - map source to human-readable string
   const sourceLabels: Record<'env' | 'config' | 'cwd', string> = {
-    env: 'env variable',
-    config: 'config file',
+    env: 'env variable (AGENT_WORKSPACE_ROOT)',
+    config: 'config file (~/.agent/config.yaml)',
     cwd: 'current directory',
   };
   let sourceValue = sourceLabels[workspaceResult.source];
@@ -528,12 +530,17 @@ export const configWorkspaceHandler: CommandHandler = async (
     }
 
     // Expand ~ and resolve to absolute path
-    const expandedPath = pathArg.startsWith('~')
-      ? pathArg.replace('~', process.env.HOME ?? process.env.USERPROFILE ?? '')
-      : pathArg;
-    const absolutePath = expandedPath.startsWith('/')
+    let expandedPath = pathArg;
+
+    if (expandedPath === '~') {
+      expandedPath = os.homedir();
+    } else if (expandedPath.startsWith('~/')) {
+      expandedPath = path.join(os.homedir(), expandedPath.slice(2));
+    }
+
+    const absolutePath = path.isAbsolute(expandedPath)
       ? expandedPath
-      : (await import('node:path')).resolve(process.cwd(), expandedPath);
+      : path.resolve(process.cwd(), expandedPath);
 
     // Check if path exists
     const fs = await import('node:fs/promises');

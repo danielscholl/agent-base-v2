@@ -174,37 +174,69 @@ export async function initializeWorkspaceRoot(
       // This catches symlink escapes via parent directories (e.g., /workspace/link/newroot where link -> /tmp)
       let checkPath = resolvedConfig;
       let parentReal: string | null = null;
+      let parentPath: string | null = null;
 
-      while (checkPath !== realEnv && checkPath !== path.dirname(checkPath)) {
-        const parentPath = path.dirname(checkPath);
+      while (checkPath !== resolvedEnv && checkPath !== path.dirname(checkPath)) {
+        const currentParent = path.dirname(checkPath);
         try {
-          parentReal = await fs.realpath(parentPath);
+          const currentParentReal = await fs.realpath(currentParent);
           // Found an existing parent - verify it's within env root
-          if (!isPathWithin(parentReal, realEnv)) {
+          if (!isPathWithin(currentParentReal, realEnv)) {
             // Parent symlink escapes env root
-            const warning = `config.agent.workspaceRoot parent (${parentPath} → ${parentReal}) is a symlink that resolves outside AGENT_WORKSPACE_ROOT (${realEnv}). Config ignored for security.`;
+            const warning = `config.agent.workspaceRoot parent (${currentParent} → ${currentParentReal}) is a symlink that resolves outside AGENT_WORKSPACE_ROOT (${realEnv}). Config ignored for security.`;
             onDebug?.('Workspace config ignored (parent symlink escape)', {
               envRoot: resolvedEnv,
               configRoot: resolvedConfig,
-              parentPath,
-              parentReal,
+              parentPath: currentParent,
+              parentReal: currentParentReal,
               realEnv,
             });
             return { workspaceRoot: resolvedEnv, source: 'env', warning };
           }
-          break; // Parent is safe
+          // Parent is safe - record it and break
+          parentReal = currentParentReal;
+          parentPath = currentParent;
+          break;
         } catch {
           // Parent doesn't exist either, keep walking up
-          checkPath = parentPath;
+          checkPath = currentParent;
         }
+      }
+
+      // Validate that we found a safe parent or reached resolvedEnv
+      if (parentReal === null) {
+        // Loop terminated without finding an existing parent
+        // This means we walked up to resolvedEnv or filesystem root
+        // Verify the config path is logically within resolvedEnv
+        if (!isPathWithin(resolvedConfig, resolvedEnv)) {
+          const warning = `config.agent.workspaceRoot (${resolvedConfig}) is outside AGENT_WORKSPACE_ROOT (${resolvedEnv}). Config ignored for security.`;
+          onDebug?.('Workspace config ignored (outside env root, no existing parent)', {
+            envRoot: resolvedEnv,
+            configRoot: resolvedConfig,
+            realEnv,
+          });
+          return { workspaceRoot: resolvedEnv, source: 'env', warning };
+        }
+        // Config is logically within env root but path doesn't exist yet
+        // Use resolvedConfig as effective root
+        process.env['AGENT_WORKSPACE_ROOT'] = resolvedConfig;
+        onDebug?.(
+          'Workspace root narrowed by config (path does not exist yet, no existing parent)',
+          {
+            envRoot: resolvedEnv,
+            configRoot: resolvedConfig,
+            effectiveRoot: resolvedConfig,
+            realEnv,
+          }
+        );
+        return { workspaceRoot: resolvedConfig, source: 'config' };
       }
 
       // All existing parents are within env root - valid narrowing
       // Pin to real path to prevent later symlink retargeting
-      const effectiveRoot =
-        parentReal !== null
-          ? path.join(parentReal, path.relative(path.dirname(checkPath), resolvedConfig))
-          : resolvedConfig;
+      // Reconstruct path by joining parent's real path with remaining relative path
+      // parentPath is set together with parentReal, so use it directly
+      const effectiveRoot = path.join(parentReal, path.relative(parentPath ?? '', resolvedConfig));
 
       process.env['AGENT_WORKSPACE_ROOT'] = effectiveRoot;
       onDebug?.('Workspace root narrowed by config (path does not exist yet)', {
@@ -212,6 +244,8 @@ export async function initializeWorkspaceRoot(
         configRoot: resolvedConfig,
         effectiveRoot,
         realEnv,
+        parentReal,
+        parentPath,
       });
       return { workspaceRoot: effectiveRoot, source: 'config' };
     }
@@ -293,26 +327,41 @@ export async function getWorkspaceInfo(configWorkspaceRoot?: string): Promise<Wo
       // Path doesn't exist - walk parents to check
       let checkPath = resolvedConfig;
       let parentReal: string | null = null;
+      let parentPath: string | null = null;
 
-      while (checkPath !== realEnv && checkPath !== path.dirname(checkPath)) {
-        const parentPath = path.dirname(checkPath);
+      while (checkPath !== resolvedEnv && checkPath !== path.dirname(checkPath)) {
+        const currentParent = path.dirname(checkPath);
         try {
-          parentReal = await fs.realpath(parentPath);
-          if (!isPathWithin(parentReal, realEnv)) {
-            const warning = `config.agent.workspaceRoot parent (${parentPath} → ${parentReal}) is a symlink that resolves outside AGENT_WORKSPACE_ROOT (${realEnv}). Config ignored for security.`;
+          const currentParentReal = await fs.realpath(currentParent);
+          if (!isPathWithin(currentParentReal, realEnv)) {
+            const warning = `config.agent.workspaceRoot parent (${currentParent} → ${currentParentReal}) is a symlink that resolves outside AGENT_WORKSPACE_ROOT (${realEnv}). Config ignored for security.`;
             return { workspaceRoot: resolvedEnv, source: 'env', warning };
           }
+          // Parent is safe - record it and break
+          parentReal = currentParentReal;
+          parentPath = currentParent;
           break;
         } catch {
-          checkPath = parentPath;
+          checkPath = currentParent;
         }
       }
 
+      // Validate that we found a safe parent or reached resolvedEnv
+      if (parentReal === null) {
+        // Loop terminated without finding an existing parent
+        // Verify the config path is logically within resolvedEnv
+        if (!isPathWithin(resolvedConfig, resolvedEnv)) {
+          const warning = `config.agent.workspaceRoot (${resolvedConfig}) is outside AGENT_WORKSPACE_ROOT (${resolvedEnv}). Config ignored for security.`;
+          return { workspaceRoot: resolvedEnv, source: 'env', warning };
+        }
+        // Config is logically within env root but path doesn't exist yet
+        return { workspaceRoot: resolvedConfig, source: 'config' };
+      }
+
       // Valid narrowing - would use config
-      const effectiveRoot =
-        parentReal !== null
-          ? path.join(parentReal, path.relative(path.dirname(checkPath), resolvedConfig))
-          : resolvedConfig;
+      // Reconstruct path by joining parent's real path with remaining relative path
+      // parentPath is set together with parentReal, so use it directly
+      const effectiveRoot = path.join(parentReal, path.relative(parentPath ?? '', resolvedConfig));
       return { workspaceRoot: effectiveRoot, source: 'config' };
     }
 

@@ -465,7 +465,8 @@ agent config workspace set ~/projects/myapp
 
 **Notes:**
 - Paths are resolved to absolute paths before saving
-- If the path doesn't exist, a warning is shown but the setting is saved
+- If the path doesn't exist and interactive prompts are available, you'll be asked whether to create the directory before saving the setting
+- If you choose not to create it, or if prompts are unavailable, a warning is shown and the setting is still saved
 - If `AGENT_WORKSPACE_ROOT` env var is set, it will override the config value
 
 ### Clear Workspace Root
