@@ -111,6 +111,48 @@ describe('createAzureOpenAIClient', () => {
       }
     });
 
+    it('azureADTokenProvider callback returns token when available', async () => {
+      // First call for initial auth check, second call for the token provider
+      mockSpawnSync
+        .mockReturnValueOnce({ status: 0, stdout: 'initial-token\n', stderr: '' })
+        .mockReturnValueOnce({ status: 0, stdout: 'refreshed-token\n', stderr: '' });
+
+      await createAzureOpenAIClient({
+        endpoint: 'https://my-resource.openai.azure.com/',
+        deployment: 'gpt-4o',
+      });
+
+      // Get the azureADTokenProvider from the mock call
+      const callArgs = mockAzureChatOpenAI.mock.calls[0][0];
+      expect(callArgs.azureADTokenProvider).toBeDefined();
+
+      // Invoke the callback to cover the token provider code
+      const tokenProvider = callArgs.azureADTokenProvider;
+      if (tokenProvider === undefined) throw new Error('tokenProvider should be defined');
+      const token = tokenProvider();
+      expect(token).toBe('refreshed-token');
+    });
+
+    it('azureADTokenProvider callback throws when token unavailable', async () => {
+      // First call succeeds (for initial check), second call fails (for refresh)
+      mockSpawnSync
+        .mockReturnValueOnce({ status: 0, stdout: 'initial-token\n', stderr: '' })
+        .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'not logged in' });
+
+      await createAzureOpenAIClient({
+        endpoint: 'https://my-resource.openai.azure.com/',
+        deployment: 'gpt-4o',
+      });
+
+      const callArgs = mockAzureChatOpenAI.mock.calls[0][0];
+      expect(callArgs.azureADTokenProvider).toBeDefined();
+
+      // Invoke the callback - should throw when token is unavailable
+      const tokenProvider = callArgs.azureADTokenProvider;
+      if (tokenProvider === undefined) throw new Error('tokenProvider should be defined');
+      expect(() => tokenProvider()).toThrow('Failed to get Azure CLI token');
+    });
+
     it('uses default apiVersion when not specified', async () => {
       const config: Record<string, unknown> = {
         endpoint: 'https://my-resource.openai.azure.com/',
@@ -373,6 +415,52 @@ describe('createAzureOpenAIClient', () => {
       if (result.success) {
         expect(result.message).toContain('Azure CLI');
       }
+    });
+
+    it('Responses API azureADTokenProvider returns token when available', async () => {
+      // First call for initial auth check, second call for the token provider
+      mockSpawnSync
+        .mockReturnValueOnce({ status: 0, stdout: 'initial-token\n', stderr: '' })
+        .mockReturnValueOnce({ status: 0, stdout: 'refreshed-responses-token\n', stderr: '' });
+
+      await createAzureOpenAIClient({
+        endpoint: 'https://my-resource.openai.azure.com/',
+        deployment: 'gpt-5-codex',
+      });
+
+      // Get the azureADTokenProvider from the Responses API mock call
+      const callArgs = mockAzureOpenAI.mock.calls[0][0] as {
+        azureADTokenProvider?: () => Promise<string>;
+      };
+      expect(callArgs.azureADTokenProvider).toBeDefined();
+
+      // Invoke the callback - returns a Promise for Responses API
+      const tokenProvider = callArgs.azureADTokenProvider;
+      if (tokenProvider === undefined) throw new Error('tokenProvider should be defined');
+      const token = await tokenProvider();
+      expect(token).toBe('refreshed-responses-token');
+    });
+
+    it('Responses API azureADTokenProvider throws when token unavailable', async () => {
+      // First call succeeds (for initial check), second call fails (for refresh)
+      mockSpawnSync
+        .mockReturnValueOnce({ status: 0, stdout: 'initial-token\n', stderr: '' })
+        .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'not logged in' });
+
+      await createAzureOpenAIClient({
+        endpoint: 'https://my-resource.openai.azure.com/',
+        deployment: 'gpt-5-codex',
+      });
+
+      const callArgs = mockAzureOpenAI.mock.calls[0][0] as {
+        azureADTokenProvider?: () => Promise<string>;
+      };
+      expect(callArgs.azureADTokenProvider).toBeDefined();
+
+      // The throw happens synchronously inside the function before Promise.resolve
+      const tokenProvider = callArgs.azureADTokenProvider;
+      if (tokenProvider === undefined) throw new Error('tokenProvider should be defined');
+      expect(() => tokenProvider()).toThrow('Azure CLI token expired or unavailable');
     });
 
     it('returns llmType as azure-responses', async () => {
