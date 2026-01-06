@@ -7,8 +7,10 @@
  * 1. **Base prompt**: Core agent instructions (model-agnostic)
  * 2. **Provider layer**: Optional provider-specific guidance
  * 3. **Environment section**: Runtime context (working dir, git status, etc.)
- * 4. **Skills section**: Progressive skill disclosure XML
- * 5. **User override**: Custom instructions from config or user files
+ * 4. **AGENTS.md**: Project-specific agent instructions (https://agents.md/)
+ * 5. **Skills section** (optional): Progressive skill disclosure XML, added via
+ *    `loadSystemPromptWithSkills()` rather than `assembleSystemPrompt()` directly
+ * 6. **User override**: Custom instructions from config or user files
  *
  * ## Backward Compatibility
  *
@@ -75,6 +77,7 @@ import {
   formatEnvironmentSection,
   type EnvironmentContext,
 } from './environment.js';
+import { getWorkspaceRoot } from '../tools/workspace.js';
 
 // =============================================================================
 // Types
@@ -102,6 +105,8 @@ export interface PromptAssemblyOptions extends PromptOptions {
   includeEnvironment?: boolean;
   /** Include provider-specific layer (default: true) */
   includeProviderLayer?: boolean;
+  /** Include AGENTS.md content if found (default: true) */
+  includeAgentsMd?: boolean;
   /** Provider mode for mode-specific prompts (e.g., 'local', 'cloud') */
   providerMode?: string;
   /** Working directory for environment context (default: process.cwd()) */
@@ -385,6 +390,65 @@ export async function loadProviderLayer(provider: string, mode?: string): Promis
 }
 
 /**
+ * Load AGENTS.md from workspace root following spec precedence rules.
+ *
+ * AGENTS.md (https://agents.md/) is a standardized way for repositories to provide
+ * context and instructions to AI coding agents. It complements README.md by containing
+ * agent-specific guidance like build steps, tests, and conventions.
+ *
+ * Discovery order:
+ * 1. {workspaceRoot}/AGENTS.md (workspace root)
+ * 2. {workspaceRoot}/.agent/AGENTS.md (workspace config directory)
+ *
+ * **Always uses workspace root** from AGENT_WORKSPACE_ROOT env var, falling back to
+ * process.cwd() if not set. The workingDir parameter is ignored for AGENTS.md discovery
+ * since AGENTS.md should always be at the workspace root, not relative to the current
+ * working directory. This ensures AGENTS.md is found even when the agent is invoked
+ * from a subdirectory.
+ *
+ * Note: For config.agent.workspaceRoot to take effect, initializeWorkspaceRoot() must
+ * be called at agent startup (which sets AGENT_WORKSPACE_ROOT env var).
+ *
+ * @param _workingDir - Ignored. AGENTS.md always loads from workspace root.
+ * @param onDebug - Optional debug callback
+ * @returns AGENTS.md content or empty string if not found
+ */
+export async function loadAgentsMd(
+  _workingDir?: string,
+  onDebug?: (message: string, data?: Record<string, unknown>) => void
+): Promise<string> {
+  // Always use workspace root for AGENTS.md, regardless of workingDir
+  const dir = getWorkspaceRoot();
+
+  // Try project root first (./AGENTS.md)
+  const projectRootPath = join(dir, 'AGENTS.md');
+  if (await fileExists(projectRootPath)) {
+    try {
+      const content = await readFile(projectRootPath, 'utf-8');
+      onDebug?.('Loaded AGENTS.md from project root', { path: projectRootPath });
+      return stripYamlFrontMatter(content);
+    } catch {
+      onDebug?.('Failed to read AGENTS.md from project root', { path: projectRootPath });
+    }
+  }
+
+  // Try project config directory (./.agent/AGENTS.md)
+  const configDirPath = join(dir, '.agent', 'AGENTS.md');
+  if (await fileExists(configDirPath)) {
+    try {
+      const content = await readFile(configDirPath, 'utf-8');
+      onDebug?.('Loaded AGENTS.md from .agent directory', { path: configDirPath });
+      return stripYamlFrontMatter(content);
+    } catch {
+      onDebug?.('Failed to read AGENTS.md from .agent directory', { path: configDirPath });
+    }
+  }
+
+  // No AGENTS.md found - this is fine, not all projects have one
+  return '';
+}
+
+/**
  * Generate environment section with runtime context.
  *
  * @param workingDir - Working directory (default: process.cwd())
@@ -447,7 +511,8 @@ function buildPlaceholderValues(
  * 1. Base prompt (core instructions)
  * 2. Provider layer (if exists and enabled)
  * 3. Environment section (if enabled)
- * 4. User override (if provided)
+ * 4. AGENTS.md content (if exists and enabled)
+ * 5. User override (if provided)
  *
  * Note: Skills are added separately via loadSystemPromptWithSkills()
  *
@@ -462,6 +527,7 @@ function buildPlaceholderValues(
  *   provider: 'anthropic',
  *   includeEnvironment: true,
  *   includeProviderLayer: true,
+ *   includeAgentsMd: true,
  * });
  * ```
  */
@@ -472,6 +538,7 @@ export async function assembleSystemPrompt(options: PromptAssemblyOptions): Prom
     provider,
     includeEnvironment = true,
     includeProviderLayer = true,
+    includeAgentsMd = true,
     providerMode,
     workingDir,
     userOverride,
@@ -514,7 +581,17 @@ export async function assembleSystemPrompt(options: PromptAssemblyOptions): Prom
     });
   }
 
-  // 4. Add user override (if provided)
+  // 4. Load AGENTS.md (if enabled and exists)
+  // Content is inserted as-is to preserve original structure and headers
+  if (includeAgentsMd) {
+    const agentsMdContent = await loadAgentsMd(workingDir, onDebug);
+    if (agentsMdContent) {
+      sections.push(agentsMdContent);
+      onDebug?.('Loaded AGENTS.md', { length: agentsMdContent.length });
+    }
+  }
+
+  // 5. Add user override (if provided)
   if (userOverride !== undefined && userOverride !== '') {
     const userSection = `# User Instructions\n\n${userOverride}`;
     sections.push(userSection);

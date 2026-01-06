@@ -50,6 +50,7 @@ export {
   assembleSystemPrompt,
   loadBasePrompt,
   loadProviderLayer,
+  loadAgentsMd,
   generateEnvironmentSectionForPrompt,
   buildPlaceholderValues,
   // Types
