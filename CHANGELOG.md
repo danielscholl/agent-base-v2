@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.9](https://github.com/danielscholl/agent-base-v2/compare/v0.3.8...v0.3.9) (2026-01-06)
+
+
+### Features
+
+* **openai:** add OpenAI Responses API integration and key validation ([7171495](https://github.com/danielscholl/agent-base-v2/commit/7171495b39862513ff52b328292ead41d6470757))
+* **openai:** add Responses API support for codex models ([c3d528c](https://github.com/danielscholl/agent-base-v2/commit/c3d528ccf6d046b87a4af64e1bf7a4396a6e810e))
+* **openai:** implement dual API routing for OpenAI models ([db9b26c](https://github.com/danielscholl/agent-base-v2/commit/db9b26c89d6721f0ce6377347e97c245e7d4af79))
+
+
+### Tests
+
+* **providers:** update expected model to gpt-5-codex ([6d51d86](https://github.com/danielscholl/agent-base-v2/commit/6d51d86d2a37ba3c88fdf6b4db5605f373236f1a))
+
 ## [0.3.8](https://github.com/danielscholl/agent-base-v2/compare/v0.3.7...v0.3.8) (2026-01-06)
 
 
