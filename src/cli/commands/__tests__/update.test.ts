@@ -16,11 +16,13 @@ const mockReadFile = jest.fn();
 const mockWriteFile = jest.fn();
 const mockMkdir = jest.fn();
 const mockUnlink = jest.fn();
+const mockAccess = jest.fn();
 jest.unstable_mockModule('node:fs/promises', () => ({
   readFile: mockReadFile,
   writeFile: mockWriteFile,
   mkdir: mockMkdir,
   unlink: mockUnlink,
+  access: mockAccess,
 }));
 
 // Mock fs for realpathSync

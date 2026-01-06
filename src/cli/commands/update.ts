@@ -7,7 +7,7 @@
 import type { CommandHandler, CommandResult } from './types.js';
 import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, unlink, access } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { createHash, randomUUID } from 'node:crypto';
@@ -610,14 +610,15 @@ async function updateShellBinary(
     const extractDir = join(INSTALL_DIR, 'bin');
     await mkdir(extractDir, { recursive: true });
 
-    // Use --no-absolute-names to prevent path traversal attacks from malicious archives
-    const tarResult = await runCommand('tar', [
-      '-xzf',
-      archivePath,
-      '-C',
-      extractDir,
-      '--no-absolute-names',
-    ]);
+    // Build tar arguments - BSD tar (macOS) strips absolute paths by default,
+    // GNU tar (Linux) needs --no-absolute-names for path traversal protection
+    const tarArgs = ['-xzf', archivePath, '-C', extractDir];
+    if (process.platform !== 'darwin') {
+      // GNU tar on Linux - add security flag
+      tarArgs.push('--no-absolute-names');
+    }
+
+    const tarResult = await runCommand('tar', tarArgs);
     if (!tarResult.success) {
       throw new Error(`Extraction failed: ${tarResult.output}`);
     }
@@ -666,6 +667,15 @@ async function updateShellBinary(
  */
 async function updateShellSource(context: { onOutput: OutputHandler }): Promise<boolean> {
   const repoPath = join(INSTALL_DIR, 'repo');
+
+  // Check if repo directory exists (binary installs don't have a repo)
+  try {
+    await access(repoPath);
+  } catch {
+    context.onOutput('Source repository not found at ~/.agent/repo', 'error');
+    context.onOutput('This installation uses pre-built binaries.', 'info');
+    return false;
+  }
 
   context.onOutput('Pulling latest changes...', 'info');
   const pullResult = await runCommand('git', ['pull', '--ff-only'], { cwd: repoPath });
