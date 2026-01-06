@@ -48,6 +48,14 @@ jest.unstable_mockModule('../environment.js', () => ({
   formatEnvironmentSection: mockFormatEnvironmentSection,
 }));
 
+// Create mock function for workspace module
+const mockGetWorkspaceRoot = jest.fn<() => string>();
+
+// Mock workspace module
+jest.unstable_mockModule('../../tools/workspace.js', () => ({
+  getWorkspaceRoot: mockGetWorkspaceRoot,
+}));
+
 // Import after mocks are set up
 const {
   loadSystemPrompt,
@@ -55,6 +63,7 @@ const {
   stripYamlFrontMatter,
   loadBasePrompt,
   loadProviderLayer,
+  loadAgentsMd,
   assembleSystemPrompt,
 } = await import('../prompts.js');
 
@@ -80,6 +89,9 @@ describe('prompts', () => {
     mockFormatEnvironmentSection.mockReturnValue(
       '# Environment\n\nWorking directory: /test/working/dir\nGit repository: Yes (branch: main, clean)\nPlatform: macOS (Darwin 24.1.0)\nDate: 2025-12-24'
     );
+
+    // Reset workspace mock with default value
+    mockGetWorkspaceRoot.mockReturnValue('/test/workspace/root');
   });
 
   describe('stripYamlFrontMatter', () => {
@@ -540,6 +552,134 @@ This is mode-specific guidance.`);
     });
   });
 
+  describe('loadAgentsMd', () => {
+    it('loads AGENTS.md from project root when file exists', async () => {
+      mockAccess.mockImplementation((path) => {
+        if (typeof path === 'string' && path.endsWith('AGENTS.md') && !path.includes('.agent')) {
+          return Promise.resolve(undefined);
+        }
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      mockReadFile.mockResolvedValue('# Build Instructions\nRun `npm test` to test.');
+
+      const result = await loadAgentsMd('/test/project');
+
+      expect(result).toBe('# Build Instructions\nRun `npm test` to test.');
+      expect(mockReadFile).toHaveBeenCalledWith('/test/project/AGENTS.md', 'utf-8');
+    });
+
+    it('loads AGENTS.md from .agent directory when root file not found', async () => {
+      mockAccess.mockImplementation((path) => {
+        if (typeof path === 'string' && path.includes('.agent') && path.endsWith('AGENTS.md')) {
+          return Promise.resolve(undefined);
+        }
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      mockReadFile.mockResolvedValue('# Config Directory Instructions\nUse these conventions.');
+
+      const result = await loadAgentsMd('/test/project');
+
+      expect(result).toBe('# Config Directory Instructions\nUse these conventions.');
+      expect(mockReadFile).toHaveBeenCalledWith('/test/project/.agent/AGENTS.md', 'utf-8');
+    });
+
+    it('prefers project root AGENTS.md over .agent directory', async () => {
+      // Both files exist - root file should be used
+      mockAccess.mockResolvedValue(undefined);
+
+      mockReadFile.mockImplementation((path) => {
+        if (typeof path === 'string' && path.endsWith('AGENTS.md') && !path.includes('.agent')) {
+          return Promise.resolve('Root file content');
+        }
+        if (typeof path === 'string' && path.includes('.agent')) {
+          return Promise.resolve('Config dir content');
+        }
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      const result = await loadAgentsMd('/test/project');
+
+      expect(result).toBe('Root file content');
+      // Should only have called readFile once for the root file
+      expect(mockReadFile).toHaveBeenCalledWith('/test/project/AGENTS.md', 'utf-8');
+    });
+
+    it('returns empty string when no AGENTS.md found', async () => {
+      mockAccess.mockRejectedValue(new Error('ENOENT'));
+
+      const result = await loadAgentsMd('/test/project');
+
+      expect(result).toBe('');
+    });
+
+    it('strips YAML front matter from AGENTS.md', async () => {
+      mockAccess.mockImplementation((path) => {
+        if (typeof path === 'string' && path.endsWith('AGENTS.md') && !path.includes('.agent')) {
+          return Promise.resolve(undefined);
+        }
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      mockReadFile.mockResolvedValue(`---
+name: my-project
+version: 1.0.0
+---
+
+# Project Instructions
+Build with \`npm run build\`.`);
+
+      const result = await loadAgentsMd('/test/project');
+
+      expect(result).toBe('# Project Instructions\nBuild with `npm run build`.');
+      expect(result).not.toContain('name:');
+      expect(result).not.toContain('version:');
+    });
+
+    it('calls onDebug callback when AGENTS.md is loaded', async () => {
+      mockAccess.mockImplementation((path) => {
+        if (typeof path === 'string' && path.endsWith('AGENTS.md') && !path.includes('.agent')) {
+          return Promise.resolve(undefined);
+        }
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      mockReadFile.mockResolvedValue('Test content');
+
+      const debugMessages: Array<{ msg: string; data?: unknown }> = [];
+      const onDebug = (msg: string, data?: Record<string, unknown>): void => {
+        debugMessages.push({ msg, data });
+      };
+
+      await loadAgentsMd('/test/project', onDebug);
+
+      expect(debugMessages.some((d) => d.msg.includes('Loaded AGENTS.md'))).toBe(true);
+    });
+
+    it('uses getWorkspaceRoot() when no workingDir provided', async () => {
+      mockAccess.mockRejectedValue(new Error('ENOENT'));
+      mockGetWorkspaceRoot.mockReturnValue('/mock/workspace');
+
+      await loadAgentsMd();
+
+      // Should have tried to access AGENTS.md in workspace root
+      expect(mockGetWorkspaceRoot).toHaveBeenCalled();
+      expect(mockAccess).toHaveBeenCalledWith('/mock/workspace/AGENTS.md', expect.anything());
+    });
+
+    it('handles file read errors gracefully', async () => {
+      // File exists check passes but read fails
+      mockAccess.mockResolvedValue(undefined);
+      mockReadFile.mockRejectedValue(new Error('Permission denied'));
+
+      const result = await loadAgentsMd('/test/project');
+
+      // Should return empty string on read error
+      expect(result).toBe('');
+    });
+  });
+
   describe('assembleSystemPrompt', () => {
     it('assembles prompt with all layers', async () => {
       // base.md exists
@@ -652,6 +792,152 @@ This is mode-specific guidance.`);
 
       expect(debugMessages).toContain('Loaded base prompt');
       expect(debugMessages.some((m) => m.includes('environment'))).toBe(true);
+    });
+
+    it('includes AGENTS.md content when file exists', async () => {
+      mockAccess.mockImplementation((path) => {
+        if (typeof path === 'string' && path.endsWith('AGENTS.md') && !path.includes('.agent')) {
+          return Promise.resolve(undefined);
+        }
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      mockReadFile.mockImplementation((path) => {
+        if (typeof path === 'string' && path.endsWith('AGENTS.md')) {
+          return Promise.resolve('# Project Guidelines\nAlways run tests before committing.');
+        }
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      const result = await assembleSystemPrompt({
+        config,
+        model: 'gpt-4o',
+        provider: 'openai',
+        includeEnvironment: false,
+        includeProviderLayer: false,
+        includeAgentsMd: true,
+        workingDir: '/test/project',
+      });
+
+      // AGENTS.md content is inserted as-is without a wrapper header
+      expect(result).toContain('# Project Guidelines');
+      expect(result).toContain('Always run tests before committing.');
+    });
+
+    it('skips AGENTS.md when includeAgentsMd is false', async () => {
+      mockAccess.mockImplementation((path) => {
+        if (typeof path === 'string' && path.endsWith('AGENTS.md')) {
+          return Promise.resolve(undefined);
+        }
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      mockReadFile.mockImplementation((path) => {
+        if (typeof path === 'string' && path.endsWith('AGENTS.md')) {
+          return Promise.resolve('# AGENTS.md Guidelines\nThis should not appear.');
+        }
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      const result = await assembleSystemPrompt({
+        config,
+        model: 'gpt-4o',
+        provider: 'openai',
+        includeEnvironment: false,
+        includeProviderLayer: false,
+        includeAgentsMd: false,
+        workingDir: '/test/project',
+      });
+
+      expect(result).not.toContain('AGENTS.md Guidelines');
+      expect(result).not.toContain('This should not appear');
+    });
+
+    it('does not break assembly when AGENTS.md is missing', async () => {
+      mockAccess.mockRejectedValue(new Error('ENOENT'));
+
+      const result = await assembleSystemPrompt({
+        config,
+        model: 'gpt-4o',
+        provider: 'openai',
+        includeEnvironment: false,
+        includeProviderLayer: false,
+        includeAgentsMd: true,
+      });
+
+      // Should still have base prompt
+      expect(result).toContain('gpt-4o');
+      // Assembly continues without errors when AGENTS.md is missing
+    });
+
+    it('places AGENTS.md content after environment section and before user override', async () => {
+      mockAccess.mockImplementation((path) => {
+        if (typeof path === 'string' && path.endsWith('AGENTS.md') && !path.includes('.agent')) {
+          return Promise.resolve(undefined);
+        }
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      mockReadFile.mockImplementation((path) => {
+        if (typeof path === 'string' && path.endsWith('AGENTS.md')) {
+          return Promise.resolve('AGENTS_MARKER_CONTENT');
+        }
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      const result = await assembleSystemPrompt({
+        config,
+        model: 'gpt-4o',
+        provider: 'openai',
+        includeEnvironment: true,
+        includeProviderLayer: false,
+        includeAgentsMd: true,
+        workingDir: '/test/project',
+        userOverride: 'USER_OVERRIDE_CONTENT',
+      });
+
+      const envIndex = result.indexOf('# Environment');
+      const agentsIndex = result.indexOf('AGENTS_MARKER_CONTENT');
+      const userIndex = result.indexOf('# User Instructions');
+
+      // Environment should come before AGENTS.md content
+      expect(envIndex).toBeLessThan(agentsIndex);
+      // AGENTS.md content should come before user override
+      expect(agentsIndex).toBeLessThan(userIndex);
+    });
+
+    it('logs AGENTS.md loading via onDebug callback', async () => {
+      mockAccess.mockImplementation((path) => {
+        if (typeof path === 'string' && path.endsWith('AGENTS.md') && !path.includes('.agent')) {
+          return Promise.resolve(undefined);
+        }
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      mockReadFile.mockImplementation((path) => {
+        if (typeof path === 'string' && path.endsWith('AGENTS.md')) {
+          return Promise.resolve('Test AGENTS.md content');
+        }
+        return Promise.reject(new Error('ENOENT'));
+      });
+
+      const debugMessages: string[] = [];
+      const onDebug = (msg: string): void => {
+        debugMessages.push(msg);
+      };
+
+      await assembleSystemPrompt({
+        config,
+        model: 'gpt-4o',
+        provider: 'openai',
+        includeEnvironment: false,
+        includeProviderLayer: false,
+        includeAgentsMd: true,
+        workingDir: '/test/project',
+        onDebug,
+      });
+
+      expect(debugMessages.some((m) => m.includes('AGENTS.md'))).toBe(true);
     });
   });
 });
