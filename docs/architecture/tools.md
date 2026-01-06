@@ -233,7 +233,8 @@ type ToolPermission = 'read' | 'write' | 'execute' | 'network';
 │    3. Capture Tool.Result                                    │
 │    4. Store in lastResults                                   │
 │    5. Emit via onToolResult callback                         │
-│    6. Return formatted string for LLM                        │
+│    6. Serialize result.output for LLM consumption            │
+│       (string passed directly; objects JSON-stringified)     │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -306,7 +307,7 @@ src/tools/
 ```
 
 **Template Variables:**
-- `${workspace}` - AGENT_WORKSPACE_ROOT or cwd
+- `${workspace}` - Resolves to `AGENT_WORKSPACE_ROOT` env var if set, otherwise falls back to `process.cwd()`
 - `${directory}`, `${cwd}` - Current working directory
 
 ---
@@ -327,8 +328,7 @@ src/tools/
 | `todoread` | read | Read current task list |
 | `webfetch` | network | Fetch URL contents with HTML sanitization |
 
-**Note:** Subagent execution is planned; current `task` tool returns an LLM_ASSIST_REQUIRED
-payload for the Agent layer to handle.
+**Note:** Subagent execution is planned; current `task` tool returns a `Tool.Result` with `metadata.error: 'LLM_ASSIST_REQUIRED'` for the Agent layer to handle.
 
 ---
 

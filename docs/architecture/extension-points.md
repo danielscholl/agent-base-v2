@@ -209,7 +209,7 @@ compatibility: Requires Node.js 18+
 Instructions for using this skill...
 ```
 
-**Note:** Toolsets and triggers are planned features not yet implemented. See [Skills Architecture](./skills.md) for the current manifest schema.
+**Note:** Toolsets and triggers are planned features not yet implemented. The manifest schema is **strict** - unknown fields will be rejected. See [Skills Architecture](./skills.md) for the current manifest schema.
 
 ---
 
@@ -281,6 +281,8 @@ interface CommandResult {
 - [ ] Registered in `PROVIDER_REGISTRY`
 - [ ] Exported from `src/model/index.ts`
 - [ ] Config schema in `src/config/schema.ts`
+- [ ] Default values in `src/config/constants.ts`
+- [ ] Environment variable mapping in `src/config/env.ts`
 - [ ] Tests with mocked LangChain client
 
 ### Tool

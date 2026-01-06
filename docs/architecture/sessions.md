@@ -68,6 +68,8 @@ interface SessionIndex {
 }
 ```
 
+**Note:** If the index file is missing or corrupt, it can be rebuilt by scanning existing session files in the sessions directory. The SessionManager will automatically regenerate the index on next startup.
+
 ---
 
 ## SessionManager API
@@ -136,6 +138,7 @@ User starts agent
        |
        v
 [Auto-save on significant events]
+(Tool execution, LLM response, user message)
        |
        v
 [Update index and last_session]
@@ -212,7 +215,7 @@ First topic: Help me implement JWT authentication...
 The conversation history follows. Continue naturally from where you left off.
 ```
 
-> **Note:** This summary is shown to the user in the UI as a visual indicator of session resumption. It is **not injected into the LLM's message history**. The LLM receives the actual conversation history directly, which provides sufficient context for continuation. This design avoids duplicating information and keeps the context window focused on the real conversation.
+> **Note:** This summary is shown to the user in the UI (via `InteractiveShell` component) as a visual indicator of session resumption. It is **not injected into the LLM's message history**. The LLM receives the actual conversation history directly, which provides sufficient context for continuation. This design avoids duplicating information and keeps the context window focused on the real conversation.
 
 ---
 

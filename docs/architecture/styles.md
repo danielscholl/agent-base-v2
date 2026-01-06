@@ -306,15 +306,23 @@ const permitted = await callbacks?.onPermissionRequest?.(request) ?? false;
 ### Mock Factory Functions
 
 ```typescript
-// Create mock factories for test objects
+// Create mock factories for test objects (pseudocode - actual AppConfig has more fields)
 function createMockConfig(overrides?: Partial<AppConfig>): AppConfig {
   return {
+    version: '1.0',
     providers: { default: 'openai', openai: { model: 'gpt-4o' } },
-    agent: { maxTokens: 4096, temperature: 0.7 },
+    agent: { dataDir: '~/.agent', logLevel: 'info', filesystemWritesEnabled: true },
+    telemetry: { enabled: false, enableSensitiveData: false },
+    memory: { enabled: true, type: 'local', historyLimit: 100 },
+    skills: { plugins: [], disabledBundled: [], enabledBundled: [], scriptTimeout: 30000 },
+    retry: { enabled: true, maxRetries: 3, baseDelayMs: 1000, maxDelayMs: 10000, enableJitter: true },
+    session: { autoSave: true, maxSessions: 50 },
     ...overrides,
   };
 }
 ```
+
+**Note:** See `tests/fixtures/factories.ts` for the actual mock factory implementation.
 
 ### Jest Mocking
 

@@ -102,6 +102,7 @@ interface AgentCallbacks {
 - All callbacks are optional (no-op if not provided)
 - Callbacks are synchronous
 - The CLI layer implements callbacks to update UI state
+- `onToolEnd` receives the legacy `ToolResponse` (converted from `Tool.Result`) plus optional `ToolExecutionResult` with full metadata including error detection
 
 ---
 
@@ -210,17 +211,23 @@ type ToolResponse<T = unknown> = SuccessResponse<T> | ErrorResponse;
 
 ### Special Error Code: LLM_ASSIST_REQUIRED
 
-When a tool cannot complete its task without LLM help:
+When a tool cannot complete its task without LLM help, it should return a `Tool.Result` with `metadata.error` set:
 
 ```typescript
 return {
-  success: false,
-  error: 'LLM_ASSIST_REQUIRED',
-  message: 'Content too large for processing. Requesting summarization.'
+  title: 'LLM Assistance Required',
+  metadata: { error: 'LLM_ASSIST_REQUIRED' },
+  output: JSON.stringify({
+    action: 'LLM_ASSIST_REQUIRED',
+    prompt: 'Summarize this content...',
+    message: 'Content too large for processing',
+  }),
 };
 ```
 
-The Agent Layer interprets this and takes appropriate action.
+The Agent Layer detects `metadata.error === 'LLM_ASSIST_REQUIRED'` and takes appropriate action.
+
+**Note:** The legacy `ToolResponse` with `error: 'LLM_ASSIST_REQUIRED'` is still recognized in callbacks for backward compatibility, but new tools should use the `Tool.Result` pattern above.
 
 ---
 

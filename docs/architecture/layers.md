@@ -209,7 +209,7 @@ The Utils layer provides shared infrastructure services.
 - Manage message history
 - Handle session persistence
 - Provide environment helpers
- - Context storage (planned; ContextManager exists but is not wired into agent loop)
+- Context storage (planned; ContextManager exists but is not wired into agent loop)
 
 **Key Files:**
 - `src/config/schema.ts` - Zod schemas for configuration
@@ -265,6 +265,7 @@ Telemetry Layer (cross-cutting, used by all)
 
 **Dependency Rules:**
 - Layers may only depend on layers below them
+- **Circular dependencies are forbidden** (enforced by build/lint)
 - CLI never imports Agent internals
 - Tools never call Model Layer directly
 - All layers may use Utils
@@ -283,7 +284,7 @@ interface AgentCallbacks {
   onAgentStart?(ctx: SpanContext, query: string): void;
   onLLMStart?(ctx: SpanContext, model: string, messages: Message[]): void;
   onLLMStream?(ctx: SpanContext, chunk: string): void;
-  onLLMEnd?(ctx: SpanContext, response: string, usage: TokenUsage): void;
+  onLLMEnd?(ctx: SpanContext, response: string, usage?: TokenUsage): void;
   onToolStart?(ctx: SpanContext, toolName: string, args: unknown): void;
   onToolEnd?(ctx: SpanContext, toolName: string, result: ToolResponse, executionResult?: ToolExecutionResult): void;
   onAgentEnd?(ctx: SpanContext, answer: string): void;

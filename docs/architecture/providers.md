@@ -156,6 +156,18 @@ The Azure provider auto-detects which API to use based on the deployment name:
 - Custom `BaseChatModel` wrapper converts Zod schemas to JSON Schema for tool binding
 - Returns `azure-responses` as `_llmType()`
 
+**API Comparison:**
+
+| Feature | Chat Completions API | Responses API |
+|---------|---------------------|---------------|
+| Streaming | Yes | Yes |
+| Tool calling | Yes | Yes |
+| Statefulness | Stateless | Stateful (`previous_response_id`) |
+| Models | gpt-4o, gpt-4, gpt-35-turbo | o1, o1-preview, o1-mini, o3, gpt-5-codex |
+| SDK | `@langchain/openai` | Custom `AzureResponsesChatModel` |
+
+**Note:** API selection is automatic based on deployment name detection. Manual override is not currently supported.
+
 **Authentication:**
 ```
 config.apiKey → AZURE_OPENAI_API_KEY env var → Azure CLI token → ERROR
@@ -464,5 +476,5 @@ export const PROVIDER_REGISTRY = {
 ## Related Documentation
 
 - [Core Interfaces](./core-interfaces.md) - ModelResponse, TokenUsage
-- [Error Handling](./error-handling.md) - Retry strategies
+- [Error Handling](./error-handling.md) - Retry strategies, exponential backoff details
 - [Configuration](./configuration.md) - Provider config schemas

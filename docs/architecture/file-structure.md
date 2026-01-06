@@ -12,7 +12,7 @@ This document describes the source code organization of the TypeScript agent fra
 ```
 src/
 ├── index.tsx                 # Entry point, CLI bootstrap
-├── cli.tsx                   # Main CLI component (React/Ink)
+├── cli.tsx                   # Main CLI component (React/Ink) - renders InteractiveShell/SinglePrompt
 │
 ├── agent/                    # Agent layer (orchestration)
 │   ├── agent.ts              # Core Agent class
@@ -36,7 +36,7 @@ src/
 │       ├── local.ts          # Ollama/Docker/OpenAI-compatible
 │       └── foundry.ts        # Azure AI Foundry (local + cloud)
 │
-├── cli/                      # CLI layer
+├── cli/                      # CLI layer (command handlers, not the main component)
 │   ├── callbacks.ts          # Callback implementations
 │   ├── cli-context.ts        # CLI context management
 │   ├── constants.ts          # CLI constants
@@ -173,14 +173,14 @@ project-root/
 ```
 ~/.agent/
 ├── config.yaml             # User configuration
-├── sessions/                 # Persisted sessions
-├── context/                  # Tool output cache
-├── skills/                   # User skills
-└── plugins/                  # Installed plugin skills
+├── sessions/               # Persisted sessions
+├── context/                # Tool output cache (may be empty until context storage is wired)
+├── skills/                 # User skills
+└── plugins/                # Installed plugin skills
 
 ./.agent/
 ├── config.yaml             # Project configuration
-└── skills/                   # Project-specific skills
+└── skills/                 # Project-specific skills
 ```
 
 ---

@@ -1,6 +1,6 @@
 # Skills Architecture
 
-> **Status:** Implemented
+> **Status:** Current
 > **Source of truth:** [`src/skills/manifest.ts`](../../src/skills/manifest.ts), [`src/skills/context-provider.ts`](../../src/skills/context-provider.ts), [`src/skills/installer.ts`](../../src/skills/installer.ts)
 
 This document describes the skills system, including manifests, progressive disclosure, and plugin management.
@@ -78,7 +78,9 @@ Detailed usage examples and guidance...
 **Validation Rules:**
 - `name` must match directory name
 - `name` pattern: `^[a-z0-9]+(-[a-z0-9]+)*$` (no leading/trailing/consecutive hyphens)
-- Schema is **strict** - unknown fields are rejected
+- Schema is **strict** - unknown fields are rejected (including planned fields like `toolsets` and `triggers`)
+
+**Example bundled skill:** See [`src/_bundled_skills/gh/SKILL.md`](../../src/_bundled_skills/gh/SKILL.md) for a real-world example.
 
 ---
 
@@ -325,6 +327,8 @@ The following features are documented for future implementation:
 
 ### Toolsets (Planned)
 
+> **Warning:** Adding `toolsets` to your SKILL.md will currently fail validation. The strict schema rejects unknown fields.
+
 ```yaml
 ---
 name: my-skill
@@ -335,6 +339,8 @@ toolsets:
 ```
 
 ### Trigger-Based Activation (Planned)
+
+> **Warning:** Adding `triggers` to your SKILL.md will currently fail validation. The strict schema rejects unknown fields.
 
 ```yaml
 ---

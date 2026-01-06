@@ -86,6 +86,14 @@ interface ToolPermissions {
 }
 ```
 
+**Optional permissions example:** A tool might require `read` but optionally use `network` for enhanced functionality:
+
+```typescript
+{ required: ['read'], optional: ['network'] }
+// Tool works with read-only access
+// If network is also granted, tool can fetch remote schemas
+```
+
 ---
 
 ## Built-in Tool Permissions
@@ -101,19 +109,21 @@ interface ToolPermissions {
 | `grep` | `read` | Content searching |
 | `webfetch` | `network` | URL fetching |
 | `task` | `execute` | Subagent spawning (planned) |
-| `todowrite` | `read` | Write task list |
+| `todowrite` | `read` | Write task list (uses `read` because it only updates in-memory state, no filesystem write) |
 | `todoread` | `read` | Read task list |
 
 ---
 
 ## Planned Features
 
+> **Important:** The features below are **planned but not yet active**. Currently, only permission filtering via `enabledPermissions` in `ToolRegistry.tools()` is implemented. Config-based permission rules (`permissions:` in YAML) have no effect.
+
 The following features are documented for future implementation:
 
 ### Hierarchical Permission Settings (Planned)
 
 ```
-Tool requests permission --> Check settings hierarchy
+Tool requests permission ──► Check settings hierarchy
                                    |
                   +----------------+----------------+
                   v                v                v

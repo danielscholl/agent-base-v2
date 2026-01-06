@@ -1,11 +1,11 @@
 # Agent Framework Architecture
 
 > **Status:** Current
-> Architecture documentation for the TypeScript agent framework (execution model, layering, contracts, and extension points).
+> **Source of truth:** Architecture documents in this directory; code in `src/`
 
 ---
 
-## Start here (pick your path)
+## Start here
 
 - **Understand the system quickly** → [System Layers](./layers.md) → [Core Interfaces](./core-interfaces.md)
 - **Add a tool** → [Tools](./tools.md) → [Permissions](./permissions.md) → [Tool Development Guide](../guides/tools.md)
@@ -20,10 +20,10 @@
 ### Execution flow
 
 ```
-User
-  ↓
+     User
+      ↓
 CLI (React/Ink)
-  ↓ callbacks
+      ↓ callbacks
 Agent (orchestrates loop, assembles response)
   ↓              ↓
 Model            Tools
@@ -45,20 +45,21 @@ See [System Layers](./layers.md) for the detailed diagram and responsibilities.
 | Layer | Responsibility |
 |-------|----------------|
 | CLI (React/Ink) | Terminal UI, state, user input, command routing |
-| Agent | Orchestration: Query→LLM→Tool→Response loop, callbacks |
+| Agent | Orchestration: Query → LLM → Tool → Response loop, callbacks |
 | Tools | Zod validation, `Tool.Result` outputs, permissions |
 | Model | Provider routing, streaming callbacks, retry/backoff |
 | Utils | Config, sessions, message history, context storage (planned) |
+| Telemetry | Cross-cutting: OpenTelemetry spans, GenAI conventions, OTLP export |
 
 ---
 
 ## Documentation map
 
-### Core architecture (recommended reading order)
+### Core architecture 
 
-| [System Layers](./layers.md) | **Start here** - layer diagram and responsibilities |
+| Document | Description |
 |----------|-------------|
-| [System Layers](./layers.md) | **Start here** — layer diagram and responsibilities |
+| [System Layers](./layers.md) | Layer diagram and responsibilities |
 | [Core Interfaces](./core-interfaces.md) | Callbacks, `Tool.Result`, `ModelResponse` contracts |
 | [Tools](./tools.md) | Tool system architecture and patterns |
 | [Providers](./providers.md) | Multi-provider LLM abstraction deep dive |
@@ -105,11 +106,15 @@ Full principles and rules: [CLAUDE.md](../../CLAUDE.md)
 **Only the Agent layer may invoke the Model layer.**
 
 - Tools must **not** call LLMs directly
-- If a tool needs LLM assistance, return a `Tool.Result` where output contains an `LLMAssistRequest`:
+- If a tool needs LLM assistance, return a `Tool.Result` where `metadata.error` is `'LLM_ASSIST_REQUIRED'`:
   ```typescript
-  { action: 'LLM_ASSIST_REQUIRED', prompt: string, message: string, description?: string }
+  return {
+    title: 'LLM Assistance Required',
+    metadata: { error: 'LLM_ASSIST_REQUIRED' },
+    output: JSON.stringify({ action: 'LLM_ASSIST_REQUIRED', prompt: '...', message: '...' }),
+  };
   ```
-  See `src/agent/agent.ts` for the authoritative type definition.
+  See `src/agent/agent.ts` for the authoritative `LLMAssistRequest` type definition.
 - The Agent detects this in tool output and may fulfill, transform, or reject the request based on policy
 
 **Why this matters:** Centralizing LLM access keeps cost tracking, observability, retry policies, and safety guardrails in one place. It also simplifies testing (mock one layer) and enables consistent rate limiting across all tool executions.

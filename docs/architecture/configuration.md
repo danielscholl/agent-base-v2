@@ -35,18 +35,17 @@ The config directory is `.agent/` (matches Python for migration compatibility):
 
 ## Config Hierarchy
 
-Priority from highest to lowest:
+**Load order vs Precedence:** Files are loaded in order (defaults → user → project → env), but precedence is reversed: later sources override earlier ones. Environment variables have highest precedence and are applied last.
+
+Priority from highest to lowest (later overrides earlier):
 
 ```
 1. Environment Variables     -> OPENAI_API_KEY, LLM_PROVIDER, etc.
-         |
-         v
+         ↓
 2. Project Config            -> ./.agent/config.yaml
-         |                       (committable, team-shared)
-         v
+         ↓                       (committable, team-shared)
 3. User Config               -> ~/.agent/config.yaml
-         |                       (personal, never committed)
-         v
+         ↓                      (personal, never committed)
 4. Schema Defaults           -> Zod schema .default() values
 ```
 
@@ -58,12 +57,11 @@ The workspace root controls where tools can read/write files. For security (sand
 
 ```
 1. AGENT_WORKSPACE_ROOT env var     -> Authoritative hard cap (if set)
-         |
-         v
+         ↓
 2. config.agent.workspaceRoot       -> Applies only if:
-         |                              - env var is unset, OR
-         |                              - config path is WITHIN env var path
-         v
+                                        - env var is unset, OR
+                                        - config path is WITHIN env var path
+         ↓
 3. process.cwd()                    -> Fallback if neither is set
 ```
 
@@ -88,6 +86,7 @@ agent:
 **Scenario 1:** Container sets `AGENT_WORKSPACE_ROOT=/sandbox`
 - Config `/home/user/projects/myapp` is outside `/sandbox`
 - Config ignored with warning, workspace = `/sandbox`
+- **Why:** `AGENT_WORKSPACE_ROOT` is the authoritative security boundary; config cannot escape it
 
 **Scenario 2:** Container sets `AGENT_WORKSPACE_ROOT=/home/user/projects`
 - Config `/home/user/projects/myapp` is inside `/home/user/projects`
@@ -260,41 +259,35 @@ AppConfig
 ## Config Loading Flow
 
 ```
-ConfigManager.load()
-         |
-         v
+        ConfigManager.load()
+                ↓
 +-------------------------------------+
 | 1. Load schema defaults             |
 |    (Zod .default() values)          |
 +-------------------------------------+
-         |
-         v
+                ↓
 +-------------------------------------+
 | 2. Load user config                 |
 |    (~/.agent/config.yaml)           |
 |    Deep merge with defaults         |
 +-------------------------------------+
-         |
-         v
+                ↓
 +-------------------------------------+
 | 3. Load project config              |
 |    (./.agent/config.yaml)           |
 |    Deep merge with user config      |
 +-------------------------------------+
-         |
-         v
+                ↓
 +-------------------------------------+
 | 4. Apply environment overrides      |
 |    (see env var mapping below)      |
 +-------------------------------------+
-         |
-         v
+                ↓
 +-------------------------------------+
 | 5. Validate with Zod schema         |
 |    Throw on validation failure      |
 +-------------------------------------+
-         |
-         v
+                ↓
 Return validated AppConfig
 ```
 
@@ -313,6 +306,7 @@ Return validated AppConfig
 | `AZURE_OPENAI_API_VERSION` | `providers.azure.apiVersion` | |
 | `AZURE_PROJECT_ENDPOINT` | `providers.foundry.projectEndpoint` | Validated as URL |
 | `AZURE_MODEL_DEPLOYMENT` | `providers.foundry.modelDeployment` | |
+| `AZURE_FOUNDRY_API_KEY` | `providers.foundry.apiKey` | API key for Foundry cloud mode |
 | `GEMINI_API_KEY` | `providers.gemini.apiKey` | |
 | `GEMINI_USE_VERTEXAI` | `providers.gemini.useVertexai` | Boolean coercion |
 | `GEMINI_PROJECT_ID` | `providers.gemini.projectId` | |
@@ -321,7 +315,7 @@ Return validated AppConfig
 | `GITHUB_MODELS_ENDPOINT` | `providers.github.endpoint` | Validated as URL |
 | `GITHUB_MODELS_ORG` | `providers.github.org` | |
 | `LLM_PROVIDER` | `providers.default` | Must be valid provider |
-| `AGENT_MODEL` | `providers.<default>.model` | Applied after merge |
+| `AGENT_MODEL` | `providers.<default>.model` | Applied to providers with `model` field (not azure/foundry which use deployment/alias) |
 | `AGENT_DATA_DIR` | `agent.dataDir` | |
 | `AGENT_LOG_LEVEL` | `agent.logLevel` | Must be debug/info/warn/error |
 | `AGENT_WORKSPACE_ROOT` | `agent.workspaceRoot` | |

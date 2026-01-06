@@ -57,6 +57,7 @@ interface ModelErrorResponse {
   success: false;
   error: ModelErrorCode;
   message: string;
+  retryAfterMs?: number;  // Provider-specified retry delay (see core-interfaces.md)
 }
 
 type ModelResponse<T> = ModelSuccessResponse<T> | ModelErrorResponse;
@@ -268,6 +269,13 @@ Random variation (±20%) to prevent thundering herd:
 jitterMultiplier = 1 + (Math.random() * 2 - 1) * 0.2;
 delay = cappedDelay * jitterMultiplier;
 ```
+
+**Example:** For attempt 2 with `baseDelay=1000ms`:
+- Base delay: `1000 * 2^1 = 2000ms`
+- With jitter (random 0.95): `2000 * 0.95 = 1900ms`
+- With jitter (random 1.15): `2000 * 1.15 = 2300ms`
+
+This variation explains why logs may show slightly different retry delays for the same attempt number.
 
 ### Retry-After Header
 

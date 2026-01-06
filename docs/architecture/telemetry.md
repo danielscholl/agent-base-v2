@@ -83,6 +83,8 @@ Standard attributes for LLM operations:
 }
 ```
 
+**Endpoint precedence:** If both `applicationinsightsConnectionString` and `otlpEndpoint` are provided, `applicationinsightsConnectionString` takes precedence and the Azure Monitor exporter is used.
+
 ### Environment Variables
 
 | Variable | Config Path | Notes |
@@ -96,11 +98,17 @@ Standard attributes for LLM operations:
 When `enableSensitiveData: false` (default):
 - Prompt content is NOT logged
 - Response content is NOT logged
+- Tool arguments are NOT recorded in spans
+- Message content is NOT recorded in spans
 - Only metadata and token counts are recorded
 
 When `enableSensitiveData: true`:
 - Full prompts and responses are logged
+- Tool arguments are recorded in span attributes
+- Message content is recorded in span events
 - Use only in development/debugging
+
+**Span attribute definitions:** See [`src/telemetry/spans.ts`](../../src/telemetry/spans.ts) for the complete list of GenAI attributes.
 
 ---
 

@@ -1,6 +1,6 @@
 # Context Storage Architecture
 
-> **Status:** Planned
+> **Status:** Partial Implementation
 > **Source of truth:** [`src/utils/context.ts`](../../src/utils/context.ts)
 
 This document describes the context storage strategy for managing tool outputs.
@@ -17,7 +17,9 @@ This document describes the context storage strategy for managing tool outputs.
 
 ## Implementation Status
 
-> **Note:** The `ContextManager` class is fully implemented in `src/utils/context.ts`, but is **not yet integrated** into the Agent's tool execution loop. Tool outputs are currently kept in message history only. Integration is planned for a future release.
+> **Note:** The `ContextManager` class is fully implemented in `src/utils/context.ts`, but is **not yet integrated** into the Agent's tool execution loop. Tool outputs are currently kept in message history only.
+>
+> **Planned integration point:** After tool execution in `Agent.run()`, before the next LLM call. The agent will call `contextManager.saveContext()` for large tool outputs.
 
 ---
 
@@ -193,6 +195,12 @@ When a session is resumed:
 | Size limits | Limited by RAM | Limited by disk |
 | Session resume | Lost (pointers cleared) | Files persist |
 | Concurrency | Simple | Handled by unique filenames |
+
+---
+
+## Memory Considerations
+
+**Pointer list growth:** The in-memory pointer list grows with each `saveContext()` call. Pointers are lightweight (~200 bytes each), but for very long sessions with many tool executions, memory usage scales linearly. Call `clearPointers()` periodically or at session boundaries to reclaim memory.
 
 ---
 
