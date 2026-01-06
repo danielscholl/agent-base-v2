@@ -14,6 +14,7 @@ import {
   isFilesystemWritesEnabled,
   mapSystemErrorToToolError,
   initializeWorkspaceRoot,
+  getWorkspaceInfo,
 } from '../workspace.js';
 
 // Test directory management
@@ -373,5 +374,145 @@ describe('initializeWorkspaceRoot', () => {
 
     const warningMsg = debugMessages.find((d) => d.msg.includes('ignored'));
     expect(warningMsg).toBeDefined();
+  });
+});
+
+describe('getWorkspaceInfo', () => {
+  it('uses env var when only env var is set (Case 1)', async () => {
+    process.env['AGENT_WORKSPACE_ROOT'] = testDir;
+
+    const result = await getWorkspaceInfo(undefined);
+
+    expect(result.source).toBe('env');
+    expect(result.workspaceRoot).toBe(testDir);
+    expect(result.warning).toBeUndefined();
+  });
+
+  it('uses config when only config is set (Case 2)', async () => {
+    delete process.env['AGENT_WORKSPACE_ROOT'];
+    const configPath = path.join(os.tmpdir(), 'config-workspace-info');
+
+    const result = await getWorkspaceInfo(configPath);
+
+    expect(result.source).toBe('config');
+    expect(result.workspaceRoot).toBe(path.resolve(configPath));
+    // Should NOT set the env var (read-only)
+    expect(process.env['AGENT_WORKSPACE_ROOT']).toBeUndefined();
+  });
+
+  it('does not mutate process.env (read-only)', async () => {
+    delete process.env['AGENT_WORKSPACE_ROOT'];
+    const configPath = '/some/path';
+
+    await getWorkspaceInfo(configPath);
+
+    // Verify env was NOT mutated
+    expect(process.env['AGENT_WORKSPACE_ROOT']).toBeUndefined();
+  });
+
+  it('uses cwd when neither is set (Case 4)', async () => {
+    delete process.env['AGENT_WORKSPACE_ROOT'];
+
+    const result = await getWorkspaceInfo(undefined);
+
+    expect(result.source).toBe('cwd');
+    expect(result.workspaceRoot).toBe(process.cwd());
+    expect(result.warning).toBeUndefined();
+  });
+
+  it('allows config to narrow env root (Case 3 - config inside env)', async () => {
+    process.env['AGENT_WORKSPACE_ROOT'] = testDir;
+    const narrowedPath = path.join(testDir, 'subdir');
+
+    const result = await getWorkspaceInfo(narrowedPath);
+
+    expect(result.source).toBe('config');
+    // Workspace should be the narrowed path
+    expect(result.workspaceRoot.endsWith('subdir')).toBe(true);
+    expect(result.warning).toBeUndefined();
+    // Env var should NOT be modified (read-only)
+    expect(process.env['AGENT_WORKSPACE_ROOT']).toBe(testDir);
+  });
+
+  it('ignores config outside env root with warning (Case 3)', async () => {
+    process.env['AGENT_WORKSPACE_ROOT'] = testDir;
+    const outsidePath = '/etc/outside';
+
+    const result = await getWorkspaceInfo(outsidePath);
+
+    expect(result.source).toBe('env');
+    expect(result.workspaceRoot).toBe(testDir);
+    expect(result.warning).toContain('outside');
+    expect(result.warning).toContain('ignored');
+    // Env var should remain unchanged
+    expect(process.env['AGENT_WORKSPACE_ROOT']).toBe(testDir);
+  });
+
+  it('detects symlink escape in config path narrowing (Case 3)', async () => {
+    // Create a symlink inside testDir that points outside
+    const symlinkPath = path.join(testDir, 'escape-link-info');
+    await fs.symlink('/tmp', symlinkPath);
+
+    process.env['AGENT_WORKSPACE_ROOT'] = testDir;
+
+    const result = await getWorkspaceInfo(symlinkPath);
+
+    // Should detect symlink escape and reject config
+    expect(result.source).toBe('env');
+    expect(result.workspaceRoot).toBe(testDir);
+    expect(result.warning).toContain('symlink');
+    expect(result.warning).toContain('ignored');
+    // Env var should remain unchanged
+    expect(process.env['AGENT_WORKSPACE_ROOT']).toBe(testDir);
+  });
+
+  it('detects parent symlink escape with non-existent leaf (Case 3)', async () => {
+    // Create a symlink inside testDir that points outside
+    const symlinkPath = path.join(testDir, 'link-outside-info');
+    await fs.symlink('/tmp', symlinkPath);
+
+    process.env['AGENT_WORKSPACE_ROOT'] = testDir;
+
+    // Config path: testDir/link-outside-info/newroot (leaf doesn't exist)
+    const configPath = path.join(symlinkPath, 'newroot');
+    const result = await getWorkspaceInfo(configPath);
+
+    // Should detect parent symlink escape and reject config
+    expect(result.source).toBe('env');
+    expect(result.workspaceRoot).toBe(testDir);
+    expect(result.warning).toContain('symlink');
+    expect(result.warning).toContain('parent');
+    // Env var should remain unchanged
+    expect(process.env['AGENT_WORKSPACE_ROOT']).toBe(testDir);
+  });
+
+  it('expands ~ in config path', async () => {
+    delete process.env['AGENT_WORKSPACE_ROOT'];
+
+    const result = await getWorkspaceInfo('~/my-workspace-info');
+
+    expect(result.source).toBe('config');
+    expect(result.workspaceRoot).toBe(path.join(os.homedir(), 'my-workspace-info'));
+    // Should NOT mutate env var
+    expect(process.env['AGENT_WORKSPACE_ROOT']).toBeUndefined();
+  });
+
+  it('handles empty string config as undefined', async () => {
+    process.env['AGENT_WORKSPACE_ROOT'] = testDir;
+
+    const result = await getWorkspaceInfo('');
+
+    expect(result.source).toBe('env');
+    expect(result.workspaceRoot).toBe(testDir);
+  });
+
+  it('handles empty string env as not set', async () => {
+    process.env['AGENT_WORKSPACE_ROOT'] = '';
+    const configPath = '/some/config/path';
+
+    const result = await getWorkspaceInfo(configPath);
+
+    expect(result.source).toBe('config');
+    expect(result.workspaceRoot).toBe(path.resolve(configPath));
   });
 });
