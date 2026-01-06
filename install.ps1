@@ -16,11 +16,12 @@ $REPO = "danielscholl/agent-base-v2"
 $REPO_URL = "https://github.com/$REPO"
 $INSTALL_DIR = "$env:LOCALAPPDATA\Programs\agent-base-v2"
 $BIN_DIR = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
+$AGENT_HOME = "$env:USERPROFILE\.agent"
 
 function Write-Info { param($msg) Write-Host $msg -ForegroundColor Cyan }
 function Write-Success { param($msg) Write-Host $msg -ForegroundColor Green }
 function Write-Warn { param($msg) Write-Host $msg -ForegroundColor Yellow }
-function Write-Err { param($msg) Write-Host "Error: $msg" -ForegroundColor Red; exit 1 }
+function Write-Err { param($msg) Write-Host "Error: $msg" -ForegroundColor Red; throw $msg }
 
 function Test-Platform {
     if ([Environment]::Is64BitOperatingSystem -eq $false) {
@@ -103,14 +104,18 @@ function Install-Binary {
     New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
     Expand-Archive -Path $archivePath -DestinationPath $extractDir -Force
 
-    # Copy binary and assets to WindowsApps
-    # Assets (prompts/, _bundled_skills/) must be alongside agent.exe for runtime resolution
+    # Copy binary to WindowsApps (in PATH)
     Copy-Item -Path "$extractDir\agent.exe" -Destination "$BIN_DIR\agent.exe" -Force
+
+    # Copy assets to ~/.agent/ (canonical data location)
+    if (-not (Test-Path $AGENT_HOME)) {
+        New-Item -ItemType Directory -Path $AGENT_HOME -Force | Out-Null
+    }
     if (Test-Path "$extractDir\prompts") {
-        Copy-Item -Path "$extractDir\prompts" -Destination "$BIN_DIR\prompts" -Recurse -Force
+        Copy-Item -Path "$extractDir\prompts" -Destination "$AGENT_HOME\prompts" -Recurse -Force
     }
     if (Test-Path "$extractDir\_bundled_skills") {
-        Copy-Item -Path "$extractDir\_bundled_skills" -Destination "$BIN_DIR\_bundled_skills" -Recurse -Force
+        Copy-Item -Path "$extractDir\_bundled_skills" -Destination "$AGENT_HOME\_bundled_skills" -Recurse -Force
     }
 
     Remove-Item -Path $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -211,6 +216,18 @@ function Build-FromSource {
         Pop-Location
     }
 
+    # Copy assets to ~/.agent/ (canonical data location)
+    if (-not (Test-Path $AGENT_HOME)) {
+        New-Item -ItemType Directory -Path $AGENT_HOME -Force | Out-Null
+    }
+    $distDir = "$repoPath\dist"
+    if (Test-Path "$distDir\prompts") {
+        Copy-Item -Path "$distDir\prompts" -Destination "$AGENT_HOME\prompts" -Recurse -Force
+    }
+    if (Test-Path "$distDir\_bundled_skills") {
+        Copy-Item -Path "$distDir\_bundled_skills" -Destination "$AGENT_HOME\_bundled_skills" -Recurse -Force
+    }
+
     # Create wrapper script
     $wrapperPath = "$BIN_DIR\agent.cmd"
     @"
@@ -268,7 +285,7 @@ function Main {
             Write-Host ""
             Write-Success "Run 'agent' to start!"
             Write-Host ""
-            exit 0
+            return
         } else {
             Write-Warn "Binary not available, falling back to source build..."
         }

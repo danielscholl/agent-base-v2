@@ -34,3 +34,5 @@ export {
 } from './tokens.js';
 
 export { resolveModelName, isProviderConfigured } from './model.js';
+
+export { getAgentHome, getPromptsDir, getBundledSkillsDir } from './paths.js';

@@ -138,6 +138,16 @@ download_binary() {
   ln -sf "${extract_dir}/agent" "${BIN_DIR}/agent"
   chmod +x "${extract_dir}/agent"
 
+  # Copy assets to ~/.agent/ (canonical data location)
+  if [ -d "${extract_dir}/prompts" ]; then
+    rm -rf "${INSTALL_DIR}/prompts"
+    cp -r "${extract_dir}/prompts" "${INSTALL_DIR}/prompts"
+  fi
+  if [ -d "${extract_dir}/_bundled_skills" ]; then
+    rm -rf "${INSTALL_DIR}/_bundled_skills"
+    cp -r "${extract_dir}/_bundled_skills" "${INSTALL_DIR}/_bundled_skills"
+  fi
+
   rm -rf "${tmp_dir}"
 
   success "Binary installed successfully!"
@@ -212,6 +222,17 @@ build_from_source() {
   info "Building..."
   bun run build
   popd > /dev/null
+
+  # Copy assets to ~/.agent/ (canonical data location)
+  local dist_dir="${repo_path}/dist"
+  if [ -d "${dist_dir}/prompts" ]; then
+    rm -rf "${INSTALL_DIR}/prompts"
+    cp -r "${dist_dir}/prompts" "${INSTALL_DIR}/prompts"
+  fi
+  if [ -d "${dist_dir}/_bundled_skills" ]; then
+    rm -rf "${INSTALL_DIR}/_bundled_skills"
+    cp -r "${dist_dir}/_bundled_skills" "${INSTALL_DIR}/_bundled_skills"
+  fi
 
   # Create symlink
   mkdir -p "${BIN_DIR}"
