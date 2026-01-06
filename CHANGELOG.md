@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.3.10](https://github.com/danielscholl/agent-base-v2/compare/v0.3.9...v0.3.10) (2026-01-06)
+
+
+### Bug Fixes
+
+* **cli:** enable meow autoVersion for --version flag ([bd727c1](https://github.com/danielscholl/agent-base-v2/commit/bd727c17f7cdff2ce4723dcbc54fb54991fade50))
+* **install:** replace exit with throw and return for proper error handling ([1889542](https://github.com/danielscholl/agent-base-v2/commit/1889542bf583754eb7d221254367a02d9c4f503f))
+
+
+### Documentation
+
+* **readme:** update Windows uninstall instructions with additional cleanup paths ([9714462](https://github.com/danielscholl/agent-base-v2/commit/9714462bfecf270507192a2c4b3240f4dae9267a))
+
+
+### Code Refactoring
+
+* **assets:** centralize asset path resolution to ~/.agent directory ([dc1e319](https://github.com/danielscholl/agent-base-v2/commit/dc1e319e73b2d501dec08cc7df248d74de61d86c))
+* **cli:** use meow built-in version handling ([83016ed](https://github.com/danielscholl/agent-base-v2/commit/83016edb6923cb524f8d87a6fb177bbbdd4ac61f))
+* **prompts:** minimize provider layers and update documentation ([d1591e4](https://github.com/danielscholl/agent-base-v2/commit/d1591e477b2a3483e77f48261eacfc4fb43a3f4b))
+* **prompts:** simplify provider prompts and drop unused providers ([e7caa75](https://github.com/danielscholl/agent-base-v2/commit/e7caa7506d04da7d0f8d29d3e0356556fad61230))
+
 ## [0.3.9](https://github.com/danielscholl/agent-base-v2/compare/v0.3.8...v0.3.9) (2026-01-06)
 
 
