@@ -56,7 +56,7 @@ See [System Layers](./layers.md) for the detailed diagram and responsibilities.
 
 ### Core architecture (recommended reading order)
 
-| Document | Description |
+| [System Layers](./layers.md) | **Start here** - layer diagram and responsibilities |
 |----------|-------------|
 | [System Layers](./layers.md) | **Start here** — layer diagram and responsibilities |
 | [Core Interfaces](./core-interfaces.md) | Callbacks, `Tool.Result`, `ModelResponse` contracts |
