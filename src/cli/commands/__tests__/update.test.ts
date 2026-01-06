@@ -16,11 +16,13 @@ const mockReadFile = jest.fn();
 const mockWriteFile = jest.fn();
 const mockMkdir = jest.fn();
 const mockUnlink = jest.fn();
+const mockAccess = jest.fn();
 jest.unstable_mockModule('node:fs/promises', () => ({
   readFile: mockReadFile,
   writeFile: mockWriteFile,
   mkdir: mockMkdir,
   unlink: mockUnlink,
+  access: mockAccess,
 }));
 
 // Mock fs for realpathSync
@@ -611,6 +613,310 @@ describe('update command handler', () => {
       expect(result.success).toBe(true);
       expect(result.message).toBe('Check complete');
       expect(context.outputs.some((o) => o.content.includes('Checking for updates...'))).toBe(true);
+    });
+  });
+
+  describe('shell-source installation', () => {
+    beforeEach(() => {
+      // Simulate shell-source installation type
+      process.argv = ['bun', '/Users/test/.agent/repo/dist/index.js'];
+    });
+
+    it('proceeds with git pull when repository exists', async () => {
+      // Mock GitHub API to return a newer version so update proceeds
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            tag_name: 'v0.2.0',
+            html_url: 'https://github.com/danielscholl/agent-base-v2/releases/tag/v0.2.0',
+            assets: [],
+          }),
+      });
+
+      // Mock access succeeds (repository exists)
+      mockAccess.mockResolvedValue(undefined);
+
+      // Mock successful git pull, bun install, and bun build
+      const mockProcess = {
+        stdout: {
+          on: jest.fn(),
+          removeListener: jest.fn(),
+        },
+        stderr: {
+          on: jest.fn(),
+          removeListener: jest.fn(),
+        },
+        once: jest.fn((event: string, callback: (arg: number | null | Error) => void) => {
+          if (event === 'close') {
+            setTimeout(() => {
+              callback(0);
+            }, 10);
+          }
+          return mockProcess;
+        }),
+      };
+      mockSpawn.mockReturnValue(mockProcess);
+
+      const { updateHandler } = await import('../update.js');
+      const context = createMockContext();
+      const result = await updateHandler('', context);
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('Update complete');
+      expect(context.outputs.some((o) => o.content.includes('Pulling latest changes...'))).toBe(
+        true
+      );
+      expect(context.outputs.some((o) => o.content.includes('Installing dependencies...'))).toBe(
+        true
+      );
+      expect(context.outputs.some((o) => o.content.includes('Building...'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('Update successful!'))).toBe(true);
+    });
+
+    it('outputs error and returns false when repository does not exist', async () => {
+      // Mock GitHub API to return a newer version so update proceeds
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            tag_name: 'v0.2.0',
+            html_url: 'https://github.com/danielscholl/agent-base-v2/releases/tag/v0.2.0',
+            assets: [],
+          }),
+      });
+
+      // Mock access fails (repository doesn't exist)
+      mockAccess.mockRejectedValue(new Error('ENOENT: no such file or directory'));
+
+      const { updateHandler } = await import('../update.js');
+      const context = createMockContext();
+      const result = await updateHandler('', context);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Update failed');
+      expect(
+        context.outputs.some((o) => o.content.includes('Source repository not found at'))
+      ).toBe(true);
+      expect(
+        context.outputs.some((o) => o.content.includes('This installation uses pre-built binaries'))
+      ).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('Update failed.'))).toBe(true);
+    });
+  });
+
+  describe('platform-specific tar extraction', () => {
+    let originalPlatform: NodeJS.Platform;
+
+    beforeEach(() => {
+      // Save original platform
+      originalPlatform = process.platform;
+
+      // Set up shell-binary installation detection
+      process.argv = ['bun', '/Users/test/.local/bin/agent'];
+      mockRealpathSync.mockReturnValue('/Users/test/.agent/bin/agent');
+
+      // Mock newer version to trigger update
+      mockVersion = '0.1.0';
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            tag_name: 'v0.2.0',
+            html_url: 'https://github.com/danielscholl/agent-base-v2/releases/tag/v0.2.0',
+            assets: [
+              {
+                name: 'agent-linux-x64.tar.gz',
+                browser_download_url:
+                  'https://github.com/danielscholl/agent-base-v2/releases/download/v0.2.0/agent-linux-x64.tar.gz',
+              },
+              {
+                name: 'agent-darwin-arm64.tar.gz',
+                browser_download_url:
+                  'https://github.com/danielscholl/agent-base-v2/releases/download/v0.2.0/agent-darwin-arm64.tar.gz',
+              },
+            ],
+          }),
+      });
+    });
+
+    afterEach(() => {
+      // Restore original platform
+      Object.defineProperty(process, 'platform', {
+        value: originalPlatform,
+        writable: true,
+        configurable: true,
+      });
+    });
+
+    it('includes --no-absolute-names flag on Linux', async () => {
+      // Mock platform as Linux
+      Object.defineProperty(process, 'platform', {
+        value: 'linux',
+        writable: true,
+        configurable: true,
+      });
+
+      // Mock process.arch for platform detection
+      const originalArch = process.arch;
+      Object.defineProperty(process, 'arch', {
+        value: 'x64',
+        writable: true,
+        configurable: true,
+      });
+
+      // Mock file system operations to succeed
+      mockMkdir.mockResolvedValue(undefined);
+      mockWriteFile.mockResolvedValue(undefined);
+      // Mock access to fail (no repo directory for binary installations)
+      mockAccess.mockRejectedValue(new Error('ENOENT'));
+
+      // Mock fetch for GitHub API and binary download
+      mockFetch.mockImplementation((url: string) => {
+        // GitHub API call
+        if (url.includes('/releases/latest')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                tag_name: 'v0.2.0',
+                html_url: 'https://github.com/danielscholl/agent-base-v2/releases/tag/v0.2.0',
+                assets: [
+                  {
+                    name: 'agent-linux-x64.tar.gz',
+                    browser_download_url:
+                      'https://github.com/danielscholl/agent-base-v2/releases/download/v0.2.0/agent-linux-x64.tar.gz',
+                  },
+                ],
+              }),
+          });
+        }
+        // Binary download
+        return Promise.resolve({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(new ArrayBuffer(100)),
+        });
+      });
+
+      // Mock successful spawn for all commands
+      const spawnCalls: Array<{ command: string; args: string[] }> = [];
+      const mockProcess = {
+        stdout: { on: jest.fn(), removeListener: jest.fn() },
+        stderr: { on: jest.fn(), removeListener: jest.fn() },
+        once: jest.fn((event: string, callback: (arg: number | null | Error) => void) => {
+          if (event === 'close') {
+            setTimeout(() => {
+              callback(0);
+            }, 10);
+          }
+          return mockProcess;
+        }),
+      };
+      mockSpawn.mockImplementation((command: string, args: string[]) => {
+        spawnCalls.push({ command, args });
+        return mockProcess;
+      });
+
+      const { updateHandler } = await import('../update.js');
+      const context = createMockContext();
+      await updateHandler('', context);
+
+      // Find the tar command call
+      const tarCall = spawnCalls.find((call) => call.command === 'tar');
+      expect(tarCall).toBeDefined();
+      expect(tarCall?.args).toContain('--no-absolute-names');
+
+      // Restore arch
+      Object.defineProperty(process, 'arch', {
+        value: originalArch,
+        writable: true,
+        configurable: true,
+      });
+    });
+
+    it('does not include --no-absolute-names flag on macOS', async () => {
+      // Mock platform as macOS
+      Object.defineProperty(process, 'platform', {
+        value: 'darwin',
+        writable: true,
+        configurable: true,
+      });
+
+      // Mock process.arch for platform detection
+      const originalArch = process.arch;
+      Object.defineProperty(process, 'arch', {
+        value: 'arm64',
+        writable: true,
+        configurable: true,
+      });
+
+      // Mock file system operations to succeed
+      mockMkdir.mockResolvedValue(undefined);
+      mockWriteFile.mockResolvedValue(undefined);
+      // Mock access to fail (no repo directory for binary installations)
+      mockAccess.mockRejectedValue(new Error('ENOENT'));
+
+      // Mock fetch for GitHub API and binary download
+      mockFetch.mockImplementation((url: string) => {
+        // GitHub API call
+        if (url.includes('/releases/latest')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                tag_name: 'v0.2.0',
+                html_url: 'https://github.com/danielscholl/agent-base-v2/releases/tag/v0.2.0',
+                assets: [
+                  {
+                    name: 'agent-darwin-arm64.tar.gz',
+                    browser_download_url:
+                      'https://github.com/danielscholl/agent-base-v2/releases/download/v0.2.0/agent-darwin-arm64.tar.gz',
+                  },
+                ],
+              }),
+          });
+        }
+        // Binary download
+        return Promise.resolve({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(new ArrayBuffer(100)),
+        });
+      });
+
+      // Mock successful spawn for all commands
+      const spawnCalls: Array<{ command: string; args: string[] }> = [];
+      const mockProcess = {
+        stdout: { on: jest.fn(), removeListener: jest.fn() },
+        stderr: { on: jest.fn(), removeListener: jest.fn() },
+        once: jest.fn((event: string, callback: (arg: number | null | Error) => void) => {
+          if (event === 'close') {
+            setTimeout(() => {
+              callback(0);
+            }, 10);
+          }
+          return mockProcess;
+        }),
+      };
+      mockSpawn.mockImplementation((command: string, args: string[]) => {
+        spawnCalls.push({ command, args });
+        return mockProcess;
+      });
+
+      const { updateHandler } = await import('../update.js');
+      const context = createMockContext();
+      await updateHandler('', context);
+
+      // Find the tar command call
+      const tarCall = spawnCalls.find((call) => call.command === 'tar');
+      expect(tarCall).toBeDefined();
+      expect(tarCall?.args).not.toContain('--no-absolute-names');
+
+      // Restore arch
+      Object.defineProperty(process, 'arch', {
+        value: originalArch,
+        writable: true,
+        configurable: true,
+      });
     });
   });
 });
