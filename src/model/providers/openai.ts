@@ -25,7 +25,7 @@ import type { Runnable } from '@langchain/core/runnables';
 
 import type { OpenAIProviderConfig } from '../../config/schema.js';
 import type { ModelResponse } from '../types.js';
-import { successResponse, errorResponse, mapErrorToCode } from '../base.js';
+import { successResponse, errorResponse, mapErrorToCode, extractTextContent } from '../base.js';
 import { DEFAULT_OPENAI_MODEL } from '../../config/constants.js';
 
 // Models that require the Responses API (reasoning/codex models)
@@ -43,6 +43,11 @@ const RESPONSES_API_MODELS = [
  * Check if a model requires the Responses API.
  * Uses specific matching to prevent false positives from substring matches.
  * Matches exact name or names that start with the model name followed by - or _.
+ *
+ * Note: Model name comparison is case-insensitive for user convenience
+ * (e.g., 'GPT-5-Codex' matches 'gpt-5-codex'). OpenAI's API handles model names
+ * case-insensitively, so this normalization improves UX without affecting API behavior.
+ * The actual model string passed to the API is not modified.
  */
 function requiresResponsesApi(model: string): boolean {
   const lowerModel = model.toLowerCase();
@@ -80,6 +85,11 @@ interface ToolCall {
  * Implements LangChain's BaseChatModel interface for compatibility.
  * Handles stateful conversation with previous_response_id for tool continuations.
  *
+ * Streaming limitation: This implementation does not support streaming responses.
+ * The class extends BaseChatModel but does not override _streamResponseChunks,
+ * causing streaming calls to fall back to non-streaming behavior. This is intentional
+ * to prioritize tool binding and continuation support over streaming functionality.
+ *
  * Note: This class is integration-tested via manual verification with actual OpenAI endpoints.
  * Unit testing is complex due to the openai package's internal structure.
  */
@@ -107,6 +117,13 @@ class OpenAIResponsesChatModel extends BaseChatModel {
    * Note: This method diverges from BaseChatModel's bindTools signature in two ways:
    * 1. Parameter type: Accepts unknown[] instead of BindToolsInput[] to remain structurally
    *    compatible with agent framework usage. Internally casts to StructuredToolInterface[].
+   *
+   *    SAFETY: The cast at line 128 is safe because:
+   *    - The agent framework always passes valid StructuredToolInterface objects
+   *    - Invalid tools would fail during Zod schema extraction (lines 134-184) anyway
+   *    - Adding runtime validation would add overhead without practical benefit
+   *    - The agent layer is the sole caller and controls the input type
+   *
    * 2. Return type: Returns Runnable<BaseMessage[], AIMessage> instead of the base class's
    *    Runnable<BaseLanguageModelInput, AIMessageChunk>. This is safe because:
    *    - The agent framework expects AIMessage (not AIMessageChunk)
@@ -140,13 +157,13 @@ class OpenAIResponsesChatModel extends BaseChatModel {
 
           for (const [key, fieldSchema] of Object.entries(shape)) {
             const field = fieldSchema as {
-              _zod?: { def?: { typeName?: string }; description?: string };
+              _zod?: { _def?: { typeName?: string }; description?: string };
               _def?: { typeName?: string };
               description?: string;
               isOptional?: () => boolean;
             };
 
-            const typeName = field._zod?.def?.typeName ?? field._def?.typeName ?? 'string';
+            const typeName = field._zod?._def?.typeName ?? field._def?.typeName ?? 'string';
             const description = field._zod?.description ?? field.description;
 
             let jsonType = 'string';
@@ -255,7 +272,7 @@ class OpenAIResponsesChatModel extends BaseChatModel {
         outputs.push({
           type: 'function_call_output',
           call_id: msg.tool_call_id,
-          output: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+          output: extractTextContent(msg.content),
         });
       }
     }
@@ -278,11 +295,11 @@ class OpenAIResponsesChatModel extends BaseChatModel {
 
     for (const msg of messages) {
       if (msg instanceof SystemMessage) {
-        items.push({ type: 'message', role: 'system', content: msg.content as string });
+        items.push({ type: 'message', role: 'system', content: extractTextContent(msg.content) });
       } else if (msg instanceof HumanMessage) {
-        items.push({ type: 'message', role: 'user', content: msg.content as string });
+        items.push({ type: 'message', role: 'user', content: extractTextContent(msg.content) });
       } else if (msg instanceof AIMessage) {
-        const content = typeof msg.content === 'string' ? msg.content : '';
+        const content = extractTextContent(msg.content);
         if (content !== '') {
           items.push({ type: 'message', role: 'assistant', content });
         }
@@ -295,6 +312,7 @@ class OpenAIResponsesChatModel extends BaseChatModel {
 
   /**
    * Extract text content from Responses API output.
+   * Accumulates all output_text blocks from all message items.
    */
   private extractTextFromOutput(
     output: Array<{
@@ -302,16 +320,19 @@ class OpenAIResponsesChatModel extends BaseChatModel {
       content?: Array<{ type: string; text?: string }>;
     }>
   ): string {
+    const texts: string[] = [];
+
     for (const item of output) {
       if (item.type === 'message' && item.content !== undefined) {
         for (const content of item.content) {
           if (content.type === 'output_text' && content.text !== undefined && content.text !== '') {
-            return content.text;
+            texts.push(content.text);
           }
         }
       }
     }
-    return '';
+
+    return texts.join('');
   }
 
   /**
@@ -333,7 +354,11 @@ class OpenAIResponsesChatModel extends BaseChatModel {
         try {
           args = JSON.parse(funcCall.arguments) as Record<string, unknown>;
         } catch {
-          // If parsing fails, use empty args
+          // Graceful degradation: If the LLM outputs malformed JSON in function arguments,
+          // we use an empty args object rather than failing the entire tool call.
+          // This allows the tool call to proceed - the tool itself will report missing
+          // required arguments, and the LLM can retry with valid JSON in the next iteration.
+          // Silent failure is intentional here to maintain conversation flow.
         }
 
         toolCalls.push({
@@ -404,6 +429,11 @@ class OpenAIResponsesChatModel extends BaseChatModel {
 
     // Create AIMessage with tool_calls if present
     // Store response.id in additional_kwargs for potential tool continuation
+    // Note: response_id is only stored when tool_calls exist because it's specifically
+    // used for the Responses API's previous_response_id parameter when continuing after
+    // tool execution. AIMessages without tool_calls don't need response_id since they
+    // never trigger continuation - detectToolContinuation only matches messages with
+    // both tool_calls AND response_id (see lines 226-234).
     const additionalKwargs: Record<string, unknown> = {};
     if (toolCalls.length > 0) {
       additionalKwargs.response_id = response.id;
@@ -468,6 +498,15 @@ function createResponsesApiClient(
   apiKey: string | undefined,
   baseUrl: string | undefined
 ): ModelResponse<BaseChatModel> {
+  // Validate API key is available
+  const effectiveApiKey = apiKey ?? process.env.OPENAI_API_KEY;
+  if (effectiveApiKey === undefined || effectiveApiKey === '') {
+    return errorResponse(
+      'PROVIDER_NOT_CONFIGURED',
+      'OpenAI Responses API requires an API key. Set OPENAI_API_KEY or configure providers.openai.apiKey'
+    );
+  }
+
   // OpenAI client configuration
   const clientConfig: {
     apiKey?: string;
