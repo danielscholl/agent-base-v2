@@ -610,10 +610,10 @@ async function updateShellBinary(
     const extractDir = join(INSTALL_DIR, 'bin');
     await mkdir(extractDir, { recursive: true });
 
-    // Build tar arguments - BSD tar (macOS) strips absolute paths by default,
+    // Build tar arguments - BSD tar (macOS, FreeBSD, OpenBSD) strips absolute paths by default,
     // GNU tar (Linux) needs --no-absolute-names for path traversal protection
     const tarArgs = ['-xzf', archivePath, '-C', extractDir];
-    if (process.platform !== 'darwin') {
+    if (process.platform === 'linux') {
       // GNU tar on Linux - add security flag
       tarArgs.push('--no-absolute-names');
     }
@@ -672,7 +672,7 @@ async function updateShellSource(context: { onOutput: OutputHandler }): Promise<
   try {
     await access(repoPath);
   } catch {
-    context.onOutput('Source repository not found at ~/.agent/repo', 'error');
+    context.onOutput(`Source repository not found at ${repoPath}`, 'error');
     context.onOutput('This installation uses pre-built binaries.', 'info');
     return false;
   }
