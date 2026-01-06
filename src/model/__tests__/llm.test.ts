@@ -362,6 +362,56 @@ describe('LLMClient', () => {
       const client = new LLMClient({ config });
       expect(client.getModelName()).toBe('unknown');
     });
+
+    it('returns modelAlias for Foundry in local mode', () => {
+      config.providers.default = 'foundry';
+      config.providers.foundry = { mode: 'local', modelAlias: 'llama-local' };
+
+      const client = new LLMClient({ config });
+      expect(client.getModelName()).toBe('llama-local');
+    });
+
+    it('returns unknown for Foundry local mode when modelAlias not set', () => {
+      config.providers.default = 'foundry';
+      config.providers.foundry = { mode: 'local' };
+
+      const client = new LLMClient({ config });
+      expect(client.getModelName()).toBe('unknown');
+    });
+  });
+
+  describe('getProviderMode', () => {
+    it('returns mode for Foundry provider', () => {
+      config.providers.default = 'foundry';
+      config.providers.foundry = { mode: 'local' };
+
+      const client = new LLMClient({ config });
+      expect(client.getProviderMode()).toBe('local');
+    });
+
+    it('returns undefined for non-Foundry providers', () => {
+      config.providers.default = 'openai';
+      config.providers.openai = { model: 'gpt-4o' };
+
+      const client = new LLMClient({ config });
+      expect(client.getProviderMode()).toBeUndefined();
+    });
+
+    it('returns undefined when provider config is undefined', () => {
+      config.providers.default = 'foundry';
+      config.providers.foundry = undefined;
+
+      const client = new LLMClient({ config });
+      expect(client.getProviderMode()).toBeUndefined();
+    });
+
+    it('returns undefined when Foundry mode is not a string', () => {
+      config.providers.default = 'foundry';
+      config.providers.foundry = { mode: 123 as unknown as string };
+
+      const client = new LLMClient({ config });
+      expect(client.getProviderMode()).toBeUndefined();
+    });
   });
 
   describe('retry integration', () => {

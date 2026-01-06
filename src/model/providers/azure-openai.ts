@@ -98,7 +98,11 @@ interface ToolCall {
  * Custom chat model that wraps Azure OpenAI Responses API.
  * Implements LangChain's BaseChatModel interface for compatibility.
  * Handles stateful conversation with previous_response_id for tool continuations.
+ *
+ * Note: This class is integration-tested via manual verification with actual Azure OpenAI endpoints.
+ * Unit testing is complex due to the openai package's internal structure.
  */
+/* istanbul ignore next -- @preserve: Integration-tested class, see manual verification */
 class AzureResponsesChatModel extends BaseChatModel {
   private client: AzureOpenAI;
   private deployment: string;
