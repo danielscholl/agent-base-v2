@@ -242,6 +242,118 @@ describe('config command handlers', () => {
       expect(result.success).toBe(false);
       expect(context.outputs.some((o) => o.content.includes('Failed to load config'))).toBe(true);
     });
+
+    it('displays foundry local mode configuration', async () => {
+      const mockConfig = {
+        version: '1.0',
+        providers: {
+          default: 'foundry',
+          foundry: { mode: 'local', modelAlias: 'llama-local' },
+        },
+        agent: { dataDir: '~/.agent', logLevel: 'info', filesystemWritesEnabled: true },
+        memory: { enabled: false, type: 'local', historyLimit: 100 },
+        session: { autoSave: true, maxSessions: 50 },
+        skills: { disabledBundled: [], enabledBundled: [], plugins: [], scriptTimeout: 30000 },
+        telemetry: { enabled: false, enableSensitiveData: false },
+        retry: {
+          enabled: true,
+          maxRetries: 3,
+          baseDelayMs: 1000,
+          maxDelayMs: 10000,
+          enableJitter: true,
+        },
+      };
+      loadConfig.mockResolvedValue({ success: true, result: mockConfig });
+      loadConfigFromFiles.mockResolvedValue({ success: true, result: mockConfig });
+
+      const { configShowHandler } = await import('../config.js');
+      const context = createMockContext();
+      const result = await configShowHandler('', context);
+
+      expect(result.success).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('foundry'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('foundry Mode'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('local'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('foundry Model'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('llama-local'))).toBe(true);
+    });
+
+    it('displays foundry cloud mode configuration', async () => {
+      const mockConfig = {
+        version: '1.0',
+        providers: {
+          default: 'foundry',
+          foundry: {
+            mode: 'cloud',
+            projectEndpoint: 'https://foundry.azure.com/project',
+            modelDeployment: 'gpt-4o-deployment',
+          },
+        },
+        agent: { dataDir: '~/.agent', logLevel: 'info', filesystemWritesEnabled: true },
+        memory: { enabled: false, type: 'local', historyLimit: 100 },
+        session: { autoSave: true, maxSessions: 50 },
+        skills: { disabledBundled: [], enabledBundled: [], plugins: [], scriptTimeout: 30000 },
+        telemetry: { enabled: false, enableSensitiveData: false },
+        retry: {
+          enabled: true,
+          maxRetries: 3,
+          baseDelayMs: 1000,
+          maxDelayMs: 10000,
+          enableJitter: true,
+        },
+      };
+      loadConfig.mockResolvedValue({ success: true, result: mockConfig });
+      loadConfigFromFiles.mockResolvedValue({ success: true, result: mockConfig });
+
+      const { configShowHandler } = await import('../config.js');
+      const context = createMockContext();
+      const result = await configShowHandler('', context);
+
+      expect(result.success).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('foundry'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('foundry Mode'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('cloud'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('foundry Endpoint'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('foundry Deployment'))).toBe(true);
+    });
+
+    it('displays foundry with default cloud mode when mode is not specified', async () => {
+      const mockConfig = {
+        version: '1.0',
+        providers: {
+          default: 'foundry',
+          foundry: {
+            projectEndpoint: 'https://foundry.azure.com/project',
+            modelDeployment: 'gpt-4o-deployment',
+          },
+        },
+        agent: { dataDir: '~/.agent', logLevel: 'info', filesystemWritesEnabled: true },
+        memory: { enabled: false, type: 'local', historyLimit: 100 },
+        session: { autoSave: true, maxSessions: 50 },
+        skills: { disabledBundled: [], enabledBundled: [], plugins: [], scriptTimeout: 30000 },
+        telemetry: { enabled: false, enableSensitiveData: false },
+        retry: {
+          enabled: true,
+          maxRetries: 3,
+          baseDelayMs: 1000,
+          maxDelayMs: 10000,
+          enableJitter: true,
+        },
+      };
+      loadConfig.mockResolvedValue({ success: true, result: mockConfig });
+      loadConfigFromFiles.mockResolvedValue({ success: true, result: mockConfig });
+
+      const { configShowHandler } = await import('../config.js');
+      const context = createMockContext();
+      const result = await configShowHandler('', context);
+
+      expect(result.success).toBe(true);
+      // Should default to cloud mode
+      expect(context.outputs.some((o) => o.content.includes('foundry Mode'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('cloud'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('foundry Endpoint'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('foundry Deployment'))).toBe(true);
+    });
   });
 
   describe('configInitHandler', () => {
