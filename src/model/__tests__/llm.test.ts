@@ -206,7 +206,7 @@ describe('LLMClient', () => {
       expect(mockModel.invoke).toHaveBeenCalled();
     });
 
-    it('handles non-string content', async () => {
+    it('handles non-string content (content block array from newer OpenAI models)', async () => {
       const mockModelWithComplexContent = createMockModel({
         content: [{ type: 'text', text: 'Hello' }],
         response_metadata: {},
@@ -222,7 +222,8 @@ describe('LLMClient', () => {
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.result.content).toBe('[{"type":"text","text":"Hello"}]');
+        // extractTextContent extracts text from content blocks
+        expect(result.result.content).toBe('Hello');
       }
     });
 

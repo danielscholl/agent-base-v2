@@ -78,7 +78,7 @@ describe('Provider Setup Wizards', () => {
       expect(result.success).toBe(true);
       expect(result.config).toBeDefined();
       expect(result.config?.apiKey).toBe('sk-test-key-123');
-      expect(result.config?.model).toBe('gpt-5-mini');
+      expect(result.config?.model).toBe('gpt-5-codex');
     });
 
     it('accepts custom model', async () => {

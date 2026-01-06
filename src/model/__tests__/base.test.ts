@@ -3,7 +3,13 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { successResponse, errorResponse, mapErrorToCode, extractTokenUsage } from '../base.js';
+import {
+  successResponse,
+  errorResponse,
+  mapErrorToCode,
+  extractTokenUsage,
+  extractTextContent,
+} from '../base.js';
 import { isModelSuccess, isModelError } from '../types.js';
 import type { ModelErrorCode } from '../types.js';
 
@@ -289,5 +295,84 @@ describe('extractTokenUsage', () => {
       completionTokens: 20,
       totalTokens: 30,
     });
+  });
+});
+
+describe('extractTextContent', () => {
+  it('returns string content unchanged', () => {
+    expect(extractTextContent('Hello world')).toBe('Hello world');
+  });
+
+  it('returns empty string unchanged', () => {
+    expect(extractTextContent('')).toBe('');
+  });
+
+  it('extracts text from single content block (OpenAI newer models)', () => {
+    const content = [{ type: 'text', text: 'Hello from GPT-5' }];
+    expect(extractTextContent(content)).toBe('Hello from GPT-5');
+  });
+
+  it('extracts text from content block with annotations (OpenAI format)', () => {
+    const content = [{ type: 'text', text: 'Hello', annotations: [] }];
+    expect(extractTextContent(content)).toBe('Hello');
+  });
+
+  it('concatenates multiple text blocks with newlines', () => {
+    const content = [
+      { type: 'text', text: 'First paragraph' },
+      { type: 'text', text: 'Second paragraph' },
+    ];
+    expect(extractTextContent(content)).toBe('First paragraph\nSecond paragraph');
+  });
+
+  it('ignores non-text block types', () => {
+    const content = [
+      { type: 'text', text: 'Hello' },
+      { type: 'image', url: 'http://example.com/img.png' },
+      { type: 'text', text: 'World' },
+    ];
+    expect(extractTextContent(content)).toBe('Hello\nWorld');
+  });
+
+  it('falls back to JSON stringify for array without text blocks', () => {
+    const content = [{ type: 'image', url: 'http://example.com/img.png' }];
+    expect(extractTextContent(content)).toBe(
+      '[{"type":"image","url":"http://example.com/img.png"}]'
+    );
+  });
+
+  it('falls back to JSON stringify for empty array', () => {
+    expect(extractTextContent([])).toBe('[]');
+  });
+
+  it('handles object content by JSON stringifying', () => {
+    const content = { custom: 'data' };
+    expect(extractTextContent(content)).toBe('{"custom":"data"}');
+  });
+
+  it('handles null content', () => {
+    expect(extractTextContent(null)).toBe('null');
+  });
+
+  it('handles undefined content', () => {
+    expect(extractTextContent(undefined)).toBe('undefined');
+  });
+
+  it('handles number content', () => {
+    expect(extractTextContent(42)).toBe('42');
+  });
+
+  it('handles boolean content', () => {
+    expect(extractTextContent(true)).toBe('true');
+  });
+
+  it('handles content block with missing text field', () => {
+    const content = [{ type: 'text' }]; // No text field
+    expect(extractTextContent(content)).toBe('[{"type":"text"}]');
+  });
+
+  it('handles content block with null text', () => {
+    const content = [{ type: 'text', text: null }];
+    expect(extractTextContent(content)).toBe('[{"type":"text","text":null}]');
   });
 });

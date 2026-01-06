@@ -95,13 +95,12 @@ describe('createOpenAIClient', () => {
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.message).toContain('gpt-5-mini');
+      // Default model is gpt-5-codex which uses Responses API
+      expect(result.message).toContain('gpt-5-codex');
+      expect(result.message).toContain('Responses');
     }
-    expect(mockChatOpenAI).toHaveBeenCalledWith({
-      model: 'gpt-5-mini',
-      openAIApiKey: 'test-key',
-      configuration: undefined,
-    });
+    // Note: gpt-5-codex uses Responses API (OpenAI client), not ChatOpenAI
+    // So mockChatOpenAI is not called for the default model
   });
 
   it('passes correct parameters to ChatOpenAI', async () => {
@@ -176,6 +175,69 @@ describe('createOpenAIClient', () => {
       model: 'gpt-4o',
       openAIApiKey: 'test-key',
       configuration: undefined,
+    });
+  });
+
+  describe('Responses API validation', () => {
+    beforeEach(() => {
+      // Clear OPENAI_API_KEY env var for these tests
+      delete process.env.OPENAI_API_KEY;
+    });
+
+    it('returns error when Responses API model has no API key', async () => {
+      const result = await createOpenAIClient({
+        model: 'gpt-5-codex',
+        // No apiKey provided and no OPENAI_API_KEY env var
+      });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toBe('PROVIDER_NOT_CONFIGURED');
+        expect(result.message).toContain('OpenAI Responses API requires an API key');
+        expect(result.message).toContain('OPENAI_API_KEY');
+      }
+    });
+
+    it('returns error when Responses API model has empty API key', async () => {
+      const result = await createOpenAIClient({
+        model: 'o1',
+        apiKey: '',
+      });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toBe('PROVIDER_NOT_CONFIGURED');
+        expect(result.message).toContain('OpenAI Responses API requires an API key');
+      }
+    });
+
+    it('succeeds when Responses API model has API key from config', async () => {
+      const result = await createOpenAIClient({
+        model: 'o3-mini',
+        apiKey: 'test-key',
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.message).toContain('o3-mini');
+        expect(result.message).toContain('Responses');
+      }
+    });
+
+    it('succeeds when Responses API model has API key from env var', async () => {
+      process.env.OPENAI_API_KEY = 'env-test-key';
+
+      const result = await createOpenAIClient({
+        model: 'o1-preview',
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.message).toContain('o1-preview');
+        expect(result.message).toContain('Responses');
+      }
+
+      delete process.env.OPENAI_API_KEY;
     });
   });
 });

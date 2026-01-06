@@ -53,7 +53,13 @@ export { isModelSuccess, isModelError } from './types.js';
 // -----------------------------------------------------------------------------
 // Helper Functions
 // -----------------------------------------------------------------------------
-export { successResponse, errorResponse, mapErrorToCode, extractTokenUsage } from './base.js';
+export {
+  successResponse,
+  errorResponse,
+  mapErrorToCode,
+  extractTokenUsage,
+  extractTextContent,
+} from './base.js';
 
 // -----------------------------------------------------------------------------
 // Registry Functions

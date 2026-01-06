@@ -16,7 +16,13 @@ import type {
   StreamResult,
   TokenUsage,
 } from './types.js';
-import { successResponse, errorResponse, mapErrorToCode, extractTokenUsage } from './base.js';
+import {
+  successResponse,
+  errorResponse,
+  mapErrorToCode,
+  extractTokenUsage,
+  extractTextContent,
+} from './base.js';
 import { getProviderFactory, getSupportedProviders, isProviderSupported } from './registry.js';
 import { withRetry, extractRetryAfter } from './retry.js';
 
@@ -181,9 +187,8 @@ export class LLMClient {
       // consider caching multiple model instances or setting values at provider configuration.
       const response = await client.invoke(messages);
 
-      // Extract content - handle both string and complex content
-      const content =
-        typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
+      // Extract content - handle both string and content block arrays (newer OpenAI models)
+      const content = extractTextContent(response.content);
 
       // Extract token usage from response metadata
       const usage = extractTokenUsage(response.response_metadata);
@@ -295,8 +300,8 @@ export class LLMClient {
               }
 
               const chunk = result.value;
-              // Extract content for callback
-              const content = typeof chunk.content === 'string' ? chunk.content : '';
+              // Extract content for callback - handle both string and content block arrays
+              const content = extractTextContent(chunk.content);
 
               if (content !== '') {
                 callbacks?.onStreamChunk?.(content);

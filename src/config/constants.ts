@@ -30,7 +30,7 @@ export const DEFAULT_PROVIDER: ProviderName = 'openai';
 export const DEFAULT_LOCAL_BASE_URL = 'http://localhost:11434/v1';
 export const DEFAULT_LOCAL_MODEL = 'qwen3:latest';
 
-export const DEFAULT_OPENAI_MODEL = 'gpt-5-mini';
+export const DEFAULT_OPENAI_MODEL = 'gpt-5-codex';
 
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-20250514';
 

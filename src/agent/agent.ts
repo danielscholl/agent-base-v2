@@ -26,7 +26,7 @@ import type { ModelResponse } from '../model/types.js';
 import { assembleSystemPrompt, loadSkillsContext } from './prompts.js';
 import { createSkillContextProvider } from '../skills/index.js';
 import { createSpanContext, createChildSpanContext } from './callbacks.js';
-import { extractTokenUsage } from '../model/base.js';
+import { extractTokenUsage, extractTextContent } from '../model/base.js';
 import { errorResponse, mapModelErrorCodeToAgentErrorCode } from '../errors/index.js';
 
 /** Default maximum iterations for tool execution loop (safety valve, not a constraint) */
@@ -623,11 +623,8 @@ export class Agent {
           usage = response.result.usage;
         }
 
-        // Get content from message
-        const content =
-          typeof aiMessage.content === 'string'
-            ? aiMessage.content
-            : JSON.stringify(aiMessage.content);
+        // Get content from message - handle both string and content block arrays (newer OpenAI models)
+        const content = extractTextContent(aiMessage.content);
 
         // Emit LLM end
         this.callbacks?.onLLMEnd?.(llmCtx, content, usage);
@@ -760,7 +757,8 @@ export class Agent {
       // Yield chunks from stream
       let fullResponse = '';
       for await (const chunk of streamResponse.result as AsyncIterable<AIMessageChunk>) {
-        const content = typeof chunk.content === 'string' ? chunk.content : '';
+        // Extract content from chunk - handle both string and content block arrays
+        const content = extractTextContent(chunk.content);
         if (content) {
           fullResponse += content;
           this.callbacks?.onLLMStream?.(llmCtx, content);

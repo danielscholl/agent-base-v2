@@ -151,3 +151,70 @@ export function extractTokenUsage(
 
   return undefined;
 }
+
+/**
+ * Content block structure from newer OpenAI models (GPT-4o, GPT-5.x).
+ * These models return content as an array of blocks instead of a plain string.
+ */
+interface ContentBlock {
+  type: string;
+  text?: string;
+}
+
+/**
+ * Extract text content from LangChain message content.
+ * Handles both string content (older models) and content block arrays (newer models).
+ *
+ * Content formats:
+ * - String: "Hello world" -> "Hello world"
+ * - Content blocks: [{"type":"text","text":"Hello","annotations":[]}] -> "Hello"
+ * - Mixed blocks: Concatenates all text blocks with newlines
+ *
+ * @param content - Message content (string or content block array)
+ * @returns Extracted text string
+ */
+export function extractTextContent(content: unknown): string {
+  // Simple string content
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  // Content block array (newer OpenAI models like gpt-4o, gpt-5.x)
+  if (Array.isArray(content)) {
+    const textParts: string[] = [];
+
+    for (const block of content) {
+      // Type guard for content block structure
+      if (
+        typeof block === 'object' &&
+        block !== null &&
+        'type' in block &&
+        (block as ContentBlock).type === 'text' &&
+        'text' in block &&
+        typeof (block as ContentBlock).text === 'string'
+      ) {
+        textParts.push((block as ContentBlock).text as string);
+      }
+    }
+
+    // If we extracted text blocks, join them
+    if (textParts.length > 0) {
+      return textParts.join('\n');
+    }
+
+    // Fallback: if no text blocks found, stringify the array
+    return JSON.stringify(content);
+  }
+
+  // Unknown format - stringify or convert to string as fallback
+  // Handle all non-primitive types via JSON.stringify
+  if (content === null || content === undefined) {
+    return String(content);
+  }
+  if (typeof content === 'object') {
+    return JSON.stringify(content);
+  }
+  // Safe primitives: number, boolean, symbol, bigint
+  // These are now guaranteed to be primitives with safe toString()
+  return String(content as string | number | boolean | symbol | bigint);
+}
