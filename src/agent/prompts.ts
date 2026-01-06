@@ -395,23 +395,29 @@ export async function loadProviderLayer(provider: string, mode?: string): Promis
  * context and instructions to AI coding agents. It complements README.md by containing
  * agent-specific guidance like build steps, tests, and conventions.
  *
- * Discovery order (closest to edited file wins):
+ * Discovery order:
  * 1. {workspaceRoot}/AGENTS.md (workspace root)
  * 2. {workspaceRoot}/.agent/AGENTS.md (workspace config directory)
  *
- * Uses workspace root from AGENT_WORKSPACE_ROOT env var or config.agent.workspaceRoot,
- * falling back to process.cwd() if neither is set. This ensures AGENTS.md is found
- * even when the agent is invoked from a subdirectory.
+ * **Always uses workspace root** from AGENT_WORKSPACE_ROOT env var, falling back to
+ * process.cwd() if not set. The workingDir parameter is ignored for AGENTS.md discovery
+ * since AGENTS.md should always be at the workspace root, not relative to the current
+ * working directory. This ensures AGENTS.md is found even when the agent is invoked
+ * from a subdirectory.
  *
- * @param workingDir - Working directory to search from (default: workspace root)
+ * Note: For config.agent.workspaceRoot to take effect, initializeWorkspaceRoot() must
+ * be called at agent startup (which sets AGENT_WORKSPACE_ROOT env var).
+ *
+ * @param _workingDir - Ignored. AGENTS.md always loads from workspace root.
  * @param onDebug - Optional debug callback
  * @returns AGENTS.md content or empty string if not found
  */
 export async function loadAgentsMd(
-  workingDir?: string,
+  _workingDir?: string,
   onDebug?: (message: string, data?: Record<string, unknown>) => void
 ): Promise<string> {
-  const dir = workingDir ?? getWorkspaceRoot();
+  // Always use workspace root for AGENTS.md, regardless of workingDir
+  const dir = getWorkspaceRoot();
 
   // Try project root first (./AGENTS.md)
   const projectRootPath = join(dir, 'AGENTS.md');

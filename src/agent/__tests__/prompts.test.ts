@@ -553,7 +553,8 @@ This is mode-specific guidance.`);
   });
 
   describe('loadAgentsMd', () => {
-    it('loads AGENTS.md from project root when file exists', async () => {
+    it('always uses getWorkspaceRoot() for AGENTS.md discovery', async () => {
+      mockGetWorkspaceRoot.mockReturnValue('/workspace/root');
       mockAccess.mockImplementation((path) => {
         if (typeof path === 'string' && path.endsWith('AGENTS.md') && !path.includes('.agent')) {
           return Promise.resolve(undefined);
@@ -563,13 +564,17 @@ This is mode-specific guidance.`);
 
       mockReadFile.mockResolvedValue('# Build Instructions\nRun `npm test` to test.');
 
-      const result = await loadAgentsMd('/test/project');
+      // Pass a different workingDir - it should be ignored
+      const result = await loadAgentsMd('/some/other/dir');
 
       expect(result).toBe('# Build Instructions\nRun `npm test` to test.');
-      expect(mockReadFile).toHaveBeenCalledWith('/test/project/AGENTS.md', 'utf-8');
+      // Should use workspace root, not the passed workingDir
+      expect(mockGetWorkspaceRoot).toHaveBeenCalled();
+      expect(mockReadFile).toHaveBeenCalledWith('/workspace/root/AGENTS.md', 'utf-8');
     });
 
     it('loads AGENTS.md from .agent directory when root file not found', async () => {
+      mockGetWorkspaceRoot.mockReturnValue('/workspace/root');
       mockAccess.mockImplementation((path) => {
         if (typeof path === 'string' && path.includes('.agent') && path.endsWith('AGENTS.md')) {
           return Promise.resolve(undefined);
@@ -579,13 +584,14 @@ This is mode-specific guidance.`);
 
       mockReadFile.mockResolvedValue('# Config Directory Instructions\nUse these conventions.');
 
-      const result = await loadAgentsMd('/test/project');
+      const result = await loadAgentsMd();
 
       expect(result).toBe('# Config Directory Instructions\nUse these conventions.');
-      expect(mockReadFile).toHaveBeenCalledWith('/test/project/.agent/AGENTS.md', 'utf-8');
+      expect(mockReadFile).toHaveBeenCalledWith('/workspace/root/.agent/AGENTS.md', 'utf-8');
     });
 
     it('prefers project root AGENTS.md over .agent directory', async () => {
+      mockGetWorkspaceRoot.mockReturnValue('/workspace/root');
       // Both files exist - root file should be used
       mockAccess.mockResolvedValue(undefined);
 
@@ -599,22 +605,24 @@ This is mode-specific guidance.`);
         return Promise.reject(new Error('ENOENT'));
       });
 
-      const result = await loadAgentsMd('/test/project');
+      const result = await loadAgentsMd();
 
       expect(result).toBe('Root file content');
       // Should only have called readFile once for the root file
-      expect(mockReadFile).toHaveBeenCalledWith('/test/project/AGENTS.md', 'utf-8');
+      expect(mockReadFile).toHaveBeenCalledWith('/workspace/root/AGENTS.md', 'utf-8');
     });
 
     it('returns empty string when no AGENTS.md found', async () => {
+      mockGetWorkspaceRoot.mockReturnValue('/workspace/root');
       mockAccess.mockRejectedValue(new Error('ENOENT'));
 
-      const result = await loadAgentsMd('/test/project');
+      const result = await loadAgentsMd();
 
       expect(result).toBe('');
     });
 
     it('strips YAML front matter from AGENTS.md', async () => {
+      mockGetWorkspaceRoot.mockReturnValue('/workspace/root');
       mockAccess.mockImplementation((path) => {
         if (typeof path === 'string' && path.endsWith('AGENTS.md') && !path.includes('.agent')) {
           return Promise.resolve(undefined);
@@ -630,7 +638,7 @@ version: 1.0.0
 # Project Instructions
 Build with \`npm run build\`.`);
 
-      const result = await loadAgentsMd('/test/project');
+      const result = await loadAgentsMd();
 
       expect(result).toBe('# Project Instructions\nBuild with `npm run build`.');
       expect(result).not.toContain('name:');
@@ -638,6 +646,7 @@ Build with \`npm run build\`.`);
     });
 
     it('calls onDebug callback when AGENTS.md is loaded', async () => {
+      mockGetWorkspaceRoot.mockReturnValue('/workspace/root');
       mockAccess.mockImplementation((path) => {
         if (typeof path === 'string' && path.endsWith('AGENTS.md') && !path.includes('.agent')) {
           return Promise.resolve(undefined);
@@ -652,28 +661,34 @@ Build with \`npm run build\`.`);
         debugMessages.push({ msg, data });
       };
 
-      await loadAgentsMd('/test/project', onDebug);
+      await loadAgentsMd(undefined, onDebug);
 
       expect(debugMessages.some((d) => d.msg.includes('Loaded AGENTS.md'))).toBe(true);
     });
 
-    it('uses getWorkspaceRoot() when no workingDir provided', async () => {
+    it('ignores workingDir parameter and uses getWorkspaceRoot()', async () => {
+      mockGetWorkspaceRoot.mockReturnValue('/workspace/root');
       mockAccess.mockRejectedValue(new Error('ENOENT'));
-      mockGetWorkspaceRoot.mockReturnValue('/mock/workspace');
 
-      await loadAgentsMd();
+      // Pass a different workingDir - it should be ignored
+      await loadAgentsMd('/completely/different/path');
 
-      // Should have tried to access AGENTS.md in workspace root
+      // Should have used workspace root, not the passed workingDir
       expect(mockGetWorkspaceRoot).toHaveBeenCalled();
-      expect(mockAccess).toHaveBeenCalledWith('/mock/workspace/AGENTS.md', expect.anything());
+      expect(mockAccess).toHaveBeenCalledWith('/workspace/root/AGENTS.md', expect.anything());
+      expect(mockAccess).not.toHaveBeenCalledWith(
+        '/completely/different/path/AGENTS.md',
+        expect.anything()
+      );
     });
 
     it('handles file read errors gracefully', async () => {
+      mockGetWorkspaceRoot.mockReturnValue('/workspace/root');
       // File exists check passes but read fails
       mockAccess.mockResolvedValue(undefined);
       mockReadFile.mockRejectedValue(new Error('Permission denied'));
 
-      const result = await loadAgentsMd('/test/project');
+      const result = await loadAgentsMd();
 
       // Should return empty string on read error
       expect(result).toBe('');
@@ -795,6 +810,7 @@ Build with \`npm run build\`.`);
     });
 
     it('includes AGENTS.md content when file exists', async () => {
+      mockGetWorkspaceRoot.mockReturnValue('/workspace/root');
       mockAccess.mockImplementation((path) => {
         if (typeof path === 'string' && path.endsWith('AGENTS.md') && !path.includes('.agent')) {
           return Promise.resolve(undefined);
@@ -816,7 +832,8 @@ Build with \`npm run build\`.`);
         includeEnvironment: false,
         includeProviderLayer: false,
         includeAgentsMd: true,
-        workingDir: '/test/project',
+        // workingDir is passed but ignored - loadAgentsMd always uses workspace root
+        workingDir: '/some/other/dir',
       });
 
       // AGENTS.md content is inserted as-is without a wrapper header
@@ -825,6 +842,7 @@ Build with \`npm run build\`.`);
     });
 
     it('skips AGENTS.md when includeAgentsMd is false', async () => {
+      mockGetWorkspaceRoot.mockReturnValue('/workspace/root');
       mockAccess.mockImplementation((path) => {
         if (typeof path === 'string' && path.endsWith('AGENTS.md')) {
           return Promise.resolve(undefined);
@@ -846,7 +864,6 @@ Build with \`npm run build\`.`);
         includeEnvironment: false,
         includeProviderLayer: false,
         includeAgentsMd: false,
-        workingDir: '/test/project',
       });
 
       expect(result).not.toContain('AGENTS.md Guidelines');
@@ -871,6 +888,7 @@ Build with \`npm run build\`.`);
     });
 
     it('places AGENTS.md content after environment section and before user override', async () => {
+      mockGetWorkspaceRoot.mockReturnValue('/workspace/root');
       mockAccess.mockImplementation((path) => {
         if (typeof path === 'string' && path.endsWith('AGENTS.md') && !path.includes('.agent')) {
           return Promise.resolve(undefined);
@@ -892,7 +910,6 @@ Build with \`npm run build\`.`);
         includeEnvironment: true,
         includeProviderLayer: false,
         includeAgentsMd: true,
-        workingDir: '/test/project',
         userOverride: 'USER_OVERRIDE_CONTENT',
       });
 
@@ -907,6 +924,7 @@ Build with \`npm run build\`.`);
     });
 
     it('logs AGENTS.md loading via onDebug callback', async () => {
+      mockGetWorkspaceRoot.mockReturnValue('/workspace/root');
       mockAccess.mockImplementation((path) => {
         if (typeof path === 'string' && path.endsWith('AGENTS.md') && !path.includes('.agent')) {
           return Promise.resolve(undefined);
@@ -933,7 +951,6 @@ Build with \`npm run build\`.`);
         includeEnvironment: false,
         includeProviderLayer: false,
         includeAgentsMd: true,
-        workingDir: '/test/project',
         onDebug,
       });
 
