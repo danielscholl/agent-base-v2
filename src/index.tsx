@@ -231,7 +231,7 @@ if (cli.flags.sandbox) {
 
     const result = await executeSandbox({
       agentArgs: process.argv.slice(2),
-      configPath: `${process.env['HOME'] ?? ''}/.agent`,
+      // configPath is auto-detected from AGENT_HOME or defaults to ~/.agent
       onDebug: debug,
     });
 

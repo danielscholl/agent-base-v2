@@ -286,6 +286,25 @@ describe('executor', () => {
       expect(cmd[hostnameIndex + 1]).toBe('agent-sandbox');
     });
 
+    it('uses AGENT_HOME env var for config path', async () => {
+      process.env['AGENT_HOME'] = '/custom/agent/home';
+
+      const { buildDockerCommand } = await import('../executor.js');
+      const cmd = buildDockerCommand({});
+
+      expect(cmd).toContain('/custom/agent/home:/home/agent/.agent');
+      delete process.env['AGENT_HOME'];
+    });
+
+    it('sets AGENT_HOME in container', async () => {
+      const { buildDockerCommand } = await import('../executor.js');
+      const cmd = buildDockerCommand({});
+
+      const envIndex = cmd.indexOf('AGENT_HOME=/home/agent/.agent');
+      expect(envIndex).toBeGreaterThan(-1);
+      expect(cmd[envIndex - 1]).toBe('-e');
+    });
+
     it('omits -it when interactive is false', async () => {
       const { buildDockerCommand } = await import('../executor.js');
       const cmd = buildDockerCommand({

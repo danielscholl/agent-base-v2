@@ -39,6 +39,8 @@ const PASSTHROUGH_ENV_VARS = [
   // Telemetry
   'OTEL_EXPORTER_OTLP_ENDPOINT',
   'APPLICATIONINSIGHTS_CONNECTION_STRING',
+  // Agent configuration
+  'AGENT_WORKSPACE_ROOT', // Host workspace root (informational, overridden in container)
 ];
 
 /**
@@ -236,8 +238,9 @@ export async function ensureSandboxImage(
 export function buildDockerCommand(options: SandboxOptions): string[] {
   const image = options.image ?? process.env['AGENT_SANDBOX_IMAGE'] ?? DEFAULT_SANDBOX_IMAGE;
   const workspacePath = options.workspacePath ?? process.cwd();
-  const homeDir = process.env['HOME'] ?? '';
-  const configPath = options.configPath ?? `${homeDir}/.agent`;
+  // Support custom AGENT_HOME, fall back to ~/.agent
+  const agentHome = process.env['AGENT_HOME'] ?? `${process.env['HOME'] ?? ''}/.agent`;
+  const configPath = options.configPath ?? agentHome;
   // Default to interactive only if stdin is a TTY
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   const interactive = options.interactive ?? process.stdin.isTTY ?? false;
@@ -255,6 +258,9 @@ export function buildDockerCommand(options: SandboxOptions): string[] {
 
   // Mount config directory (read-write for sessions/plugins)
   cmd.push('-v', `${configPath}:/home/agent/.agent`);
+
+  // Pass AGENT_HOME so container knows where config is mounted
+  cmd.push('-e', 'AGENT_HOME=/home/agent/.agent');
 
   // Pass through environment variables
   for (const envVar of PASSTHROUGH_ENV_VARS) {
@@ -355,8 +361,11 @@ export async function executeSandbox(
   debug(`Running: ${cmd.join(' ')}`);
 
   // Determine timeout: no timeout for interactive sessions, 30 min for non-interactive
+  // Check if --prompt/-p was passed (non-interactive even with TTY)
+  const hasPromptArg =
+    options.agentArgs?.some((arg) => arg === '-p' || arg === '--prompt') ?? false;
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  const isInteractive = options.interactive ?? process.stdin.isTTY ?? false;
+  const isInteractive = !hasPromptArg && (options.interactive ?? process.stdin.isTTY ?? false);
   const timeoutMs = options.timeout ?? (isInteractive ? undefined : 30 * 60 * 1000);
 
   const result = await spawnProcess(cmd, {

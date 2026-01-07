@@ -89,6 +89,10 @@ The following environment variables are automatically passed through to the sand
 - `OTEL_EXPORTER_OTLP_ENDPOINT`
 - `APPLICATIONINSIGHTS_CONNECTION_STRING`
 
+**Agent Configuration:**
+- `AGENT_HOME` - Custom agent home directory (automatically mounted and mapped)
+- `AGENT_WORKSPACE_ROOT` - Passed through for reference (overridden to `/workspace` in container)
+
 ## Custom Sandbox Image
 
 Override the default image name:
@@ -192,3 +196,8 @@ If the agent can't authenticate with your LLM provider:
 - **Local network**: Container has its own network namespace
 - **Docker-in-Docker**: Running Docker commands inside the sandbox requires additional configuration
 - **Performance**: Container startup adds ~1-2 seconds of overhead
+- **Workspace narrowing**: The sandbox always sets `AGENT_WORKSPACE_ROOT=/workspace`, limiting file access to the mounted directory (your cwd). This is intentional for security isolation, even if you have a broader workspace configured on the host.
+- **Linux UID/GID**: The container runs as user `agent` (UID 1000). On Linux hosts where your user has a different UID, mounted directories may have permission issues. Workaround: run with explicit user mapping:
+  ```bash
+  docker run --user $(id -u):$(id -g) ...
+  ```
