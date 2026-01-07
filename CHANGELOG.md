@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.18](https://github.com/danielscholl/agent-harness/compare/v0.3.17...v0.3.18) (2026-01-07)
+
+
+### Features
+
+* **sandbox:** enforce TTY for interactive sandbox and adjust docker run logic ([ffb6bb8](https://github.com/danielscholl/agent-harness/commit/ffb6bb81197c313cf2c776e42d43e5afd0fdeedc))
+* **sandbox:** enhance sandbox interactive mode and workspace handling ([ffb6bb8](https://github.com/danielscholl/agent-harness/commit/ffb6bb81197c313cf2c776e42d43e5afd0fdeedc))
+* **sandbox:** resolve workspace root from AGENT_WORKSPACE_ROOT and expand ~ ([ffb6bb8](https://github.com/danielscholl/agent-harness/commit/ffb6bb81197c313cf2c776e42d43e5afd0fdeedc))
+
+
+### Bug Fixes
+
+* **sandbox:** enhance interactive mode and workspace handling ([e1fa49d](https://github.com/danielscholl/agent-harness/commit/e1fa49d03795a9a000ef07ef688bfc4557a7b48d))
+* **sandbox:** improve interactivity detection and path expansion ([274bc3e](https://github.com/danielscholl/agent-harness/commit/274bc3e0412b0a52178adba2e84e3249ed039805))
+
 ## [0.3.17](https://github.com/danielscholl/agent-harness/compare/v0.3.16...v0.3.17) (2026-01-07)
 
 
