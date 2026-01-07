@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.11](https://github.com/danielscholl/agent-base-v2/compare/v0.3.10...v0.3.11) (2026-01-07)
+
+
+### Features
+
+* **cli:** add custom slash commands system ([7631da0](https://github.com/danielscholl/agent-base-v2/commit/7631da0a5babcc487665fc4fed0b8a5e6ed790d1))
+* **custom:** add slash command system with discovery and execution ([462ea1b](https://github.com/danielscholl/agent-base-v2/commit/462ea1b1addefdb43fbaed7a62c68e3e2bdfcd3f))
+* **executor:** enforce absolute cwd and block path traversal bash cmd ([c90dbcd](https://github.com/danielscholl/agent-base-v2/commit/c90dbcdfdbc04e3d3ae4ba23b30a2b93a105fe11))
+* **executor:** improve argument parsing with backslash escapes ([c0b2311](https://github.com/danielscholl/agent-base-v2/commit/c0b231137f256a108683c0608d1b5e813e117a00))
+
+
+### Code Refactoring
+
+* harden custom command loading and rename bundled commands dir ([b64c1b3](https://github.com/danielscholl/agent-base-v2/commit/b64c1b3d779e0a5e3c681054fad0c912884beea9))
+
 ## [0.3.10](https://github.com/danielscholl/agent-base-v2/compare/v0.3.9...v0.3.10) (2026-01-06)
 
 
