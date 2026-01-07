@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.3.15](https://github.com/danielscholl/agent-harness/compare/v0.3.14...v0.3.15) (2026-01-07)
+
+
+### Features
+
+* **sandbox:** add Docker sandbox support with auto-pull ([05bf967](https://github.com/danielscholl/agent-harness/commit/05bf96715ea1b1e9e04dca2ba26c0d8f57a4a621))
+* **sandbox:** adopt AGENT_HOME for config path and container env ([434159d](https://github.com/danielscholl/agent-harness/commit/434159d9dd3678210b8313dc0c537b2ed2fd88c3))
+* **sandbox:** enable read-write config mount and AGENT_WORKSPACE_ROOT ([5b50801](https://github.com/danielscholl/agent-harness/commit/5b50801ca3f91f13f085a638516d0a6b11b2b44d))
+* **sandbox:** enhance image handling and build configurability ([aed4a39](https://github.com/danielscholl/agent-harness/commit/aed4a39aff591101d4ea9d8a2343af168921d61d))
+* **sandbox:** introduce docker sandbox support for agent ([124e19a](https://github.com/danielscholl/agent-harness/commit/124e19abb62d088c0c8abe281d85ad5731b6ce2b))
+* **sandbox:** support AGENT_SANDBOX_IMAGE override and default path tweaks ([bad3b6b](https://github.com/danielscholl/agent-harness/commit/bad3b6b64799e7beeca4429a00a08fcff9b74fb5))
+
+
+### Documentation
+
+* **sandbox:** document env var usage and updated defaults ([bad3b6b](https://github.com/danielscholl/agent-harness/commit/bad3b6b64799e7beeca4429a00a08fcff9b74fb5))
+
+
+### Code Refactoring
+
+* rebrand from agent-base-v2 to ai-harness (Agent Harness) ([d131b4b](https://github.com/danielscholl/agent-harness/commit/d131b4b6c11c652d11bddef8bf8d960df0e0b47a))
+* **rename:** update references from agent-base-v2 to ai-harness ([7d09b32](https://github.com/danielscholl/agent-harness/commit/7d09b320d64f493cc60c19f2d870be7e96486857))
+
 ## [0.3.14](https://github.com/danielscholl/agent-base-v2/compare/v0.3.13...v0.3.14) (2026-01-07)
 
 
