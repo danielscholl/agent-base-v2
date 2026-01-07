@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.17](https://github.com/danielscholl/agent-harness/compare/v0.3.16...v0.3.17) (2026-01-07)
+
+
+### Features
+
+* **subprocess:** add stdin support for interactive sandbox ([54fca65](https://github.com/danielscholl/agent-harness/commit/54fca658281a9e719a645cb715184384191fd45c))
+* **subprocess:** extend spawn options with stdin for bun/node ([3b62c89](https://github.com/danielscholl/agent-harness/commit/3b62c8926c78db5b496270840437935f6039b615))
+
+
+### Code Refactoring
+
+* **subprocess:** use mapStdioOption for stdio mapping ([77a417c](https://github.com/danielscholl/agent-harness/commit/77a417c3452d68778fccd774ec58ec8be0854916))
+
+
+### Tests
+
+* **subprocess:** cover interactive and non-interactive stdio behavior in spawn ([77a417c](https://github.com/danielscholl/agent-harness/commit/77a417c3452d68778fccd774ec58ec8be0854916))
+
 ## [0.3.16](https://github.com/danielscholl/agent-harness/compare/v0.3.15...v0.3.16) (2026-01-07)
 
 
