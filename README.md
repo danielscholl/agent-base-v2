@@ -1,6 +1,8 @@
-# Agent Base v2
+# Agent Harness
 
-A TypeScript agent framework + CLI for building conversational AI agents.
+**The rig. Not the driver.**
+
+A TypeScript runtime for building, running, and composing AI agents with any LLM.
 
 [![Bun 1.3.4+](https://img.shields.io/badge/bun-1.3.4+-black.svg)](https://bun.sh/)
 [![TypeScript 5.x](https://img.shields.io/badge/typescript-5.x-blue.svg)](https://www.typescriptlang.org/)
@@ -8,13 +10,39 @@ A TypeScript agent framework + CLI for building conversational AI agents.
 
 ---
 
-## Why Agent Base v2?
+## What is a Harness?
 
-- **Multi-provider LLM support** — local + cloud with runtime switching
-- **Session persistence + conversation memory** — in-memory
-- **Observability built in** — trace execution, tools, and timing
-- **Extensible toolsets** — add agent capabilities easily
-- **CLI-first workflow** — interactive use and scripting
+A harness is infrastructure — it constrains, orchestrates, and connects an AI model to tools, policies, and workflows. It is not intelligent on its own; it channels intelligence safely and repeatably.
+
+| | Harness (this project) | Agent (the LLM) |
+|---|------------------------|-----------------|
+| Decides actions | No | Yes |
+| Enforces safety | Yes | No |
+| Has goals | No | Yes (when configured) |
+| Ships with behavior | No | Yes (when configured) |
+
+**Agent Harness is the rig that runs agents. The LLM is the driver.**
+
+---
+
+## What You Get
+
+**The harness provides:**
+
+- **Multi-provider LLM support** — swap between local and cloud models at runtime
+- **Tool execution pipeline** — filesystem, shell, search, and custom tools
+- **Session persistence** — conversation memory across interactions
+- **Observability** — tracing, timing, and execution logs via OpenTelemetry
+- **Extension points** — skills, commands, and workflows
+- **CLI-first interface** — interactive use and scripting
+
+**The harness does NOT provide:**
+
+- Goals or objectives
+- Domain-specific behavior
+- Autonomous planning out of the box
+
+The power comes when you configure it: add AGENTS.md, custom commands, and skills. Then it becomes whatever you need.
 
 ---
 
@@ -51,13 +79,13 @@ Goodbye!
 **macOS / Linux / WSL**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/danielscholl/agent-base-v2/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/danielscholl/ai-harness/main/install.sh | bash
 ```
 
 **Windows PowerShell**
 
 ```powershell
-irm https://raw.githubusercontent.com/danielscholl/agent-base-v2/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/danielscholl/ai-harness/main/install.ps1 | iex
 ```
 
 ---
@@ -88,7 +116,7 @@ agent -p "Say hello to Alice"
 
 ## Configuration
 
-Agent uses `~/.agent/config.yaml` to manage providers, memory, and observability.
+The harness uses `~/.agent/config.yaml` to manage providers, memory, and observability.
 
 ```bash
 # View current configuration
@@ -144,6 +172,26 @@ agent --provider anthropic --model claude-sonnet-4-5-20250929 -p "Hello"
 
 ---
 
+## Making it Yours
+
+Agent Harness ships neutral. Here's how to configure it:
+
+### AGENTS.md
+
+Create an `AGENTS.md` file in your workspace root to define agent behavior, goals, and constraints. The harness discovers and injects this into the system prompt.
+
+### Custom Commands
+
+Add slash commands in `~/.agent/commands/` to create reusable workflows. Commands are markdown files with YAML frontmatter.
+
+### Skills
+
+Install skills to add capabilities. Skills use progressive disclosure — they inject documentation only when relevant to the user's query.
+
+See [Architecture](docs/architecture/README.md) for details.
+
+---
+
 ## Uninstall
 
 **macOS / Linux / WSL**
@@ -159,7 +207,7 @@ rm -rf ~/.agent  # optional: remove config
 ```powershell
 Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\agent.exe" -Force -ErrorAction SilentlyContinue
 Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\agent.cmd" -Force -ErrorAction SilentlyContinue
-Remove-Item "$env:LOCALAPPDATA\Programs\agent-base-v2" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item "$env:LOCALAPPDATA\Programs\ai-harness" -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item "$env:USERPROFILE\.agent" -Recurse -Force -ErrorAction SilentlyContinue  # removes config, assets, and sessions
 ```
 

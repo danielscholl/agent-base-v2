@@ -1,4 +1,4 @@
-# Agent Base v2 Container Image
+# Agent Harness Container Image
 #
 # Build options:
 #   docker build -t agent .                          # Default: try binary, fallback to source
@@ -66,7 +66,7 @@ RUN case "${TARGETARCH}" in \
 
 # Get version and try to download
 RUN . /download/env && \
-    REPO="danielscholl/agent-base-v2" && \
+    REPO="danielscholl/ai-harness" && \
     if [ "${VERSION}" = "latest" ]; then \
       VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null | jq -r '.tag_name // empty') || true; \
     fi && \

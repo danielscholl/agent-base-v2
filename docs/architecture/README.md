@@ -1,4 +1,4 @@
-# Agent Framework Architecture
+# Agent Harness Architecture
 
 > **Status:** Current
 > **Source of truth:** Architecture documents in this directory; code in `src/`

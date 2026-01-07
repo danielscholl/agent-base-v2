@@ -1,6 +1,6 @@
 # Project Constitution
 
-This file provides governance and guidance for AI coding assistants working on the TypeScript agent framework.
+This file provides governance and guidance for AI coding assistants working on the Agent Harness — a TypeScript runtime for building, running, and composing AI agents.
 
 ---
 
@@ -33,7 +33,7 @@ This file provides governance and guidance for AI coding assistants working on t
 ## Core Principles
 
 ### 0. CONTROLLED COMPLEXITY
-This is a general-purpose agent framework, not a minimal LLM shell:
+This is an agent harness (runtime infrastructure), not a minimal LLM shell:
 - The Agent Layer orchestrates multi-provider access, skills, and memory
 - We accept more structure than a minimal shell requires
 - Delete scaffolding when LLM improvements make it unnecessary

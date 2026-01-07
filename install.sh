@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Agent Base v2 Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/danielscholl/agent-base-v2/main/install.sh | bash
+# Agent Harness Installer
+# Usage: curl -fsSL https://raw.githubusercontent.com/danielscholl/ai-harness/main/install.sh | bash
 #
 # Options:
 #   --source    Force build from source (skip binary download)
@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-REPO="danielscholl/agent-base-v2"
+REPO="danielscholl/ai-harness"
 REPO_URL="https://github.com/${REPO}"
 INSTALL_DIR="${HOME}/.agent"
 BIN_DIR="${HOME}/.local/bin"
@@ -284,7 +284,7 @@ verify_install() {
 # Main
 main() {
   echo ""
-  info "Agent Base v2 Installer"
+  info "Agent Harness Installer"
   echo ""
 
   # Early PATH check - warn user before installation if BIN_DIR not in PATH

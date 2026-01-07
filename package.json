@@ -1,7 +1,7 @@
 {
-  "name": "agent-base-v2",
+  "name": "ai-harness",
   "version": "0.3.14",
-  "description": "TypeScript agent framework with multi-provider LLM support",
+  "description": "Agent Harness - A TypeScript runtime for building, running, and composing AI agents",
   "type": "module",
   "main": "dist/index.js",
   "bin": {

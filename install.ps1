@@ -1,5 +1,5 @@
-# Agent Base v2 Installer for Windows PowerShell
-# Usage: irm https://raw.githubusercontent.com/danielscholl/agent-base-v2/main/install.ps1 | iex
+# Agent Harness Installer for Windows PowerShell
+# Usage: irm https://raw.githubusercontent.com/danielscholl/ai-harness/main/install.ps1 | iex
 #
 # Options (when running locally):
 #   .\install.ps1 -Source        # Force build from source
@@ -12,9 +12,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$REPO = "danielscholl/agent-base-v2"
+$REPO = "danielscholl/ai-harness"
 $REPO_URL = "https://github.com/$REPO"
-$INSTALL_DIR = "$env:LOCALAPPDATA\Programs\agent-base-v2"
+$INSTALL_DIR = "$env:LOCALAPPDATA\Programs\ai-harness"
 $BIN_DIR = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
 $AGENT_HOME = "$env:USERPROFILE\.agent"
 
@@ -270,7 +270,7 @@ function Test-Installation {
 # Main
 function Main {
     Write-Host ""
-    Write-Info "Agent Base v2 Installer"
+    Write-Info "Agent Harness Installer"
     Write-Host ""
 
     Test-Platform

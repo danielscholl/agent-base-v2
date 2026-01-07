@@ -1,13 +1,13 @@
 # Contributing
 
-Development guide for Agent Base v2 contributors.
+Development guide for Agent Harness contributors.
 
 ## Quick Start
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/danielscholl/agent-base-v2.git
-cd agent-base-v2
+git clone https://github.com/danielscholl/ai-harness.git
+cd ai-harness
 bun install
 
 # 2. Verify setup
