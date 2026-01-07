@@ -33,7 +33,7 @@
             "model": {
               "type": "string",
               "description": "Model name to use",
-              "default": "qwen3:latest"
+              "default": "qwen3-coder:latest"
             },
             "supportsFunctionCalling": {
               "type": "boolean",

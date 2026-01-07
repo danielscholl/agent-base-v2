@@ -36,10 +36,10 @@ describe('createLocalClient', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result).toBeDefined();
-      expect(result.message).toContain('qwen3:latest');
+      expect(result.message).toContain('qwen3-coder:latest');
     }
     expect(mockChatOpenAI).toHaveBeenCalledWith({
-      model: 'qwen3:latest',
+      model: 'qwen3-coder:latest',
       openAIApiKey: 'not-needed',
       configuration: { baseURL: 'http://localhost:11434/v1' },
     });
@@ -48,12 +48,12 @@ describe('createLocalClient', () => {
   it('creates ChatOpenAI with custom baseUrl', async () => {
     const result = await createLocalClient({
       baseUrl: 'http://localhost:11434/v1',
-      model: 'qwen3:latest',
+      model: 'qwen3-coder:latest',
     });
 
     expect(result.success).toBe(true);
     expect(mockChatOpenAI).toHaveBeenCalledWith({
-      model: 'qwen3:latest',
+      model: 'qwen3-coder:latest',
       openAIApiKey: 'not-needed',
       configuration: { baseURL: 'http://localhost:11434/v1' },
     });
@@ -91,10 +91,10 @@ describe('createLocalClient', () => {
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.message).toContain('qwen3:latest');
+      expect(result.message).toContain('qwen3-coder:latest');
     }
     expect(mockChatOpenAI).toHaveBeenCalledWith({
-      model: 'qwen3:latest',
+      model: 'qwen3-coder:latest',
       openAIApiKey: 'not-needed',
       configuration: { baseURL: 'http://localhost:11434/v1' },
     });
@@ -148,12 +148,12 @@ describe('createLocalClient', () => {
   it('works with Ollama-style baseUrl', async () => {
     const result = await createLocalClient({
       baseUrl: 'http://localhost:11434/v1',
-      model: 'qwen3:latest',
+      model: 'qwen3-coder:latest',
     });
 
     expect(result.success).toBe(true);
     expect(mockChatOpenAI).toHaveBeenCalledWith({
-      model: 'qwen3:latest',
+      model: 'qwen3-coder:latest',
       openAIApiKey: 'not-needed',
       configuration: { baseURL: 'http://localhost:11434/v1' },
     });
@@ -195,10 +195,10 @@ describe('createLocalClient', () => {
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.message).toContain('qwen3:latest');
+      expect(result.message).toContain('qwen3-coder:latest');
     }
     expect(mockChatOpenAI).toHaveBeenCalledWith({
-      model: 'qwen3:latest',
+      model: 'qwen3-coder:latest',
       openAIApiKey: 'not-needed',
       configuration: { baseURL: 'http://localhost:11434/v1' },
     });
@@ -212,10 +212,10 @@ describe('createLocalClient', () => {
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.message).toContain('qwen3:latest');
+      expect(result.message).toContain('qwen3-coder:latest');
     }
     expect(mockChatOpenAI).toHaveBeenCalledWith({
-      model: 'qwen3:latest',
+      model: 'qwen3-coder:latest',
       openAIApiKey: 'not-needed',
       configuration: { baseURL: 'http://localhost:11434/v1' },
     });

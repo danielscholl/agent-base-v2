@@ -14,7 +14,7 @@ const LOCAL_BACKENDS = [
     name: 'ollama',
     displayName: 'Ollama',
     baseUrl: 'http://localhost:11434/v1',
-    defaultModel: 'qwen3:latest',
+    defaultModel: 'qwen3-coder:latest',
     description: 'Popular local LLM runner',
     note: 'Ensure Ollama is running: ollama serve',
   },
