@@ -442,5 +442,97 @@ describe('executor', () => {
       expect(debugMessages.some((m) => m.includes('Docker CLI'))).toBe(true);
       expect(debugMessages.some((m) => m.includes('Docker daemon'))).toBe(true);
     });
+
+    it('passes stdin: "inherit" to spawnProcess in interactive mode', async () => {
+      spawnProcess
+        .mockResolvedValueOnce(mockResult('Docker version', '', 0))
+        .mockResolvedValueOnce(mockResult('', '', 0))
+        .mockResolvedValueOnce(mockResult('[{}]', '', 0))
+        .mockResolvedValueOnce(mockResult('', '', 0));
+
+      const { executeSandbox } = await import('../executor.js');
+      await executeSandbox({
+        interactive: true,
+      });
+
+      // Check the final spawnProcess call (4th call - the Docker run command)
+      expect(spawnProcess).toHaveBeenCalledTimes(4);
+      const dockerRunCall = spawnProcess.mock.calls[3];
+      expect(dockerRunCall).toBeDefined();
+      expect(dockerRunCall[1]).toMatchObject({
+        stdin: 'inherit',
+        stdout: 'inherit',
+        stderr: 'inherit',
+      });
+    });
+
+    it('passes stdin: "ignore" to spawnProcess in non-interactive mode', async () => {
+      spawnProcess
+        .mockResolvedValueOnce(mockResult('Docker version', '', 0))
+        .mockResolvedValueOnce(mockResult('', '', 0))
+        .mockResolvedValueOnce(mockResult('[{}]', '', 0))
+        .mockResolvedValueOnce(mockResult('', '', 0));
+
+      const { executeSandbox } = await import('../executor.js');
+      await executeSandbox({
+        interactive: false,
+      });
+
+      // Check the final spawnProcess call (4th call - the Docker run command)
+      expect(spawnProcess).toHaveBeenCalledTimes(4);
+      const dockerRunCall = spawnProcess.mock.calls[3];
+      expect(dockerRunCall).toBeDefined();
+      expect(dockerRunCall[1]).toMatchObject({
+        stdin: 'ignore',
+        stdout: 'inherit',
+        stderr: 'inherit',
+      });
+    });
+
+    it('passes stdin: "ignore" when --prompt flag is present (non-interactive)', async () => {
+      spawnProcess
+        .mockResolvedValueOnce(mockResult('Docker version', '', 0))
+        .mockResolvedValueOnce(mockResult('', '', 0))
+        .mockResolvedValueOnce(mockResult('[{}]', '', 0))
+        .mockResolvedValueOnce(mockResult('', '', 0));
+
+      const { executeSandbox } = await import('../executor.js');
+      await executeSandbox({
+        agentArgs: ['--prompt', 'Hello world'],
+      });
+
+      // Check the final spawnProcess call (4th call - the Docker run command)
+      expect(spawnProcess).toHaveBeenCalledTimes(4);
+      const dockerRunCall = spawnProcess.mock.calls[3];
+      expect(dockerRunCall).toBeDefined();
+      expect(dockerRunCall[1]).toMatchObject({
+        stdin: 'ignore',
+        stdout: 'inherit',
+        stderr: 'inherit',
+      });
+    });
+
+    it('passes stdin: "ignore" when -p flag is present (non-interactive)', async () => {
+      spawnProcess
+        .mockResolvedValueOnce(mockResult('Docker version', '', 0))
+        .mockResolvedValueOnce(mockResult('', '', 0))
+        .mockResolvedValueOnce(mockResult('[{}]', '', 0))
+        .mockResolvedValueOnce(mockResult('', '', 0));
+
+      const { executeSandbox } = await import('../executor.js');
+      await executeSandbox({
+        agentArgs: ['-p', 'Hello world'],
+      });
+
+      // Check the final spawnProcess call (4th call - the Docker run command)
+      expect(spawnProcess).toHaveBeenCalledTimes(4);
+      const dockerRunCall = spawnProcess.mock.calls[3];
+      expect(dockerRunCall).toBeDefined();
+      expect(dockerRunCall[1]).toMatchObject({
+        stdin: 'ignore',
+        stdout: 'inherit',
+        stderr: 'inherit',
+      });
+    });
   });
 });

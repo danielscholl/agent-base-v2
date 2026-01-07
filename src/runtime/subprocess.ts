@@ -192,6 +192,17 @@ async function spawnWithBun(
 }
 
 /**
+ * Map stdio option to Node.js child_process stdio value.
+ */
+function mapStdioOption(
+  option: 'pipe' | 'inherit' | 'ignore' | undefined
+): 'pipe' | 'inherit' | 'ignore' {
+  if (option === 'inherit') return 'inherit';
+  if (option === 'pipe') return 'pipe';
+  return 'ignore';
+}
+
+/**
  * Spawn using Node child_process (fallback/test path).
  */
 function spawnWithNode(
@@ -212,9 +223,9 @@ function spawnWithNode(
 
     const proc = nodeSpawn(command, args, {
       stdio: [
-        options.stdin === 'inherit' ? 'inherit' : options.stdin === 'pipe' ? 'pipe' : 'ignore',
-        options.stdout === 'inherit' ? 'inherit' : options.stdout === 'pipe' ? 'pipe' : 'ignore',
-        options.stderr === 'inherit' ? 'inherit' : options.stderr === 'pipe' ? 'pipe' : 'ignore',
+        mapStdioOption(options.stdin),
+        mapStdioOption(options.stdout),
+        mapStdioOption(options.stderr),
       ],
       cwd: options.cwd,
       env: options.env ? { ...process.env, ...options.env } : undefined,
