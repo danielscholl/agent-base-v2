@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.14](https://github.com/danielscholl/agent-base-v2/compare/v0.3.13...v0.3.14) (2026-01-07)
+
+
+### Features
+
+* **skills:** add skill dependency validation ([ceda87a](https://github.com/danielscholl/agent-base-v2/commit/ceda87a2c1de654d2c043737c87e5d2e155e6ea3))
+* **skills:** implement dependency checks and unavailable marking ([55f9a2d](https://github.com/danielscholl/agent-base-v2/commit/55f9a2dc55bb3fdadb0f5483a372f7b4e247e491))
+* **skills:** introduce getSkillStatus and unify skill display ([3240d1d](https://github.com/danielscholl/agent-base-v2/commit/3240d1dd6c185a7e64f9695744d2cfc6eb07f448))
+
+
+### Bug Fixes
+
+* **skills:** filter out unavailable and disabled skills in XML prompt ([3240d1d](https://github.com/danielscholl/agent-base-v2/commit/3240d1dd6c185a7e64f9695744d2cfc6eb07f448))
+
+
+### Code Refactoring
+
+* **skillShowHandler:** use getSkillStatus for all skill lists ([3240d1d](https://github.com/danielscholl/agent-base-v2/commit/3240d1dd6c185a7e64f9695744d2cfc6eb07f448))
+
 ## [0.3.13](https://github.com/danielscholl/agent-base-v2/compare/v0.3.12...v0.3.13) (2026-01-07)
 
 
