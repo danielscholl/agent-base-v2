@@ -3,10 +3,29 @@
  * Handles launching the agent inside a Docker container for isolation.
  */
 
+import * as path from 'node:path';
+import * as os from 'node:os';
 import { spawnProcess } from '../runtime/subprocess.js';
 import { detectContainer, isAgentSandbox } from './detection.js';
 import { VERSION } from '../cli/version.js';
 import type { SandboxOptions, SandboxResponse, SandboxStatus, SandboxErrorCode } from './types.js';
+
+/**
+ * Get workspace root for sandbox mounting.
+ * Priority: AGENT_WORKSPACE_ROOT env var > process.cwd()
+ *
+ * This is a simplified version that doesn't load config (sandbox runs before config is loaded).
+ * It respects the env var which is the authoritative source for workspace root.
+ */
+function getSandboxWorkspaceRoot(): string {
+  const envRoot = process.env['AGENT_WORKSPACE_ROOT'];
+  if (envRoot !== undefined && envRoot !== '') {
+    // Expand ~ to home directory
+    const expanded = envRoot.startsWith('~') ? path.join(os.homedir(), envRoot.slice(1)) : envRoot;
+    return path.resolve(expanded);
+  }
+  return process.cwd();
+}
 
 /**
  * Default sandbox image from GitHub Container Registry.
@@ -261,17 +280,24 @@ export function buildDockerCommand(options: SandboxOptions): string[] {
   const image =
     options.image ??
     (envImage !== undefined && envImage.trim() !== '' ? envImage : DEFAULT_SANDBOX_IMAGE);
-  const workspacePath = options.workspacePath ?? process.cwd();
+  // Use workspace root from env var if set, otherwise cwd
+  const workspacePath = options.workspacePath ?? getSandboxWorkspaceRoot();
   // Support custom AGENT_HOME, fall back to ~/.agent
   const agentHome = process.env['AGENT_HOME'] ?? `${process.env['HOME'] ?? '/tmp'}/.agent`;
   const configPath = options.configPath ?? agentHome;
-  // Default to interactive only if stdin is a TTY
+
+  // Determine interactivity: check for -p/--prompt flag which forces non-interactive mode
+  // This must align with the stdin handling logic in executeSandbox
+  const hasPromptArg =
+    options.agentArgs?.some((arg) => arg === '-p' || arg === '--prompt') ?? false;
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  const interactive = options.interactive ?? process.stdin.isTTY ?? false;
+  const stdinIsTTY = process.stdin.isTTY ?? false;
+  const interactive = !hasPromptArg && (options.interactive ?? stdinIsTTY);
 
   const cmd: string[] = ['docker', 'run', '--rm'];
 
-  // Interactive mode (only when TTY is available)
+  // Interactive mode: -it for TTY allocation and stdin connection
+  // Only add when truly interactive (not when -p flag is present)
   if (interactive) {
     cmd.push('-it');
   }
