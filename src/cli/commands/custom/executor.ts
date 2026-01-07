@@ -315,12 +315,13 @@ async function runBashCommand(command: string, cwd: string, timeoutMs: number): 
 
   return new Promise((resolve, reject) => {
     const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
-    const shellArgs = process.platform === 'win32' ? ['/c', command] : ['-c', command];
+    // Run an interactive shell and feed the command via stdin instead of -c /c
+    const shellArgs = process.platform === 'win32' ? [] : ['-s'];
 
     const proc = spawn(shell, shellArgs, {
       cwd,
       timeout: timeoutMs,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
 
     let stdout = '';
@@ -345,6 +346,12 @@ async function runBashCommand(command: string, cwd: string, timeoutMs: number): 
         resolve(stdout);
       } else {
         const exitCode = code !== null ? String(code) : 'unknown';
+    // Write the command to the shell's stdin and then close it
+    if (proc.stdin) {
+      proc.stdin.write(command);
+      proc.stdin.end();
+    }
+
         reject(new Error(stderr !== '' ? stderr : `Command exited with code ${exitCode}`));
       }
     });
