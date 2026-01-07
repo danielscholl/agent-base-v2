@@ -390,7 +390,7 @@ describe('Provider Setup Wizards', () => {
 
       expect(result.success).toBe(true);
       expect(result.config?.baseUrl).toBe('http://localhost:11434/v1');
-      expect(result.config?.model).toBe('qwen3:latest');
+      expect(result.config?.model).toBe('qwen3-coder:latest');
     });
 
     it('configures custom backend with URL and model', async () => {
