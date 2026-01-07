@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.13](https://github.com/danielscholl/agent-base-v2/compare/v0.3.12...v0.3.13) (2026-01-07)
+
+
+### Bug Fixes
+
+* **installer:** include bundled commands in release and install ([653bce6](https://github.com/danielscholl/agent-base-v2/commit/653bce6a9717ac123e81bc6e955637db223e794d))
+
+
+### Build System
+
+* **installer:** include _bundled_commands in release artifacts ([4bd640e](https://github.com/danielscholl/agent-base-v2/commit/4bd640ee8b0636206979a82bb4220d7d6a9aef69))
+
 ## [0.3.12](https://github.com/danielscholl/agent-base-v2/compare/v0.3.11...v0.3.12) (2026-01-07)
 
 
