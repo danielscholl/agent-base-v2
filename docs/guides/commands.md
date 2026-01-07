@@ -20,8 +20,8 @@ Custom commands extend the agent with reusable prompts that execute in response 
 │   Bundled         User               Project                    │
 │   Commands    →   Commands       →   Commands                   │
 │                                                                 │
-│   src/commands/   ~/.agent/          .agent/commands/           │
-│                   commands/                                     │
+│   src/_bundled_commands/  ~/.agent/   .agent/commands/          │
+│                           commands/                             │
 │                                                                 │
 │   "Built-in       "Personal          "Project-specific          │
 │    defaults"       workflows"         conventions"              │
@@ -56,7 +56,7 @@ When custom commands share a name, later sources **replace** earlier ones—proj
 
 | Layer | Location | Autocomplete | Purpose |
 |-------|----------|--------------|---------|
-| **Bundled** | `src/commands/*.md` | `(bundled)` | Framework defaults |
+| **Bundled** | `src/_bundled_commands/*.md` | `(bundled)` | Framework defaults |
 | **User** | `~/.agent/commands/*.md` | `(user)` | Personal workflows |
 | **Project** | `.agent/commands/*.md` | `(project)` | Team-shared commands |
 
@@ -78,8 +78,8 @@ When custom commands share a name, later sources **replace** earlier ones—proj
 │   └── migrate.md          # Database migration workflow
 └── deploy.md               # Overrides user deploy.md
 
-src/commands/                # Bundled commands (framework)
-└── prime.md                # Codebase exploration
+src/_bundled_commands/       # Bundled commands (framework)
+└── prime.md                 # Codebase exploration
 ```
 
 **Namespace support:** Subdirectories create namespaced commands. A file at `.agent/commands/db/migrate.md` becomes `/db:migrate`.
