@@ -58,7 +58,7 @@ export interface CustomCommandContent {
 
 /**
  * Source type for custom commands.
- * - 'bundled': Shipped with the agent (src/commands/)
+ * - 'bundled': Shipped with the agent (src/_bundled_commands/)
  * - 'user': User's personal commands (~/.agent/commands/)
  * - 'project': Project-specific commands (.agent/commands/)
  */
