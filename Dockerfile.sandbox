@@ -178,4 +178,5 @@ VOLUME ["/home/agent/.agent"]
 VOLUME ["/workspace"]
 
 ENTRYPOINT ["/app/agent"]
-CMD ["--help"]
+# No default CMD - agent will enter interactive mode when no args are passed
+# Use --help explicitly if you want help: docker run ... agent-harness-sandbox --help

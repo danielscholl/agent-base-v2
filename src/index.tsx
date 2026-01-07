@@ -227,6 +227,22 @@ if (cli.flags.sandbox) {
   if (!status.isInSandbox) {
     // Not in sandbox - execute inside Docker
     const debug = cli.flags.verbose ? console.error : () => {};
+
+    // Check if interactive mode is requested but no TTY is available
+    const hasPromptArg = cli.flags.prompt !== undefined && cli.flags.prompt !== '';
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    const stdinIsTTY = process.stdin.isTTY ?? false;
+    const wantsInteractive = !hasPromptArg && !cli.flags.check && !cli.flags.tools;
+
+    if (wantsInteractive && !stdinIsTTY) {
+      console.error(
+        '[sandbox] Error: Interactive mode requires a terminal (TTY).\n' +
+          '  Use -p/--prompt for non-interactive mode, or run from a real terminal.\n' +
+          '  Example: agent --sandbox -p "your prompt here"'
+      );
+      process.exit(1);
+    }
+
     debug('[sandbox] Launching in Docker container...');
 
     const result = await executeSandbox({

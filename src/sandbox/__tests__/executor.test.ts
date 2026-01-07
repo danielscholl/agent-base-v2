@@ -534,5 +534,89 @@ describe('executor', () => {
         stderr: 'inherit',
       });
     });
+
+    it('passes stdin: "ignore" when --check flag is present (non-interactive)', async () => {
+      spawnProcess
+        .mockResolvedValueOnce(mockResult('Docker version', '', 0))
+        .mockResolvedValueOnce(mockResult('', '', 0))
+        .mockResolvedValueOnce(mockResult('[{}]', '', 0))
+        .mockResolvedValueOnce(mockResult('', '', 0));
+
+      const { executeSandbox } = await import('../executor.js');
+      await executeSandbox({
+        agentArgs: ['--check'],
+      });
+
+      // Check the final spawnProcess call (4th call - the Docker run command)
+      expect(spawnProcess).toHaveBeenCalledTimes(4);
+      const dockerRunCall = spawnProcess.mock.calls[3];
+      expect(dockerRunCall).toBeDefined();
+      expect(dockerRunCall[1]).toMatchObject({
+        stdin: 'ignore',
+        stdout: 'inherit',
+        stderr: 'inherit',
+      });
+    });
+
+    it('passes stdin: "ignore" when --tools flag is present (non-interactive)', async () => {
+      spawnProcess
+        .mockResolvedValueOnce(mockResult('Docker version', '', 0))
+        .mockResolvedValueOnce(mockResult('', '', 0))
+        .mockResolvedValueOnce(mockResult('[{}]', '', 0))
+        .mockResolvedValueOnce(mockResult('', '', 0));
+
+      const { executeSandbox } = await import('../executor.js');
+      await executeSandbox({
+        agentArgs: ['--tools'],
+      });
+
+      // Check the final spawnProcess call (4th call - the Docker run command)
+      expect(spawnProcess).toHaveBeenCalledTimes(4);
+      const dockerRunCall = spawnProcess.mock.calls[3];
+      expect(dockerRunCall).toBeDefined();
+      expect(dockerRunCall[1]).toMatchObject({
+        stdin: 'ignore',
+        stdout: 'inherit',
+        stderr: 'inherit',
+      });
+    });
+  });
+
+  describe('buildDockerCommand - non-interactive mode detection', () => {
+    it('omits -it when --prompt flag is present', async () => {
+      const { buildDockerCommand } = await import('../executor.js');
+      const cmd = buildDockerCommand({
+        agentArgs: ['--prompt', 'Hello world'],
+      });
+
+      expect(cmd).not.toContain('-it');
+    });
+
+    it('omits -it when -p flag is present', async () => {
+      const { buildDockerCommand } = await import('../executor.js');
+      const cmd = buildDockerCommand({
+        agentArgs: ['-p', 'Hello world'],
+      });
+
+      expect(cmd).not.toContain('-it');
+    });
+
+    it('omits -it when --check flag is present', async () => {
+      const { buildDockerCommand } = await import('../executor.js');
+      const cmd = buildDockerCommand({
+        agentArgs: ['--check'],
+      });
+
+      expect(cmd).not.toContain('-it');
+    });
+
+    it('omits -it when --tools flag is present', async () => {
+      const { buildDockerCommand } = await import('../executor.js');
+      const cmd = buildDockerCommand({
+        agentArgs: ['--tools'],
+      });
+
+      expect(cmd).not.toContain('-it');
+    });
   });
 });
