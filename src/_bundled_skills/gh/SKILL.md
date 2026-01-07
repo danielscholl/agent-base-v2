@@ -7,6 +7,7 @@ metadata:
   author: Agent Framework Team
   version: 1.0.0
   tags: github gh cli pr pull-request issue actions workflow cicd
+  requires: gh
 allowed-tools: Bash Read Grep Glob
 ---
 

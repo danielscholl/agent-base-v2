@@ -75,6 +75,17 @@ Detailed usage examples and guidance...
 | `metadata` | No | Arbitrary key-value string mapping |
 | `allowed-tools` | No | Space-delimited tool patterns (experimental) |
 
+### Metadata Fields
+
+The `metadata` field supports arbitrary key-value strings. The following keys have special meaning:
+
+| Key | Description |
+|-----|-------------|
+| `author` | Skill author name |
+| `version` | Skill version |
+| `tags` | Space-delimited keywords for search |
+| `requires` | Space-delimited CLI commands required for the skill (see [Dependency Validation](#dependency-validation)) |
+
 **Validation Rules:**
 - `name` must match directory name
 - `name` pattern: `^[a-z0-9]+(-[a-z0-9]+)*$` (no leading/trailing/consecutive hyphens)
@@ -362,6 +373,79 @@ Scripts will run as isolated Bun subprocesses with safety limits:
 | Timeout | 60 seconds |
 | Output size | 1MB |
 | Working directory | Skill directory |
+
+---
+
+## Dependency Validation
+
+Skills can declare CLI command dependencies using the `metadata.requires` field. The framework checks if these commands are available on the system during skill discovery.
+
+### How It Works
+
+1. **Declaration**: Add `requires: command1 command2` to your skill's metadata
+2. **Discovery**: During skill loading, the framework checks command availability
+3. **Marking**: Skills with missing dependencies are marked `unavailable: true`
+4. **Filtering**: Unavailable skills are excluded from the LLM system prompt
+
+### Example
+
+```yaml
+---
+name: gh
+description: GitHub CLI skill
+metadata:
+  author: Agent Framework Team
+  version: 1.0.0
+  requires: gh
+---
+```
+
+### Command Checking
+
+- Uses `which` on Unix/macOS and `where` on Windows
+- Timeout: 5 seconds per command
+- Multiple commands can be specified (space-delimited)
+
+### Skill Status in CLI
+
+The `agent skill show` command displays skill status:
+
+| Symbol | Status | Meaning |
+|--------|--------|---------|
+| `✓` | enabled | Skill is available and active |
+| `○` | disabled | Skill is disabled by configuration |
+| `✗` | unavailable | Missing required CLI commands |
+
+**Example output:**
+```
+[Bundled Skills]
+  ✓ hello-world
+      A simple greeting skill (enabled)
+  ✗ gh
+      Expert guidance for using the GitHub CLI... (unavailable)
+      missing commands: gh
+```
+
+### SkillLoaderOptions
+
+```typescript
+interface SkillLoaderOptions {
+  // ... other options ...
+  includeDisabled?: boolean;    // Include disabled skills (default: false)
+  includeUnavailable?: boolean; // Include unavailable skills (default: false)
+}
+```
+
+### DiscoveredSkill Fields
+
+```typescript
+interface DiscoveredSkill {
+  // ... other fields ...
+  disabled?: boolean;           // Disabled by configuration
+  unavailable?: boolean;        // Missing dependencies
+  unavailableReason?: string;   // e.g., "missing commands: gh, docker"
+}
+```
 
 ---
 

@@ -192,6 +192,109 @@ describe('skill command handlers', () => {
       expect(data.skills.length).toBe(3);
       expect(data.errors.length).toBe(0);
     });
+
+    it('shows enabled skills with checkmark', async () => {
+      const { skillShowHandler } = await import('../skills.js');
+      const context = createMockContext();
+      await skillShowHandler('', context);
+
+      // Should show ✓ for enabled skills
+      expect(context.outputs.some((o) => o.content.includes('✓ test-skill'))).toBe(true);
+      expect(context.outputs.some((o) => o.content.includes('(enabled)'))).toBe(true);
+    });
+  });
+
+  describe('skillShowHandler with unavailable skills', () => {
+    beforeEach(() => {
+      jest.resetModules();
+    });
+
+    it('shows unavailable skills with X indicator and reason', async () => {
+      // Re-mock the loader to return an unavailable skill
+      jest.unstable_mockModule('../../../skills/loader.js', () => ({
+        SkillLoader: jest.fn().mockImplementation(() => ({
+          discover: jest.fn().mockResolvedValue({
+            skills: [
+              {
+                manifest: {
+                  name: 'available-skill',
+                  description: 'An available skill',
+                },
+                path: '/path/to/available-skill/SKILL.md',
+                directory: '/path/to/available-skill',
+                source: 'bundled',
+                disabled: false,
+              },
+              {
+                manifest: {
+                  name: 'unavailable-skill',
+                  description: 'A skill with missing dependencies',
+                  metadata: { requires: 'missing-cmd' },
+                },
+                path: '/path/to/unavailable-skill/SKILL.md',
+                directory: '/path/to/unavailable-skill',
+                source: 'bundled',
+                disabled: false,
+                unavailable: true,
+                unavailableReason: 'missing commands: missing-cmd',
+              },
+            ] as DiscoveredSkill[],
+            errors: [],
+          }),
+        })),
+      }));
+
+      const { skillShowHandler } = await import('../skills.js');
+      const context = createMockContext();
+      await skillShowHandler('', context);
+
+      // Should show ✓ for available skill
+      expect(context.outputs.some((o) => o.content.includes('✓ available-skill'))).toBe(true);
+
+      // Should show ✗ for unavailable skill
+      expect(context.outputs.some((o) => o.content.includes('✗ unavailable-skill'))).toBe(true);
+
+      // Should show (unavailable) status
+      expect(context.outputs.some((o) => o.content.includes('(unavailable)'))).toBe(true);
+
+      // Should show the reason
+      expect(context.outputs.some((o) => o.content.includes('missing commands: missing-cmd'))).toBe(
+        true
+      );
+    });
+
+    it('shows disabled skills with circle indicator', async () => {
+      // Re-mock the loader to return a disabled skill
+      jest.unstable_mockModule('../../../skills/loader.js', () => ({
+        SkillLoader: jest.fn().mockImplementation(() => ({
+          discover: jest.fn().mockResolvedValue({
+            skills: [
+              {
+                manifest: {
+                  name: 'disabled-skill',
+                  description: 'A disabled skill',
+                },
+                path: '/path/to/disabled-skill/SKILL.md',
+                directory: '/path/to/disabled-skill',
+                source: 'bundled',
+                disabled: true,
+              },
+            ] as DiscoveredSkill[],
+            errors: [],
+          }),
+        })),
+      }));
+
+      const { skillShowHandler } = await import('../skills.js');
+      const context = createMockContext();
+      await skillShowHandler('', context);
+
+      // Should show ○ for disabled skill
+      expect(context.outputs.some((o) => o.content.includes('○ disabled-skill'))).toBe(true);
+
+      // Should show (disabled) status
+      expect(context.outputs.some((o) => o.content.includes('(disabled)'))).toBe(true);
+    });
   });
 
   describe('skillInstallHandler', () => {

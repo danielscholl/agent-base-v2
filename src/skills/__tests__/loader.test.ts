@@ -30,16 +30,31 @@ describe('SkillLoader', () => {
   async function createSkillDir(
     baseDir: string,
     skillName: string,
-    manifest: { name: string; description: string; license?: string }
+    manifest: {
+      name: string;
+      description: string;
+      license?: string;
+      metadata?: Record<string, string>;
+    }
   ): Promise<void> {
     const skillDir = join(baseDir, skillName);
     await mkdir(skillDir, { recursive: true });
 
     const licenseField = manifest.license !== undefined ? `license: ${manifest.license}\n` : '';
+
+    // Build metadata section if provided
+    let metadataSection = '';
+    if (manifest.metadata) {
+      const entries = Object.entries(manifest.metadata)
+        .map(([k, v]) => `  ${k}: ${v}`)
+        .join('\n');
+      metadataSection = `metadata:\n${entries}\n`;
+    }
+
     const skillMd = `---
 name: ${manifest.name}
 description: ${manifest.description}
-${licenseField}---
+${licenseField}${metadataSection}---
 
 # ${manifest.name}
 
@@ -204,6 +219,186 @@ Skill body content.`;
       expect(debugMessages.length).toBeGreaterThan(0);
       expect(debugMessages.some((m) => m.includes('Scanning'))).toBe(true);
       expect(debugMessages.some((m) => m.includes('Discovery complete'))).toBe(true);
+    });
+
+    it('marks skills as unavailable when dependencies are missing', async () => {
+      await createSkillDir(bundledDir, 'missing-dep-skill', {
+        name: 'missing-dep-skill',
+        description: 'Skill with missing dependency',
+        metadata: { requires: 'nonexistent-command-12345' },
+      });
+
+      const loader = new SkillLoader({
+        bundledDir,
+        userDir,
+        projectDir,
+        includeUnavailable: true,
+      });
+
+      const result = await loader.discover();
+
+      expect(result.skills).toHaveLength(1);
+      expect(result.skills[0]?.unavailable).toBe(true);
+      expect(result.skills[0]?.unavailableReason).toContain('missing commands');
+      expect(result.skills[0]?.unavailableReason).toContain('nonexistent-command-12345');
+    });
+
+    it('filters out unavailable skills by default', async () => {
+      await createSkillDir(bundledDir, 'missing-dep-skill', {
+        name: 'missing-dep-skill',
+        description: 'Skill with missing dependency',
+        metadata: { requires: 'nonexistent-command-12345' },
+      });
+
+      const loader = new SkillLoader({
+        bundledDir,
+        userDir,
+        projectDir,
+        // includeUnavailable defaults to false
+      });
+
+      const result = await loader.discover();
+
+      expect(result.skills).toHaveLength(0);
+    });
+
+    it('includes unavailable skills when includeUnavailable is true', async () => {
+      await createSkillDir(bundledDir, 'missing-dep-skill', {
+        name: 'missing-dep-skill',
+        description: 'Skill with missing dependency',
+        metadata: { requires: 'nonexistent-command-12345' },
+      });
+
+      const loader = new SkillLoader({
+        bundledDir,
+        userDir,
+        projectDir,
+        includeUnavailable: true,
+      });
+
+      const result = await loader.discover();
+
+      expect(result.skills).toHaveLength(1);
+      expect(result.skills[0]?.unavailable).toBe(true);
+    });
+
+    it('does not mark skills as unavailable when dependencies exist', async () => {
+      // Use a command that exists on all platforms
+      const isWindows = process.platform === 'win32';
+      const existingCmd = isWindows ? 'cmd' : 'ls';
+
+      await createSkillDir(bundledDir, 'available-skill', {
+        name: 'available-skill',
+        description: 'Skill with existing dependency',
+        metadata: { requires: existingCmd },
+      });
+
+      const loader = new SkillLoader({
+        bundledDir,
+        userDir,
+        projectDir,
+      });
+
+      const result = await loader.discover();
+
+      expect(result.skills).toHaveLength(1);
+      expect(result.skills[0]?.unavailable).toBeFalsy();
+    });
+
+    it('skills without requires metadata are not marked unavailable', async () => {
+      await createSkillDir(bundledDir, 'no-deps-skill', {
+        name: 'no-deps-skill',
+        description: 'Skill without dependencies',
+      });
+
+      const loader = new SkillLoader({
+        bundledDir,
+        userDir,
+        projectDir,
+      });
+
+      const result = await loader.discover();
+
+      expect(result.skills).toHaveLength(1);
+      expect(result.skills[0]?.unavailable).toBeFalsy();
+    });
+
+    it('handles skills with both disabled and unavailable flags', async () => {
+      await createSkillDir(bundledDir, 'both-flags-skill', {
+        name: 'both-flags-skill',
+        description: 'Skill that is both disabled and has missing deps',
+        metadata: { requires: 'nonexistent-command-12345' },
+      });
+
+      const loader = new SkillLoader({
+        bundledDir,
+        userDir,
+        projectDir,
+        disabledBundled: ['both-flags-skill'],
+        includeDisabled: true,
+        includeUnavailable: true,
+      });
+
+      const result = await loader.discover();
+
+      expect(result.skills).toHaveLength(1);
+      expect(result.skills[0]?.disabled).toBe(true);
+      expect(result.skills[0]?.unavailable).toBe(true);
+    });
+
+    it('unavailable higher-priority skill does not let lower-priority surface', async () => {
+      // Bundled skill (lower priority) - available
+      await createSkillDir(bundledDir, 'same-name', {
+        name: 'same-name',
+        description: 'Bundled version - available',
+      });
+      // User skill (higher priority) - unavailable due to missing dep
+      await createSkillDir(userDir, 'same-name', {
+        name: 'same-name',
+        description: 'User version - unavailable',
+        metadata: { requires: 'nonexistent-command-12345' },
+      });
+
+      // Default behavior: filter unavailable, so skill shouldn't appear at all
+      const loader = new SkillLoader({
+        bundledDir,
+        userDir,
+        projectDir,
+      });
+
+      const result = await loader.discover();
+
+      // The skill should NOT appear (user version wins but is unavailable, gets filtered)
+      // The bundled version should NOT surface as a fallback
+      expect(result.skills).toHaveLength(0);
+    });
+
+    it('unavailable higher-priority skill shows when includeUnavailable is true', async () => {
+      // Bundled skill (lower priority) - available
+      await createSkillDir(bundledDir, 'same-name', {
+        name: 'same-name',
+        description: 'Bundled version - available',
+      });
+      // User skill (higher priority) - unavailable due to missing dep
+      await createSkillDir(userDir, 'same-name', {
+        name: 'same-name',
+        description: 'User version - unavailable',
+        metadata: { requires: 'nonexistent-command-12345' },
+      });
+
+      const loader = new SkillLoader({
+        bundledDir,
+        userDir,
+        projectDir,
+        includeUnavailable: true,
+      });
+
+      const result = await loader.discover();
+
+      // Should show the user version (unavailable) not the bundled version
+      expect(result.skills).toHaveLength(1);
+      expect(result.skills[0]?.source).toBe('user');
+      expect(result.skills[0]?.unavailable).toBe(true);
     });
   });
 

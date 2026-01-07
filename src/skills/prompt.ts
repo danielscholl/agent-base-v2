@@ -43,6 +43,9 @@ function generateSkillXml(skill: DiscoveredSkill): string {
  * This is injected into the system prompt to inform the LLM
  * about available skills.
  *
+ * Filters out unavailable skills (missing dependencies) to prevent
+ * the LLM from attempting to use skills that will fail.
+ *
  * @param skills - Array of discovered skills
  * @returns XML string for system prompt
  *
@@ -58,11 +61,14 @@ function generateSkillXml(skill: DiscoveredSkill): string {
  * ```
  */
 export function generateAvailableSkillsXml(skills: DiscoveredSkill[]): string {
-  if (skills.length === 0) {
+  // Filter out unavailable skills - they shouldn't be presented to the LLM
+  const availableSkills = skills.filter((s) => s.unavailable !== true);
+
+  if (availableSkills.length === 0) {
     return '';
   }
 
-  const skillElements = skills.map(generateSkillXml).join('\n');
+  const skillElements = availableSkills.map(generateSkillXml).join('\n');
 
   return `<available_skills>
 ${skillElements}

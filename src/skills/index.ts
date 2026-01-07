@@ -59,3 +59,12 @@ export {
   extractRepoName,
 } from './installer.js';
 export type { InstallOptions, InstallResult, UpdateResult } from './installer.js';
+
+// Dependency checking
+export {
+  checkCommandAvailable,
+  parseRequires,
+  findMissingCommands,
+  checkSkillDependencies,
+} from './dependencies.js';
+export type { DependencyCheckResult } from './dependencies.js';

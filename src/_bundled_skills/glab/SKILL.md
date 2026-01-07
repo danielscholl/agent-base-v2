@@ -7,6 +7,7 @@ metadata:
   author: Agent Framework Team
   version: 1.0.0
   tags: gitlab glab cli mr merge-request issue pipeline cicd
+  requires: glab
 allowed-tools: Bash Read Grep Glob
 ---
 

@@ -52,6 +52,10 @@ export interface DiscoveredSkill {
   source: SkillSource;
   /** Whether the skill is disabled by configuration */
   disabled?: boolean;
+  /** Whether the skill is unavailable due to missing dependencies */
+  unavailable?: boolean;
+  /** Reason the skill is unavailable (e.g., "missing commands: gh, docker") */
+  unavailableReason?: string;
 }
 
 /**
@@ -102,6 +106,8 @@ export interface SkillLoaderOptions {
   enabledBundled?: string[];
   /** Include disabled skills with disabled flag set (for management UI) */
   includeDisabled?: boolean;
+  /** Include unavailable skills with unavailable flag set (for management UI) */
+  includeUnavailable?: boolean;
   /** Debug callback */
   onDebug?: (msg: string, data?: unknown) => void;
 }

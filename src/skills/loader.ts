@@ -16,6 +16,7 @@ import type {
 import { parseSkillMd } from './parser.js';
 import { extractRepoName } from './installer.js';
 import { getBundledSkillsDir } from '../utils/paths.js';
+import { checkSkillDependencies } from './dependencies.js';
 
 // Default directories
 const DEFAULT_BUNDLED_DIR = getBundledSkillsDir();
@@ -35,6 +36,7 @@ export class SkillLoader {
   private readonly disabledBundled: string[];
   private readonly enabledBundled: string[];
   private readonly includeDisabled: boolean;
+  private readonly includeUnavailable: boolean;
   private readonly onDebug?: (msg: string, data?: unknown) => void;
 
   constructor(options: SkillLoaderOptions = {}) {
@@ -46,6 +48,7 @@ export class SkillLoader {
     this.disabledBundled = options.disabledBundled ?? [];
     this.enabledBundled = options.enabledBundled ?? [];
     this.includeDisabled = options.includeDisabled ?? false;
+    this.includeUnavailable = options.includeUnavailable ?? false;
     this.onDebug = options.onDebug;
   }
 
@@ -94,40 +97,58 @@ export class SkillLoader {
       errors.push(...pluginResult.errors);
     }
 
-    // Mark and optionally filter bundled skills based on enabled/disabled lists
-    const filteredSkills = skills
-      .map((skill) => {
-        if (skill.source === 'bundled') {
-          // Check if explicitly disabled
-          if (this.disabledBundled.includes(skill.manifest.name)) {
-            this.debug(`Bundled skill disabled by config`, { name: skill.manifest.name });
-            return { ...skill, disabled: true };
-          }
-          // Check if enabledBundled is specified and skill not in list
-          if (
-            this.enabledBundled.length > 0 &&
-            !this.enabledBundled.includes(skill.manifest.name)
-          ) {
-            this.debug(`Bundled skill not in enabledBundled list`, { name: skill.manifest.name });
-            return { ...skill, disabled: true };
-          }
-        }
-        // Preserve disabled status if already set (e.g., for plugins from scanPlugins)
-        // Otherwise default to enabled
-        return { ...skill, disabled: skill.disabled ?? false };
-      })
-      .filter((skill) => {
-        // If includeDisabled is true, keep all skills
-        if (this.includeDisabled) return true;
-        // Otherwise, filter out disabled skills
-        return !skill.disabled;
-      });
+    // Step 1: Mark disabled/unavailable status on all skills
+    // This must happen before de-duplication to preserve priority order
+    const markedSkills = skills.map((skill) => {
+      let updatedSkill = skill;
 
-    // Check for duplicate skill names - effective priority: plugin > project > user > bundled
+      // Check disabled status for bundled skills
+      if (skill.source === 'bundled') {
+        // Check if explicitly disabled
+        if (this.disabledBundled.includes(skill.manifest.name)) {
+          this.debug(`Bundled skill disabled by config`, { name: skill.manifest.name });
+          updatedSkill = { ...updatedSkill, disabled: true };
+        }
+        // Check if enabledBundled is specified and skill not in list
+        else if (
+          this.enabledBundled.length > 0 &&
+          !this.enabledBundled.includes(skill.manifest.name)
+        ) {
+          this.debug(`Bundled skill not in enabledBundled list`, { name: skill.manifest.name });
+          updatedSkill = { ...updatedSkill, disabled: true };
+        }
+      }
+
+      // Preserve disabled status if already set (e.g., for plugins from scanPlugins)
+      // Otherwise default to enabled
+      if (updatedSkill.disabled === undefined) {
+        updatedSkill = { ...updatedSkill, disabled: false };
+      }
+
+      // Check dependencies from metadata.requires
+      const depCheck = checkSkillDependencies(skill.manifest.metadata?.requires);
+      if (!depCheck.available) {
+        this.debug(`Skill unavailable due to missing dependencies`, {
+          name: skill.manifest.name,
+          missing: depCheck.missingCommands,
+        });
+        updatedSkill = {
+          ...updatedSkill,
+          unavailable: true,
+          unavailableReason: depCheck.reason,
+        };
+      }
+
+      return updatedSkill;
+    });
+
+    // Step 2: De-duplicate BEFORE filtering
+    // This ensures priority order (plugin > project > user > bundled) is respected
+    // even if the higher-priority skill is disabled/unavailable
     // Skills are scanned in order: bundled, user, project, plugins
     // Later sources override earlier ones (Map.set replaces duplicates), so plugins win
     const seen = new Map<string, DiscoveredSkill>();
-    for (const skill of filteredSkills) {
+    for (const skill of markedSkills) {
       if (seen.has(skill.manifest.name)) {
         this.debug(`Duplicate skill name, later definition wins`, {
           name: skill.manifest.name,
@@ -138,7 +159,16 @@ export class SkillLoader {
       seen.set(skill.manifest.name, skill);
     }
 
-    const uniqueSkills = Array.from(seen.values());
+    // Step 3: Filter AFTER de-duplication
+    // This prevents a lower-priority skill from surfacing when the higher-priority
+    // version is unavailable (the skill just won't appear at all unless includeUnavailable is set)
+    const uniqueSkills = Array.from(seen.values()).filter((skill) => {
+      // Filter disabled skills unless includeDisabled is true
+      if (!this.includeDisabled && skill.disabled === true) return false;
+      // Filter unavailable skills unless includeUnavailable is true
+      if (!this.includeUnavailable && skill.unavailable === true) return false;
+      return true;
+    });
 
     this.debug(`Discovery complete`, {
       total: uniqueSkills.length,

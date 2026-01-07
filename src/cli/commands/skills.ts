@@ -90,7 +90,7 @@ export const skillShowHandler: CommandHandler = async (_args, context): Promise<
   const configResult = await loadConfig();
   const config = configResult.success ? (configResult.result as AppConfig) : null;
 
-  // Build loader options from config - include disabled for display
+  // Build loader options from config - include disabled and unavailable for display
   const loaderOptions = config
     ? {
         userDir: config.skills.userDir,
@@ -99,8 +99,9 @@ export const skillShowHandler: CommandHandler = async (_args, context): Promise<
         disabledBundled: config.skills.disabledBundled,
         enabledBundled: config.skills.enabledBundled,
         includeDisabled: true, // Include disabled skills for management UI
+        includeUnavailable: true, // Include unavailable skills for management UI
       }
-    : { includeDisabled: true };
+    : { includeDisabled: true, includeUnavailable: true };
 
   const loader = new SkillLoader(loaderOptions);
   const { skills, errors } = await loader.discover();
@@ -129,61 +130,129 @@ export const skillShowHandler: CommandHandler = async (_args, context): Promise<
   if (bundled.length > 0) {
     context.onOutput('\n[Bundled Skills]', 'info');
     for (const skill of bundled) {
-      // Use the disabled flag from the skill object
       const isDisabled = skill.disabled === true;
-      const status = isDisabled ? '○ ' : '✓ ';
-      const statusText = isDisabled ? '(disabled)' : '(enabled)';
+      const isUnavailable = skill.unavailable === true;
+      // Priority: unavailable > disabled > enabled
+      let status: string;
+      let statusText: string;
+      let outputType: 'error' | 'warning' | 'success';
+      if (isUnavailable) {
+        status = '✗ ';
+        statusText = '(unavailable)';
+        outputType = 'error';
+      } else if (isDisabled) {
+        status = '○ ';
+        statusText = '(disabled)';
+        outputType = 'warning';
+      } else {
+        status = '✓ ';
+        statusText = '(enabled)';
+        outputType = 'success';
+      }
       const desc = skill.manifest.description;
       const truncatedDesc =
         desc.length > DESCRIPTION_MAX_LENGTH
           ? desc.slice(0, DESCRIPTION_MAX_LENGTH - 3) + '...'
           : desc;
-      context.onOutput(`  ${status}${skill.manifest.name}`, isDisabled ? 'warning' : 'success');
+      context.onOutput(`  ${status}${skill.manifest.name}`, outputType);
       context.onOutput(`      ${truncatedDesc} ${statusText}`, 'info');
+      // Show unavailable reason with install hint
+      if (
+        isUnavailable &&
+        skill.unavailableReason !== undefined &&
+        skill.unavailableReason !== ''
+      ) {
+        context.onOutput(`      ${skill.unavailableReason}`, 'warning');
+      }
     }
   }
 
   if (plugins.length > 0) {
     context.onOutput('\n[Plugin Skills]', 'info');
     for (const skill of plugins) {
-      // Use the disabled flag from the skill object
       const isDisabled = skill.disabled === true;
-      const status = isDisabled ? '○ ' : '✓ ';
-      const statusText = isDisabled ? '(disabled)' : '(enabled)';
+      const isUnavailable = skill.unavailable === true;
+      // Priority: unavailable > disabled > enabled
+      let status: string;
+      let statusText: string;
+      let outputType: 'error' | 'warning' | 'success';
+      if (isUnavailable) {
+        status = '✗ ';
+        statusText = '(unavailable)';
+        outputType = 'error';
+      } else if (isDisabled) {
+        status = '○ ';
+        statusText = '(disabled)';
+        outputType = 'warning';
+      } else {
+        status = '✓ ';
+        statusText = '(enabled)';
+        outputType = 'success';
+      }
       const desc = skill.manifest.description;
       const truncatedDesc =
         desc.length > DESCRIPTION_MAX_LENGTH
           ? desc.slice(0, DESCRIPTION_MAX_LENGTH - 3) + '...'
           : desc;
-      context.onOutput(`  ${status}${skill.manifest.name}`, isDisabled ? 'warning' : 'success');
+      context.onOutput(`  ${status}${skill.manifest.name}`, outputType);
       context.onOutput(`      ${truncatedDesc} ${statusText}`, 'info');
       context.onOutput(`      ${skill.directory}`, 'info');
+      // Show unavailable reason
+      if (
+        isUnavailable &&
+        skill.unavailableReason !== undefined &&
+        skill.unavailableReason !== ''
+      ) {
+        context.onOutput(`      ${skill.unavailableReason}`, 'warning');
+      }
     }
   }
 
   if (user.length > 0) {
     context.onOutput('\n[User Skills]', 'info');
     for (const skill of user) {
+      const isUnavailable = skill.unavailable === true;
+      const status = isUnavailable ? '✗ ' : '✓ ';
+      const statusText = isUnavailable ? ' (unavailable)' : '';
+      const outputType = isUnavailable ? 'error' : 'success';
       const desc = skill.manifest.description;
       const truncatedDesc =
         desc.length > DESCRIPTION_MAX_LENGTH
           ? desc.slice(0, DESCRIPTION_MAX_LENGTH - 3) + '...'
           : desc;
-      context.onOutput(`  ✓ ${skill.manifest.name}`, 'success');
-      context.onOutput(`      ${truncatedDesc}`, 'info');
+      context.onOutput(`  ${status}${skill.manifest.name}`, outputType);
+      context.onOutput(`      ${truncatedDesc}${statusText}`, 'info');
+      if (
+        isUnavailable &&
+        skill.unavailableReason !== undefined &&
+        skill.unavailableReason !== ''
+      ) {
+        context.onOutput(`      ${skill.unavailableReason}`, 'warning');
+      }
     }
   }
 
   if (project.length > 0) {
     context.onOutput('\n[Project Skills]', 'info');
     for (const skill of project) {
+      const isUnavailable = skill.unavailable === true;
+      const status = isUnavailable ? '✗ ' : '✓ ';
+      const statusText = isUnavailable ? ' (unavailable)' : '';
+      const outputType = isUnavailable ? 'error' : 'success';
       const desc = skill.manifest.description;
       const truncatedDesc =
         desc.length > DESCRIPTION_MAX_LENGTH
           ? desc.slice(0, DESCRIPTION_MAX_LENGTH - 3) + '...'
           : desc;
-      context.onOutput(`  ✓ ${skill.manifest.name}`, 'success');
-      context.onOutput(`      ${truncatedDesc}`, 'info');
+      context.onOutput(`  ${status}${skill.manifest.name}`, outputType);
+      context.onOutput(`      ${truncatedDesc}${statusText}`, 'info');
+      if (
+        isUnavailable &&
+        skill.unavailableReason !== undefined &&
+        skill.unavailableReason !== ''
+      ) {
+        context.onOutput(`      ${skill.unavailableReason}`, 'warning');
+      }
     }
   }
 
