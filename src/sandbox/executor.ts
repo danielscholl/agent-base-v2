@@ -12,7 +12,7 @@ import type { SandboxOptions, SandboxResponse, SandboxStatus, SandboxErrorCode }
  * Default sandbox image from GitHub Container Registry.
  * Uses the current version tag, falling back to 'latest'.
  */
-const SANDBOX_REGISTRY = 'ghcr.io/danielscholl/ai-harness-sandbox';
+const SANDBOX_REGISTRY = 'ghcr.io/danielscholl/agent-harness-sandbox';
 const DEFAULT_SANDBOX_IMAGE = `${SANDBOX_REGISTRY}:${VERSION}`;
 
 /**
@@ -198,7 +198,7 @@ export async function ensureSandboxImage(
   debug('Image not found locally, attempting to pull from registry...');
 
   // If using a custom image (not from our registry), don't auto-pull
-  if (!imageName.startsWith(SANDBOX_REGISTRY) && !imageName.startsWith('ai-harness-sandbox')) {
+  if (!imageName.startsWith(SANDBOX_REGISTRY) && !imageName.startsWith('agent-harness-sandbox')) {
     return {
       success: false,
       error: 'IMAGE_NOT_FOUND' as SandboxErrorCode,

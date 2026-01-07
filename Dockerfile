@@ -71,7 +71,7 @@ RUN case "${TARGETARCH}" in \
 # Always create package directory (even if empty) to avoid COPY failures
 RUN mkdir -p /download/package && \
     . /download/env && \
-    REPO="danielscholl/ai-harness" && \
+    REPO="danielscholl/agent-harness" && \
     if [ "${VERSION}" = "latest" ]; then \
       VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null | jq -r '.tag_name // empty') || true; \
     fi && \

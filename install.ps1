@@ -1,5 +1,5 @@
 # Agent Harness Installer for Windows PowerShell
-# Usage: irm https://raw.githubusercontent.com/danielscholl/ai-harness/main/install.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/danielscholl/agent-harness/main/install.ps1 | iex
 #
 # Options (when running locally):
 #   .\install.ps1 -Source        # Force build from source
@@ -12,9 +12,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$REPO = "danielscholl/ai-harness"
+$REPO = "danielscholl/agent-harness"
 $REPO_URL = "https://github.com/$REPO"
-$INSTALL_DIR = "$env:LOCALAPPDATA\Programs\ai-harness"
+$INSTALL_DIR = "$env:LOCALAPPDATA\Programs\agent-harness"
 $BIN_DIR = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
 $AGENT_HOME = "$env:USERPROFILE\.agent"
 

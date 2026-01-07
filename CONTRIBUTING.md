@@ -6,8 +6,8 @@ Development guide for Agent Harness contributors.
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/danielscholl/ai-harness.git
-cd ai-harness
+git clone https://github.com/danielscholl/agent-harness.git
+cd agent-harness
 bun install
 
 # 2. Verify setup

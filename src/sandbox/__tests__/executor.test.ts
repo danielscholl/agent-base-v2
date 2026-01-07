@@ -148,7 +148,7 @@ describe('executor', () => {
       spawnProcess.mockResolvedValue(mockResult('[{"Id": "sha256:abc123"}]', '', 0));
 
       const { checkSandboxImage } = await import('../executor.js');
-      const result = await checkSandboxImage('ai-harness-sandbox');
+      const result = await checkSandboxImage('agent-harness-sandbox');
 
       expect(result.success).toBe(true);
     });
@@ -176,8 +176,10 @@ describe('executor', () => {
       expect(cmd).toContain('run');
       expect(cmd).toContain('--rm');
       // -it is only added when stdin is a TTY (not in test environment)
-      // Default image is ghcr.io/danielscholl/ai-harness-sandbox:VERSION
-      const imageArg = cmd.find((arg) => arg.includes('ghcr.io/danielscholl/ai-harness-sandbox'));
+      // Default image is ghcr.io/danielscholl/agent-harness-sandbox:VERSION
+      const imageArg = cmd.find((arg) =>
+        arg.includes('ghcr.io/danielscholl/agent-harness-sandbox')
+      );
       expect(imageArg).toBeDefined();
     });
 
@@ -249,7 +251,7 @@ describe('executor', () => {
       });
 
       expect(cmd).toContain('custom-sandbox:v2');
-      expect(cmd).not.toContain('ai-harness-sandbox');
+      expect(cmd).not.toContain('agent-harness-sandbox');
     });
 
     it('uses AGENT_SANDBOX_IMAGE env var', async () => {

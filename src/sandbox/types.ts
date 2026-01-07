@@ -16,7 +16,7 @@ export interface SandboxResponse<T = void> {
  * Options for sandbox execution.
  */
 export interface SandboxOptions {
-  /** Docker image to use (defaults to AGENT_SANDBOX_IMAGE or 'ai-harness-sandbox') */
+  /** Docker image to use (defaults to AGENT_SANDBOX_IMAGE or 'agent-harness-sandbox') */
   image?: string;
   /** Workspace directory to mount (defaults to cwd) */
   workspacePath?: string;

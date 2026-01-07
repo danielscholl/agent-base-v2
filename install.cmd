@@ -1,6 +1,6 @@
 @echo off
 REM Agent Harness Installer for Windows CMD
-REM Usage: curl -fsSL https://raw.githubusercontent.com/danielscholl/ai-harness/main/install.cmd -o install.cmd && install.cmd && del install.cmd
+REM Usage: curl -fsSL https://raw.githubusercontent.com/danielscholl/agent-harness/main/install.cmd -o install.cmd && install.cmd && del install.cmd
 REM
 REM This script bootstraps the PowerShell installer for full functionality.
 REM For direct CMD installation, it falls back to source build.
@@ -15,15 +15,15 @@ REM Try PowerShell installer first (supports binary download)
 where powershell >nul 2>&1
 if %ERRORLEVEL% equ 0 (
     echo Launching PowerShell installer...
-    powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/danielscholl/ai-harness/main/install.ps1 | iex"
+    powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/danielscholl/agent-harness/main/install.ps1 | iex"
     exit /b %ERRORLEVEL%
 )
 
 REM Fallback: Direct CMD installation (source build only)
 echo PowerShell not available, using CMD fallback...
 
-set "REPO=danielscholl/ai-harness"
-set "INSTALL_DIR=%LOCALAPPDATA%\Programs\ai-harness"
+set "REPO=danielscholl/agent-harness"
+set "INSTALL_DIR=%LOCALAPPDATA%\Programs\agent-harness"
 set "BIN_DIR=%LOCALAPPDATA%\Microsoft\WindowsApps"
 
 REM Check for git
@@ -46,7 +46,7 @@ if %ERRORLEVEL% neq 0 (
 for /f "tokens=*" %%i in ('bun --version') do set BUN_VERSION=%%i
 echo Using Bun %BUN_VERSION%
 
-echo Installing ai-harness...
+echo Installing agent-harness...
 
 REM Create directories
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"

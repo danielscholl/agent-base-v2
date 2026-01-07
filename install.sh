@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Agent Harness Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/danielscholl/ai-harness/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/danielscholl/agent-harness/main/install.sh | bash
 #
 # Options:
 #   --source    Force build from source (skip binary download)
@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-REPO="danielscholl/ai-harness"
+REPO="danielscholl/agent-harness"
 REPO_URL="https://github.com/${REPO}"
 INSTALL_DIR="${HOME}/.agent"
 BIN_DIR="${HOME}/.local/bin"

@@ -87,7 +87,7 @@ describe('update command handler', () => {
     // Save original process.argv
     originalArgv = process.argv;
     // Set default test argv
-    process.argv = ['bun', '/Users/test/.bun/install/global/ai-harness/index.js'];
+    process.argv = ['bun', '/Users/test/.bun/install/global/agent-harness/index.js'];
 
     // Default mock VERSION
     mockVersion = '0.1.0';
@@ -105,7 +105,7 @@ describe('update command handler', () => {
       json: () =>
         Promise.resolve({
           tag_name: 'v0.1.0',
-          html_url: 'https://github.com/danielscholl/ai-harness/releases/tag/v0.1.0',
+          html_url: 'https://github.com/danielscholl/agent-harness/releases/tag/v0.1.0',
           assets: [],
         }),
     });
@@ -121,7 +121,7 @@ describe('update command handler', () => {
 
   describe('detectInstallationType', () => {
     it('detects global installation via .bun/install/global', async () => {
-      process.argv = ['bun', '/Users/test/.bun/install/global/ai-harness/index.js'];
+      process.argv = ['bun', '/Users/test/.bun/install/global/agent-harness/index.js'];
 
       const { updateHandler } = await import('../update.js');
       const context = createMockContext();
@@ -145,7 +145,7 @@ describe('update command handler', () => {
     });
 
     it('detects local development via src/index.tsx', async () => {
-      process.argv = ['bun', '/Users/test/projects/ai-harness/src/index.tsx'];
+      process.argv = ['bun', '/Users/test/projects/agent-harness/src/index.tsx'];
 
       const { updateHandler } = await import('../update.js');
       const context = createMockContext();
@@ -162,7 +162,7 @@ describe('update command handler', () => {
     });
 
     it('detects local development via dist/', async () => {
-      process.argv = ['bun', '/Users/test/projects/ai-harness/dist/index.js'];
+      process.argv = ['bun', '/Users/test/projects/agent-harness/dist/index.js'];
 
       const { updateHandler } = await import('../update.js');
       const context = createMockContext();
@@ -191,7 +191,7 @@ describe('update command handler', () => {
     });
 
     it('handles Windows-style paths', async () => {
-      process.argv = ['bun', 'C:\\Users\\test\\.bun\\install\\global\\ai-harness\\index.js'];
+      process.argv = ['bun', 'C:\\Users\\test\\.bun\\install\\global\\agent-harness\\index.js'];
 
       const { updateHandler } = await import('../update.js');
       const context = createMockContext();
@@ -234,7 +234,7 @@ describe('update command handler', () => {
         json: () =>
           Promise.resolve({
             tag_name: 'v0.2.0',
-            html_url: 'https://github.com/danielscholl/ai-harness/releases/tag/v0.2.0',
+            html_url: 'https://github.com/danielscholl/agent-harness/releases/tag/v0.2.0',
             assets: [],
           }),
       });
@@ -258,7 +258,7 @@ describe('update command handler', () => {
         json: () =>
           Promise.resolve({
             tag_name: 'v0.2.0',
-            html_url: 'https://github.com/danielscholl/ai-harness/releases/tag/v0.2.0',
+            html_url: 'https://github.com/danielscholl/agent-harness/releases/tag/v0.2.0',
             assets: [],
           }),
       });
@@ -308,7 +308,7 @@ describe('update command handler', () => {
     });
 
     it('falls back to original path if realpath fails', async () => {
-      process.argv = ['bun', '/Users/test/.bun/install/global/ai-harness/index.js'];
+      process.argv = ['bun', '/Users/test/.bun/install/global/agent-harness/index.js'];
       mockRealpathSync.mockImplementation(() => {
         throw new Error('ENOENT');
       });
@@ -326,7 +326,7 @@ describe('update command handler', () => {
 
   describe('local development installation', () => {
     beforeEach(() => {
-      process.argv = ['bun', '/Users/test/projects/ai-harness/src/index.tsx'];
+      process.argv = ['bun', '/Users/test/projects/agent-harness/src/index.tsx'];
     });
 
     it('shows git pull instructions', async () => {
@@ -383,7 +383,7 @@ describe('update command handler', () => {
 
   describe('check-only mode', () => {
     beforeEach(() => {
-      process.argv = ['bun', '/Users/test/.bun/install/global/ai-harness/index.js'];
+      process.argv = ['bun', '/Users/test/.bun/install/global/agent-harness/index.js'];
     });
 
     it('checks for updates without installing', async () => {
@@ -403,7 +403,7 @@ describe('update command handler', () => {
 
   describe('global installation update', () => {
     beforeEach(() => {
-      process.argv = ['bun', '/Users/test/.bun/install/global/ai-harness/index.js'];
+      process.argv = ['bun', '/Users/test/.bun/install/global/agent-harness/index.js'];
     });
 
     it('updates successfully', async () => {
@@ -413,7 +413,7 @@ describe('update command handler', () => {
         json: () =>
           Promise.resolve({
             tag_name: 'v0.2.0',
-            html_url: 'https://github.com/danielscholl/ai-harness/releases/tag/v0.2.0',
+            html_url: 'https://github.com/danielscholl/agent-harness/releases/tag/v0.2.0',
             assets: [],
           }),
       });
@@ -506,7 +506,7 @@ describe('update command handler', () => {
         json: () =>
           Promise.resolve({
             tag_name: 'v0.2.0',
-            html_url: 'https://github.com/danielscholl/ai-harness/releases/tag/v0.2.0',
+            html_url: 'https://github.com/danielscholl/agent-harness/releases/tag/v0.2.0',
             assets: [],
           }),
       });
@@ -560,7 +560,7 @@ describe('update command handler', () => {
         json: () =>
           Promise.resolve({
             tag_name: 'v0.2.0',
-            html_url: 'https://github.com/danielscholl/ai-harness/releases/tag/v0.2.0',
+            html_url: 'https://github.com/danielscholl/agent-harness/releases/tag/v0.2.0',
             assets: [],
           }),
       });
@@ -604,7 +604,7 @@ describe('update command handler', () => {
 
   describe('combined flags', () => {
     beforeEach(() => {
-      process.argv = ['bun', '/Users/test/.bun/install/global/ai-harness/index.js'];
+      process.argv = ['bun', '/Users/test/.bun/install/global/agent-harness/index.js'];
     });
 
     it('handles --check and --force together (check takes precedence)', async () => {
@@ -631,7 +631,7 @@ describe('update command handler', () => {
         json: () =>
           Promise.resolve({
             tag_name: 'v0.2.0',
-            html_url: 'https://github.com/danielscholl/ai-harness/releases/tag/v0.2.0',
+            html_url: 'https://github.com/danielscholl/agent-harness/releases/tag/v0.2.0',
             assets: [],
           }),
       });
@@ -683,7 +683,7 @@ describe('update command handler', () => {
         json: () =>
           Promise.resolve({
             tag_name: 'v0.2.0',
-            html_url: 'https://github.com/danielscholl/ai-harness/releases/tag/v0.2.0',
+            html_url: 'https://github.com/danielscholl/agent-harness/releases/tag/v0.2.0',
             assets: [],
           }),
       });
@@ -725,17 +725,17 @@ describe('update command handler', () => {
         json: () =>
           Promise.resolve({
             tag_name: 'v0.2.0',
-            html_url: 'https://github.com/danielscholl/ai-harness/releases/tag/v0.2.0',
+            html_url: 'https://github.com/danielscholl/agent-harness/releases/tag/v0.2.0',
             assets: [
               {
                 name: 'agent-linux-x64.tar.gz',
                 browser_download_url:
-                  'https://github.com/danielscholl/ai-harness/releases/download/v0.2.0/agent-linux-x64.tar.gz',
+                  'https://github.com/danielscholl/agent-harness/releases/download/v0.2.0/agent-linux-x64.tar.gz',
               },
               {
                 name: 'agent-darwin-arm64.tar.gz',
                 browser_download_url:
-                  'https://github.com/danielscholl/ai-harness/releases/download/v0.2.0/agent-darwin-arm64.tar.gz',
+                  'https://github.com/danielscholl/agent-harness/releases/download/v0.2.0/agent-darwin-arm64.tar.gz',
               },
             ],
           }),
@@ -798,17 +798,17 @@ describe('update command handler', () => {
             json: () =>
               Promise.resolve({
                 tag_name: 'v0.2.0',
-                html_url: 'https://github.com/danielscholl/ai-harness/releases/tag/v0.2.0',
+                html_url: 'https://github.com/danielscholl/agent-harness/releases/tag/v0.2.0',
                 assets: [
                   {
                     name: 'agent-linux-x64.tar.gz',
                     browser_download_url:
-                      'https://github.com/danielscholl/ai-harness/releases/download/v0.2.0/agent-linux-x64.tar.gz',
+                      'https://github.com/danielscholl/agent-harness/releases/download/v0.2.0/agent-linux-x64.tar.gz',
                   },
                   {
                     name: 'SHA256SUMS',
                     browser_download_url:
-                      'https://github.com/danielscholl/ai-harness/releases/download/v0.2.0/SHA256SUMS',
+                      'https://github.com/danielscholl/agent-harness/releases/download/v0.2.0/SHA256SUMS',
                   },
                 ],
               }),
@@ -916,17 +916,17 @@ describe('update command handler', () => {
             json: () =>
               Promise.resolve({
                 tag_name: 'v0.2.0',
-                html_url: 'https://github.com/danielscholl/ai-harness/releases/tag/v0.2.0',
+                html_url: 'https://github.com/danielscholl/agent-harness/releases/tag/v0.2.0',
                 assets: [
                   {
                     name: 'agent-darwin-arm64.tar.gz',
                     browser_download_url:
-                      'https://github.com/danielscholl/ai-harness/releases/download/v0.2.0/agent-darwin-arm64.tar.gz',
+                      'https://github.com/danielscholl/agent-harness/releases/download/v0.2.0/agent-darwin-arm64.tar.gz',
                   },
                   {
                     name: 'SHA256SUMS',
                     browser_download_url:
-                      'https://github.com/danielscholl/ai-harness/releases/download/v0.2.0/SHA256SUMS',
+                      'https://github.com/danielscholl/agent-harness/releases/download/v0.2.0/SHA256SUMS',
                   },
                 ],
               }),

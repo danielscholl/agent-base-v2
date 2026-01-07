@@ -12,7 +12,7 @@ agent --sandbox -p "Analyze this codebase"
 agent --sandbox
 ```
 
-The sandbox image is automatically pulled from `ghcr.io/danielscholl/ai-harness-sandbox` on first use. No manual setup required!
+The sandbox image is automatically pulled from `ghcr.io/danielscholl/agent-harness-sandbox` on first use. No manual setup required!
 
 ## How It Works
 
@@ -49,21 +49,21 @@ The sandbox image is automatically pulled from the registry on first use. Manual
 
 ```bash
 # Build from source
-docker build -f Dockerfile.sandbox -t ai-harness-sandbox .
+docker build -f Dockerfile.sandbox -t agent-harness-sandbox .
 
 # Build with specific options
 docker build -f Dockerfile.sandbox \
   --build-arg SOURCE=true \
-  -t ai-harness-sandbox .
+  -t agent-harness-sandbox .
 ```
 
 After building locally, set the environment variable to use your local image:
 
 ```bash
-export AGENT_SANDBOX_IMAGE=ai-harness-sandbox
+export AGENT_SANDBOX_IMAGE=agent-harness-sandbox
 ```
 
-Without this, the executor will look for `ghcr.io/danielscholl/ai-harness-sandbox:VERSION` by default. Setting `AGENT_SANDBOX_IMAGE` tells the harness to use your locally-built image instead.
+Without this, the executor will look for `ghcr.io/danielscholl/agent-harness-sandbox:VERSION` by default. Setting `AGENT_SANDBOX_IMAGE` tells the harness to use your locally-built image instead.
 
 The sandbox image includes:
 - The agent binary
@@ -126,7 +126,7 @@ docker run -it --rm \
   -e AGENT_SANDBOX=true \
   -e AGENT_WORKSPACE_ROOT=/workspace \
   --hostname agent-sandbox \
-  ai-harness-sandbox \
+  agent-harness-sandbox \
   -p "Analyze this codebase"
 ```
 
@@ -179,22 +179,22 @@ Start the Docker daemon or Docker Desktop application.
 ### Image Not Found
 
 ```
-[sandbox] Error: Sandbox image 'ai-harness-sandbox' not found. Build it with: docker build -f Dockerfile.sandbox -t ai-harness-sandbox .
+[sandbox] Error: Sandbox image 'agent-harness-sandbox' not found. Build it with: docker build -f Dockerfile.sandbox -t agent-harness-sandbox .
 ```
 
 Build the sandbox image as described in [Building the Sandbox Image](#building-the-sandbox-image).
 
-After building locally with the `ai-harness-sandbox` tag, set the environment variable to use it:
+After building locally with the `agent-harness-sandbox` tag, set the environment variable to use it:
 
 ```bash
-export AGENT_SANDBOX_IMAGE=ai-harness-sandbox
+export AGENT_SANDBOX_IMAGE=agent-harness-sandbox
 agent --sandbox ...
 ```
 
 Alternatively, retag the image to match the default:
 
 ```bash
-docker tag ai-harness-sandbox ghcr.io/danielscholl/ai-harness-sandbox:latest
+docker tag agent-harness-sandbox ghcr.io/danielscholl/agent-harness-sandbox:latest
 ```
 
 ### Windows Considerations

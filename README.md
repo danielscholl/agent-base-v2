@@ -79,13 +79,13 @@ Goodbye!
 **macOS / Linux / WSL**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/danielscholl/ai-harness/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/danielscholl/agent-harness/main/install.sh | bash
 ```
 
 **Windows PowerShell**
 
 ```powershell
-irm https://raw.githubusercontent.com/danielscholl/ai-harness/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/danielscholl/agent-harness/main/install.ps1 | iex
 ```
 
 ---
@@ -231,7 +231,7 @@ rm -rf ~/.agent  # optional: remove config
 ```powershell
 Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\agent.exe" -Force -ErrorAction SilentlyContinue
 Remove-Item "$env:LOCALAPPDATA\Microsoft\WindowsApps\agent.cmd" -Force -ErrorAction SilentlyContinue
-Remove-Item "$env:LOCALAPPDATA\Programs\ai-harness" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item "$env:LOCALAPPDATA\Programs\agent-harness" -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item "$env:USERPROFILE\.agent" -Recurse -Force -ErrorAction SilentlyContinue  # removes config, assets, and sessions
 ```
 

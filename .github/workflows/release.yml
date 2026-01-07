@@ -234,7 +234,7 @@ jobs:
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/ai-harness-sandbox:${{ steps.version.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/ai-harness-sandbox:latest
+            ghcr.io/${{ github.repository_owner }}/agent-harness-sandbox:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/agent-harness-sandbox:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

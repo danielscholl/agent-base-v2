@@ -15,7 +15,7 @@ import { VERSION } from '../version.js';
 
 /** GitHub repository info */
 const REPO_OWNER = 'danielscholl';
-const REPO_NAME = 'ai-harness';
+const REPO_NAME = 'agent-harness';
 const GIT_REPO_URL = `github:${REPO_OWNER}/${REPO_NAME}`;
 const RELEASES_API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest`;
 
@@ -213,7 +213,7 @@ async function fetchLatestRelease(): Promise<GitHubRelease | null> {
     // Build headers with optional GitHub token for higher rate limits
     const headers: Record<string, string> = {
       Accept: 'application/vnd.github+json',
-      'User-Agent': 'ai-harness-updater',
+      'User-Agent': 'agent-harness-updater',
     };
 
     // Support GITHUB_TOKEN for authenticated requests (5000 req/hr vs 60 unauthenticated)
@@ -813,7 +813,7 @@ export const updateHandler: CommandHandler = async (args, context): Promise<Comm
     context.onOutput('', 'info');
     context.onOutput('Recommended installation:', 'info');
     context.onOutput(
-      '  curl -fsSL https://raw.githubusercontent.com/danielscholl/ai-harness/main/install.sh | bash',
+      '  curl -fsSL https://raw.githubusercontent.com/danielscholl/agent-harness/main/install.sh | bash',
       'info'
     );
     context.onOutput('', 'info');
