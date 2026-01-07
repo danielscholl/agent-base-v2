@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process';
 import { join, isAbsolute } from 'node:path';
 import type { DiscoveredCustomCommand, CustomCommandExecutionResult } from './types.js';
 import { getWorkspaceRoot } from '../../../tools/workspace.js';
+import { parse as parseShellCommand } from 'shell-quote';
 
 /** Default timeout for bash commands (5 seconds) */
 const DEFAULT_BASH_TIMEOUT_MS = 5000;
@@ -314,13 +315,22 @@ async function runBashCommand(command: string, cwd: string, timeoutMs: number): 
   }
 
   return new Promise((resolve, reject) => {
-    const shell = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
-    const shellArgs = process.platform === 'win32' ? ['/c', command] : ['-c', command];
+    // Parse the command string into executable + arguments without invoking a shell
+    const parsed = parseShellCommand(command).filter((token) => typeof token === 'string') as string[];
 
-    const proc = spawn(shell, shellArgs, {
+    if (parsed.length === 0) {
+      reject(new Error('No command provided to execute'));
+      return;
+    }
+
+    const cmd = parsed[0] as string;
+    const cmdArgs = parsed.slice(1);
+
+    const proc = spawn(cmd, cmdArgs, {
       cwd,
       timeout: timeoutMs,
       stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
     });
 
     let stdout = '';
