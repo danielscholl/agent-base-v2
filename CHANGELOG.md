@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.16](https://github.com/danielscholl/agent-harness/compare/v0.3.15...v0.3.16) (2026-01-07)
+
+
+### Bug Fixes
+
+* rename ai-harness to agent-harness across codebase ([252a28d](https://github.com/danielscholl/agent-harness/commit/252a28da91124cf95a434eb41b15da5962d682d0))
+
+
+### Code Refactoring
+
+* **rename:** rename ai-harness to agent-harness across repo ([660bee5](https://github.com/danielscholl/agent-harness/commit/660bee5e04db6d9b9e1ef5d377b8d5e2e3e58078))
+
 ## [0.3.15](https://github.com/danielscholl/agent-harness/compare/v0.3.14...v0.3.15) (2026-01-07)
 
 
