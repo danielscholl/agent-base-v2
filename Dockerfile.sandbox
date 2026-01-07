@@ -1,12 +1,20 @@
-# Agent Harness Container Image
+# Agent Harness Sandbox Container
 #
-# Build options:
-#   docker build -t agent .                          # Default: try binary, fallback to source
-#   docker build --build-arg SOURCE=true -t agent .  # Force build from source
+# Optimized container for running the agent in isolated sandbox mode.
+# Includes git and common development tools for project analysis.
 #
-# Usage:
-#   docker run -it --rm agent --version
-#   docker run -it --rm -v ~/.agent:/home/agent/.agent agent
+# Build:
+#   docker build -f Dockerfile.sandbox -t ai-harness-sandbox .
+#
+# Usage (automatic via --sandbox flag):
+#   agent --sandbox -p "Analyze this codebase"
+#
+# Manual usage:
+#   docker run -it --rm \
+#     -v $(pwd):/workspace \
+#     -v ~/.agent:/home/agent/.agent:ro \
+#     -e OPENAI_API_KEY \
+#     ai-harness-sandbox
 
 ARG SOURCE=false
 ARG VERSION=latest
@@ -93,19 +101,22 @@ RUN mkdir -p /download/package && \
     fi
 
 # =============================================================================
-# Stage 3: Final minimal image
+# Stage 3: Final sandbox image
 # =============================================================================
 FROM alpine:latest AS runtime
 
-# Install runtime dependencies
-RUN apk add --no-cache libstdc++ libgcc
+# Install runtime dependencies + development tools for sandbox
+RUN apk add --no-cache \
+    libstdc++ libgcc \
+    git curl jq \
+    openssh-client \
+    && rm -rf /var/cache/apk/*
 
 WORKDIR /app
 
 ARG SOURCE
 
 # Conditionally copy from the appropriate stage based on SOURCE arg
-# This avoids copying unused artifacts from both stages
 COPY --from=binary-downloader /download/status /tmp/download-status
 
 # Select the right package: binary if available and SOURCE!=true, otherwise source
@@ -146,11 +157,22 @@ RUN BUILD_SOURCE=$(cat /tmp/build-source) && \
 
 # Create non-root user
 RUN adduser -D -h /home/agent agent
-USER agent
-WORKDIR /home/agent
 
-# Config volume
+# Create sandbox marker file (before switching to non-root user)
+RUN touch /.agent-sandbox
+
+# Switch to non-root user
+USER agent
+WORKDIR /workspace
+
+# Environment marker
+ENV AGENT_SANDBOX=true
+
+# Config volume (mounted read-only from host)
 VOLUME ["/home/agent/.agent"]
+
+# Workspace volume (mounted read-write from host)
+VOLUME ["/workspace"]
 
 ENTRYPOINT ["/app/agent"]
 CMD ["--help"]

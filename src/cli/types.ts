@@ -24,6 +24,8 @@ export interface CLIFlags {
   continue?: boolean;
   /** Enable verbose/debug output */
   verbose?: boolean;
+  /** Run inside Docker sandbox for isolation */
+  sandbox?: boolean;
 }
 
 /**

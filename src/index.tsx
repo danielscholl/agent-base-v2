@@ -16,6 +16,7 @@ import { skillHandler } from './cli/commands/skills.js';
 import { updateHandler } from './cli/commands/update.js';
 import { telemetryHandler } from './cli/commands/telemetry.js';
 import { VERSION } from './cli/version.js';
+import { getSandboxStatus, executeSandbox } from './sandbox/index.js';
 
 const cli = meow(
   `
@@ -36,6 +37,7 @@ const cli = meow(
     --model       Override model name
     --continue    Resume last session
     --verbose     Show detailed execution
+    --sandbox     Run inside Docker container
 
   Run 'agent <command> --help' for command details.
 `,
@@ -50,6 +52,7 @@ const cli = meow(
       model: { type: 'string' },
       continue: { type: 'boolean', default: false },
       verbose: { type: 'boolean', default: false },
+      sandbox: { type: 'boolean', default: false },
     },
   }
 );
@@ -218,6 +221,32 @@ if (command === 'telemetry') {
   process.exit(result.success ? 0 : 1);
 }
 
+// Handle --sandbox flag: re-exec inside Docker container
+if (cli.flags.sandbox) {
+  const status = getSandboxStatus();
+  if (!status.isInSandbox) {
+    // Not in sandbox - execute inside Docker
+    const debug = cli.flags.verbose ? console.error : () => {};
+    debug('[sandbox] Launching in Docker container...');
+
+    const result = await executeSandbox({
+      agentArgs: process.argv.slice(2),
+      configPath: `${process.env['HOME'] ?? ''}/.agent`,
+      onDebug: debug,
+    });
+
+    if (!result.success) {
+      console.error(`[sandbox] Error: ${result.message}`);
+    }
+
+    process.exit(result.result ?? (result.success ? 0 : 1));
+  }
+  // Already in sandbox - fall through to normal execution
+  if (cli.flags.verbose) {
+    console.error(`[sandbox] Running inside container (${status.detectionMethod})`);
+  }
+}
+
 // Apply overrides to environment before rendering
 if (cli.flags.provider !== undefined && cli.flags.provider !== '') {
   process.env.LLM_PROVIDER = cli.flags.provider;
@@ -235,6 +264,7 @@ const flags: CLIFlags = {
   model: cli.flags.model,
   continue: cli.flags.continue,
   verbose: cli.flags.verbose,
+  sandbox: cli.flags.sandbox,
 };
 
 const { waitUntilExit } = render(<CLI flags={flags} />);

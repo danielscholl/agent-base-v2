@@ -172,6 +172,30 @@ agent --provider anthropic --model claude-sonnet-4-5-20250929 -p "Hello"
 
 ---
 
+## Security Model
+
+Agent Harness provides two layers of security:
+
+| Layer | Mechanism | Protection |
+|-------|-----------|------------|
+| **Application** | Workspace root constraints | Prevents tools from accessing files outside the designated workspace |
+| **OS (with --sandbox)** | Docker container isolation | Provides OS-level process and filesystem isolation |
+
+### Sandbox Mode
+
+Run the agent inside a Docker container for enhanced isolation:
+
+```bash
+# Run with sandbox isolation (image auto-pulled on first use)
+agent --sandbox -p "Analyze this codebase"
+```
+
+When `--sandbox` is passed, the harness automatically pulls the sandbox image from the registry (if needed) and re-executes itself inside a Docker container with your workspace mounted and credentials passed through securely.
+
+See [docs/guides/sandbox.md](docs/guides/sandbox.md) for complete sandbox documentation.
+
+---
+
 ## Making it Yours
 
 Agent Harness ships neutral. Here's how to configure it:
