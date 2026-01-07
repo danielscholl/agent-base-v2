@@ -28,7 +28,7 @@ export const DEFAULT_PROVIDER: ProviderName = 'openai';
 // Local provider defaults to Ollama (accessible from host)
 // For Docker Model Runner, use: http://model-runner.docker.internal/engines/llama.cpp/v1
 export const DEFAULT_LOCAL_BASE_URL = 'http://localhost:11434/v1';
-export const DEFAULT_LOCAL_MODEL = 'qwen3:latest';
+export const DEFAULT_LOCAL_MODEL = 'qwen3-coder:latest';
 
 export const DEFAULT_OPENAI_MODEL = 'gpt-5-codex';
 
