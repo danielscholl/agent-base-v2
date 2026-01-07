@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.12](https://github.com/danielscholl/agent-base-v2/compare/v0.3.11...v0.3.12) (2026-01-07)
+
+
+### Bug Fixes
+
+* **commands:** complete bundled commands directory rename ([41c9470](https://github.com/danielscholl/agent-base-v2/commit/41c9470984c978f4b38d1711e9b2fcf17aa0b05a))
+* **config:** set ollama default model to qwen3-coder:latest ([2484f38](https://github.com/danielscholl/agent-base-v2/commit/2484f3844acd03c0821dda22ffd8a695ef55d017))
+* **config:** set ollama default model to qwen3-coder:latest ([55b3da1](https://github.com/danielscholl/agent-base-v2/commit/55b3da19b1659379b80084fcf096d41765ac4efa))
+
+
+### Code Refactoring
+
+* **commands:** migrate bundled commands to src/_bundled_commands ([6cf1903](https://github.com/danielscholl/agent-base-v2/commit/6cf1903f3fb5cbf8af5448d5dfd8977201038817))
+
+
+### Tests
+
+* **model:** update tests to expect qwen3-coder:latest ([3614a2e](https://github.com/danielscholl/agent-base-v2/commit/3614a2e61403a3064fbec66a76f5cf36b4f9b82e))
+
 ## [0.3.11](https://github.com/danielscholl/agent-base-v2/compare/v0.3.10...v0.3.11) (2026-01-07)
 
 
