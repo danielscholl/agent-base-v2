@@ -29,12 +29,13 @@ SHELL COMMANDS
   !<command>           Execute shell command (e.g., !ls -la)
 
 CUSTOM COMMANDS
-  Create .agent/commands/*.md files to define custom slash commands.
+  Create *.md files to define custom slash commands.
   - Project commands: ./.agent/commands/*.md (shown with 'project' suffix)
+  - Claude commands: ./.claude/commands/*.md (shown with 'claude' suffix)
   - User commands: ~/.agent/commands/*.md (shown with 'user' suffix)
   - Bundled commands: Built-in commands included with the framework
 
-  Precedence order: project > user > bundled (project commands override user and bundled).
+  Precedence order: project > claude > user > bundled (later override earlier).
   Note: Built-in CLI commands (/help, /exit, /clear, etc.) cannot be overridden.
   See documentation for format: description, argument-hint in YAML front matter.
 

@@ -9,15 +9,43 @@ import { z } from 'zod';
  * Schema for custom command YAML front matter.
  * Uses z.looseObject to allow unknown fields (lenient validation).
  */
+/**
+ * Transform argument-hint to string if it's an array.
+ * In YAML, [foo] is parsed as an array, but users often mean it as literal text.
+ */
+const argumentHintTransform = z
+  .union([z.string(), z.array(z.string())])
+  .optional()
+  .transform((val) => {
+    if (Array.isArray(val)) {
+      return `[${val.join('] [')}]`;
+    }
+    return val;
+  });
+
+/**
+ * Transform allowed-tools to string if it's an array.
+ * Supports both space-delimited string and YAML array formats.
+ */
+const allowedToolsTransform = z
+  .union([z.string(), z.array(z.string())])
+  .optional()
+  .transform((val) => {
+    if (Array.isArray(val)) {
+      return val.join(' ');
+    }
+    return val;
+  });
+
 export const CustomCommandManifestSchema = z.looseObject({
   /** Optional: Override command name (defaults to filename) */
   name: z.string().optional(),
   /** Brief description shown in autocomplete */
   description: z.string().optional(),
-  /** Expected arguments hint (e.g., "[name] [options]") */
-  'argument-hint': z.string().optional(),
-  /** Tool restrictions (reserved for future use) */
-  'allowed-tools': z.string().optional(),
+  /** Expected arguments hint - accepts string or array (YAML [foo] syntax) */
+  'argument-hint': argumentHintTransform,
+  /** Tool restrictions - accepts string or array (experimental) */
+  'allowed-tools': allowedToolsTransform,
   /** Model override (reserved for future use) */
   model: z.string().optional(),
   /** Command arguments definition (Claude Code compatible) */

@@ -109,6 +109,62 @@ Clone repo`;
     }
   });
 
+  it('handles argument-hint as array (YAML [foo] syntax is parsed as array)', () => {
+    // When YAML parser sees [company-or-email], it creates an array
+    // This tests that we handle that gracefully by transforming back to string
+    const content = `---
+description: Test command
+argument-hint:
+  - company-or-email
+---
+
+Body content`;
+
+    const result = parseCustomCommandMd(content, 'test.md');
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.content.manifest.argumentHint).toBe('[company-or-email]');
+    }
+  });
+
+  it('handles argument-hint as multi-element array', () => {
+    const content = `---
+description: Test command
+argument-hint:
+  - name
+  - email
+---
+
+Body content`;
+
+    const result = parseCustomCommandMd(content, 'test.md');
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.content.manifest.argumentHint).toBe('[name] [email]');
+    }
+  });
+
+  it('handles allowed-tools as array', () => {
+    const content = `---
+description: Test command
+allowed-tools:
+  - Bash
+  - Read
+  - Grep
+---
+
+Body content`;
+
+    const result = parseCustomCommandMd(content, 'test.md');
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.content.manifest.allowedTools).toBe('Bash Read Grep');
+    }
+  });
+
   it('preserves extra fields in raw', () => {
     const content = `---
 description: Test

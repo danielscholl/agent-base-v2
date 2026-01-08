@@ -167,7 +167,7 @@ describe('SkillManifestSchema', () => {
       }
     });
 
-    it('accepts allowed-tools field', () => {
+    it('accepts allowed-tools field as string', () => {
       const result = SkillManifestSchema.safeParse({
         ...validManifest,
         'allowed-tools': 'Bash(git:*) Read',
@@ -175,6 +175,17 @@ describe('SkillManifestSchema', () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data['allowed-tools']).toBe('Bash(git:*) Read');
+      }
+    });
+
+    it('accepts allowed-tools field as array', () => {
+      const result = SkillManifestSchema.safeParse({
+        ...validManifest,
+        'allowed-tools': ['Bash', 'Read', 'Grep', 'Glob'],
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data['allowed-tools']).toEqual(['Bash', 'Read', 'Grep', 'Glob']);
       }
     });
   });

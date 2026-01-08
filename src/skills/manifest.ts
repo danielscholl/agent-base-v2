@@ -94,14 +94,15 @@ export const MetadataSchema = z
 
 /**
  * Schema for allowed-tools field.
- * - Space-delimited list of tool patterns
+ * - Accepts either a space-delimited string or an array of strings
  * - Experimental feature
- * - Format: "Bash(git:*) Bash(jq:*) Read"
+ * - String format: "Bash(git:*) Bash(jq:*) Read"
+ * - Array format: ["Bash", "Read", "Grep"]
  */
 export const AllowedToolsSchema = z
-  .string()
+  .union([z.string(), z.array(z.string())])
   .optional()
-  .describe('Space-delimited tool patterns (experimental)');
+  .describe('Tool patterns as space-delimited string or array (experimental)');
 
 /**
  * Complete SKILL.md manifest schema.

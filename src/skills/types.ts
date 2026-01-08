@@ -19,8 +19,8 @@ export interface SkillManifest {
   compatibility?: string;
   /** Arbitrary key-value metadata */
   metadata?: Record<string, string>;
-  /** Space-delimited allowed tool patterns (experimental) */
-  allowedTools?: string;
+  /** Allowed tool patterns - string (space-delimited) or array (experimental) */
+  allowedTools?: string | string[];
 }
 
 /**
