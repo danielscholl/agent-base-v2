@@ -95,7 +95,7 @@ describe('CommandAutocomplete', () => {
     expect(lastFrame()).toContain('Show help message');
   });
 
-  it('respects maxItems limit', () => {
+  it('respects maxItems limit and shows hidden count below', () => {
     const { lastFrame } = render(
       <CommandAutocomplete commands={TEST_COMMANDS} filter="" selectedIndex={0} maxItems={3} />
     );
@@ -104,7 +104,32 @@ describe('CommandAutocomplete', () => {
     expect(lastFrame()).toContain('/continue');
     expect(lastFrame()).toContain('/exit');
     expect(lastFrame()).not.toContain('/sessions');
-    expect(lastFrame()).toContain('... and 7 more');
+    expect(lastFrame()).toContain('7 more below');
+  });
+
+  it('scrolls window to keep selected item visible', () => {
+    // When selection is at the bottom, window should scroll down
+    const { lastFrame } = render(
+      <CommandAutocomplete commands={TEST_COMMANDS} filter="" selectedIndex={9} maxItems={3} />
+    );
+
+    // Last item (telemetry) should be visible
+    expect(lastFrame()).toContain('/telemetry');
+    // First item should no longer be visible
+    expect(lastFrame()).not.toContain('/clear');
+    // Should show items above indicator
+    expect(lastFrame()).toContain('more above');
+  });
+
+  it('shows both above and below indicators when scrolled to middle', () => {
+    // Select item in the middle
+    const { lastFrame } = render(
+      <CommandAutocomplete commands={TEST_COMMANDS} filter="" selectedIndex={5} maxItems={3} />
+    );
+
+    // Should show both indicators
+    expect(lastFrame()).toContain('more above');
+    expect(lastFrame()).toContain('more below');
   });
 
   it('highlights selected command', () => {

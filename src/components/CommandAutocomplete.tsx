@@ -64,8 +64,21 @@ export function CommandAutocomplete({
     return null;
   }
 
-  // Limit displayed items
-  const displayed = filtered.slice(0, maxItems);
+  // Calculate window bounds to keep selected item visible
+  // The window scrolls to follow the selection
+  let startIndex = 0;
+  if (filtered.length > maxItems) {
+    // Keep selected item roughly centered, but clamp to valid bounds
+    const halfWindow = Math.floor(maxItems / 2);
+    startIndex = Math.max(0, selectedIndex - halfWindow);
+    // Clamp so we don't go past the end
+    startIndex = Math.min(startIndex, filtered.length - maxItems);
+  }
+  const endIndex = Math.min(startIndex + maxItems, filtered.length);
+  const displayed = filtered.slice(startIndex, endIndex);
+
+  // Adjust selected index relative to displayed window
+  const displayedSelectedIndex = selectedIndex - startIndex;
 
   // Calculate column widths
   const maxNameWidth = Math.max(...displayed.map((cmd) => cmd.name.length)) + 1;
@@ -85,10 +98,15 @@ export function CommandAutocomplete({
       ? selectedCommand
       : null;
 
+  // Calculate how many items are hidden above/below
+  const hiddenAbove = startIndex;
+  const hiddenBelow = filtered.length - endIndex;
+
   return (
     <Box flexDirection="column" marginTop={1} marginBottom={1}>
+      {hiddenAbove > 0 && <Text dimColor>↑ {String(hiddenAbove)} more above</Text>}
       {displayed.map((cmd, index) => {
-        const isSelected = index === selectedIndex;
+        const isSelected = index === displayedSelectedIndex;
         return (
           <Box key={cmd.name}>
             <Text color={isSelected ? 'cyan' : 'gray'} bold={isSelected}>
@@ -109,9 +127,7 @@ export function CommandAutocomplete({
           <Text color="yellow">{hintCommand.argumentHint}</Text>
         </Box>
       )}
-      {filtered.length > maxItems && (
-        <Text dimColor>... and {String(filtered.length - maxItems)} more</Text>
-      )}
+      {hiddenBelow > 0 && <Text dimColor>↓ {String(hiddenBelow)} more below</Text>}
     </Box>
   );
 }
