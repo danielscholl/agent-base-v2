@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.19](https://github.com/danielscholl/agent-harness/compare/v0.3.18...v0.3.19) (2026-01-08)
+
+
+### Features
+
+* **claude:** add Claude Code compatibility support ([b8ba8eb](https://github.com/danielscholl/agent-harness/commit/b8ba8eb6c5eccad67e489cef7f387dc0889dd76c))
+
+
+### Code Refactoring
+
+* **skills:** lazily resolve claude and project dirs using workspace root ([0cd9847](https://github.com/danielscholl/agent-harness/commit/0cd9847b80d1e8a800a34f27fe31440a48ff1187))
+
+
+### Tests
+
+* **loader:** adjust source priority expectations and notes symlinks ([11df209](https://github.com/danielscholl/agent-harness/commit/11df209e71ffeb514b84b3a7a150452ed429eb47))
+
 ## [0.3.18](https://github.com/danielscholl/agent-harness/compare/v0.3.17...v0.3.18) (2026-01-07)
 
 

@@ -1,6 +1,6 @@
 {
   "name": "agent-harness",
-  "version": "0.3.18",
+  "version": "0.3.19",
   "description": "Agent Harness - A TypeScript runtime for building, running, and composing AI agents",
   "type": "module",
   "main": "dist/index.js",
