@@ -60,9 +60,10 @@ export interface CustomCommandContent {
  * Source type for custom commands.
  * - 'bundled': Shipped with the agent (src/_bundled_commands/)
  * - 'user': User's personal commands (~/.agent/commands/)
+ * - 'claude': Claude Code compatible commands (./.claude/commands/)
  * - 'project': Project-specific commands (.agent/commands/)
  */
-export type CustomCommandSource = 'bundled' | 'project' | 'user';
+export type CustomCommandSource = 'bundled' | 'user' | 'claude' | 'project';
 
 /**
  * Discovered custom command with metadata.
@@ -122,6 +123,8 @@ export interface CustomCommandLoaderOptions {
   workspaceRoot?: string;
   /** User commands directory (defaults to ~/.agent/commands) */
   userDir?: string;
+  /** Claude commands directory (defaults to ./.claude/commands) for Claude Code compatibility */
+  claudeDir?: string;
   /** Bundled commands directory (defaults to getBundledCommandsDir()) */
   bundledDir?: string;
   /** Debug callback */

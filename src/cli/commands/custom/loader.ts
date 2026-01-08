@@ -15,25 +15,27 @@ import type {
   CustomCommandSource,
 } from './types.js';
 import { getWorkspaceRoot } from '../../../tools/workspace.js';
-import { getBundledCommandsDir } from '../../../utils/paths.js';
+import { getBundledCommandsDir, getClaudeCommandsDir } from '../../../utils/paths.js';
 
 // Default directories
 const DEFAULT_BUNDLED_DIR = getBundledCommandsDir();
 const DEFAULT_USER_DIR = join(homedir(), '.agent', 'commands');
 
 /**
- * Custom command loader that discovers commands from bundled, user, and project directories.
+ * Custom command loader that discovers commands from bundled, user, claude, and project directories.
  */
 export class CustomCommandLoader {
   private readonly workspaceRoot: string;
   private readonly bundledDir: string;
   private readonly userDir: string;
+  private readonly claudeDir: string;
   private readonly onDebug?: (msg: string, data?: unknown) => void;
 
   constructor(options: CustomCommandLoaderOptions = {}) {
     this.workspaceRoot = options.workspaceRoot ?? getWorkspaceRoot();
     this.bundledDir = options.bundledDir ?? DEFAULT_BUNDLED_DIR;
     this.userDir = options.userDir ?? DEFAULT_USER_DIR;
+    this.claudeDir = options.claudeDir ?? getClaudeCommandsDir(this.workspaceRoot);
     this.onDebug = options.onDebug;
   }
 
@@ -51,10 +53,12 @@ export class CustomCommandLoader {
     const commands: DiscoveredCustomCommand[] = [];
     const errors: CustomCommandError[] = [];
 
-    // Scan directories in order: bundled first, then user, then project (project wins on conflict)
+    // Scan directories in order: bundled first, then user, then claude, then project (project wins on conflict)
+    // Priority order: bundled < user < claude < project (later sources override earlier)
     const sources: Array<{ dir: string; source: CustomCommandSource }> = [
       { dir: this.bundledDir, source: 'bundled' },
       { dir: this.userDir, source: 'user' },
+      { dir: this.claudeDir, source: 'claude' },
       { dir: join(this.workspaceRoot, '.agent', 'commands'), source: 'project' },
     ];
 

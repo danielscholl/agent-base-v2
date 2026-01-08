@@ -156,6 +156,7 @@ export const skillShowHandler: CommandHandler = async (_args, context): Promise<
     context.onOutput('  - Bundled skills (included with the agent)', 'info');
     const userSkillsPath = config?.skills.userDir ?? '~/.agent/skills/';
     context.onOutput(`  - User skills (${userSkillsPath})`, 'info');
+    context.onOutput('  - Claude skills (./.claude/skills/) - Claude Code compatible', 'info');
     context.onOutput('  - Project skills (./.agent/skills/)', 'info');
     context.onOutput('  - Plugin skills (installed via git)', 'info');
     context.onOutput('\nUse "agent skill install <url>" to install a plugin.', 'info');
@@ -169,6 +170,7 @@ export const skillShowHandler: CommandHandler = async (_args, context): Promise<
   const bundled = skills.filter((s) => s.source === 'bundled');
   const plugins = skills.filter((s) => s.source === 'plugin');
   const user = skills.filter((s) => s.source === 'user');
+  const claude = skills.filter((s) => s.source === 'claude');
   const project = skills.filter((s) => s.source === 'project');
 
   if (bundled.length > 0) {
@@ -219,6 +221,27 @@ export const skillShowHandler: CommandHandler = async (_args, context): Promise<
   if (user.length > 0) {
     context.onOutput('\n[User Skills]', 'info');
     for (const skill of user) {
+      const { status, statusText, outputType } = getSkillStatus(skill);
+      const desc = skill.manifest.description;
+      const truncatedDesc =
+        desc.length > DESCRIPTION_MAX_LENGTH
+          ? desc.slice(0, DESCRIPTION_MAX_LENGTH - 3) + '...'
+          : desc;
+      context.onOutput(`  ${status}${skill.manifest.name}`, outputType);
+      context.onOutput(`      ${truncatedDesc} ${statusText}`, 'info');
+      if (
+        skill.unavailable === true &&
+        skill.unavailableReason !== undefined &&
+        skill.unavailableReason !== ''
+      ) {
+        context.onOutput(`      ${skill.unavailableReason}`, 'warning');
+      }
+    }
+  }
+
+  if (claude.length > 0) {
+    context.onOutput('\n[Claude Skills] (Claude Code compatible)', 'info');
+    for (const skill of claude) {
       const { status, statusText, outputType } = getSkillStatus(skill);
       const desc = skill.manifest.description;
       const truncatedDesc =
@@ -503,6 +526,15 @@ export const skillManageHandler: CommandHandler = async (args, context): Promise
           'info'
         );
         return { success: false, message: 'Cannot disable project skills' };
+      }
+
+      if (skill.source === 'claude') {
+        context.onOutput(`Cannot disable claude skill: ${skillName}`, 'error');
+        context.onOutput(
+          'Claude skills (.claude/skills/) are always enabled. Remove the skill directory to disable it.',
+          'info'
+        );
+        return { success: false, message: 'Cannot disable claude skills' };
       }
 
       // Must be a bundled skill

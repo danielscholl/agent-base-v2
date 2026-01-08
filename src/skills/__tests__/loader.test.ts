@@ -12,6 +12,7 @@ describe('SkillLoader', () => {
   let tempDir: string;
   let bundledDir: string;
   let userDir: string;
+  let claudeDir: string;
   let projectDir: string;
 
   beforeEach(async () => {
@@ -19,6 +20,7 @@ describe('SkillLoader', () => {
     tempDir = await mkdtemp(join(tmpdir(), 'skills-test-'));
     bundledDir = join(tempDir, 'bundled');
     userDir = join(tempDir, 'user');
+    claudeDir = join(tempDir, '.claude', 'skills');
     projectDir = join(tempDir, 'project');
   });
 
@@ -400,6 +402,203 @@ Skill body content.`;
       expect(result.skills[0]?.source).toBe('user');
       expect(result.skills[0]?.unavailable).toBe(true);
     });
+
+    it('discovers skills from .claude/skills directory', async () => {
+      await createSkillDir(claudeDir, 'claude-skill', {
+        name: 'claude-skill',
+        description: 'A Claude Code compatible skill',
+      });
+
+      const loader = new SkillLoader({
+        bundledDir,
+        userDir,
+        claudeDir,
+        projectDir,
+      });
+
+      const result = await loader.discover();
+
+      expect(result.skills).toHaveLength(1);
+      expect(result.skills[0]?.manifest.name).toBe('claude-skill');
+      expect(result.skills[0]?.source).toBe('claude');
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('handles missing .claude/skills directory gracefully', async () => {
+      // Don't create claude directory
+      const loader = new SkillLoader({
+        bundledDir,
+        userDir,
+        claudeDir: join(tempDir, 'nonexistent-claude', 'skills'),
+        projectDir,
+      });
+
+      const result = await loader.discover();
+
+      expect(result.skills).toHaveLength(0);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('project skills override claude skills with same name', async () => {
+      // Same skill name in claude and project
+      await createSkillDir(claudeDir, 'same-skill', {
+        name: 'same-skill',
+        description: 'Claude version',
+      });
+      await createSkillDir(projectDir, 'same-skill', {
+        name: 'same-skill',
+        description: 'Project version',
+      });
+
+      const loader = new SkillLoader({
+        bundledDir,
+        userDir,
+        claudeDir,
+        projectDir,
+      });
+
+      const result = await loader.discover();
+
+      // Project skill should override claude
+      expect(result.skills).toHaveLength(1);
+      expect(result.skills[0]?.source).toBe('project');
+      expect(result.skills[0]?.manifest.description).toBe('Project version');
+    });
+
+    it('claude skills override user skills with same name', async () => {
+      // Same skill name in user and claude
+      await createSkillDir(userDir, 'same-skill', {
+        name: 'same-skill',
+        description: 'User version',
+      });
+      await createSkillDir(claudeDir, 'same-skill', {
+        name: 'same-skill',
+        description: 'Claude version',
+      });
+
+      const loader = new SkillLoader({
+        bundledDir,
+        userDir,
+        claudeDir,
+        projectDir,
+      });
+
+      const result = await loader.discover();
+
+      // Claude skill should override user
+      expect(result.skills).toHaveLength(1);
+      expect(result.skills[0]?.source).toBe('claude');
+      expect(result.skills[0]?.manifest.description).toBe('Claude version');
+    });
+
+    it('discovers skills from all four source types', async () => {
+      await createSkillDir(bundledDir, 'bundled-skill', {
+        name: 'bundled-skill',
+        description: 'Bundled skill',
+      });
+      await createSkillDir(userDir, 'user-skill', {
+        name: 'user-skill',
+        description: 'User skill',
+      });
+      await createSkillDir(claudeDir, 'claude-skill', {
+        name: 'claude-skill',
+        description: 'Claude skill',
+      });
+      await createSkillDir(projectDir, 'project-skill', {
+        name: 'project-skill',
+        description: 'Project skill',
+      });
+
+      const loader = new SkillLoader({
+        bundledDir,
+        userDir,
+        claudeDir,
+        projectDir,
+      });
+
+      const result = await loader.discover();
+
+      expect(result.skills).toHaveLength(4);
+      const sources = result.skills.map((s) => s.source);
+      expect(sources).toContain('bundled');
+      expect(sources).toContain('user');
+      expect(sources).toContain('claude');
+      expect(sources).toContain('project');
+    });
+
+    it('respects priority order: plugin > project > claude > user > bundled', async () => {
+      // All sources have same skill name
+      await createSkillDir(bundledDir, 'priority-skill', {
+        name: 'priority-skill',
+        description: 'Bundled version',
+      });
+      await createSkillDir(userDir, 'priority-skill', {
+        name: 'priority-skill',
+        description: 'User version',
+      });
+      await createSkillDir(claudeDir, 'priority-skill', {
+        name: 'priority-skill',
+        description: 'Claude version',
+      });
+      await createSkillDir(projectDir, 'priority-skill', {
+        name: 'priority-skill',
+        description: 'Project version',
+      });
+
+      const loader = new SkillLoader({
+        bundledDir,
+        userDir,
+        claudeDir,
+        projectDir,
+      });
+
+      const result = await loader.discover();
+
+      // Project should win (highest priority among the non-plugin sources)
+      expect(result.skills).toHaveLength(1);
+      expect(result.skills[0]?.source).toBe('project');
+      expect(result.skills[0]?.manifest.description).toBe('Project version');
+    });
+
+    it('ignores symlink entries in .claude/skills directory (security protection)', async () => {
+      const { symlink } = await import('node:fs/promises');
+
+      // Create the claude directory and a target skill directory outside
+      await mkdir(claudeDir, { recursive: true });
+      const outsideSkillDir = join(tempDir, 'outside-skill');
+      await mkdir(outsideSkillDir, { recursive: true });
+
+      // Create a valid SKILL.md in the outside directory
+      const manifest = { name: 'escape-skill', description: 'Malicious skill' };
+      const skillMd = `---\nname: ${manifest.name}\ndescription: ${manifest.description}\n---\n\nInstructions`;
+      await writeFile(join(outsideSkillDir, 'SKILL.md'), skillMd);
+
+      // Create a symlink inside claudeDir that points to the outside skill
+      const escapePath = join(claudeDir, 'escape-skill');
+      try {
+        await symlink(outsideSkillDir, escapePath);
+      } catch {
+        // Symlink creation may fail on some systems (e.g., Windows without admin)
+        // Skip test in that case
+        return;
+      }
+
+      const loader = new SkillLoader({
+        bundledDir,
+        userDir,
+        claudeDir,
+        projectDir,
+      });
+
+      const result = await loader.discover();
+
+      // Symlinks are ignored by the loader (entry.isDirectory() returns false for symlinks)
+      // This provides implicit security protection - no skills from symlinks are loaded
+      expect(result.skills).toHaveLength(0);
+
+      // No error is reported since symlinks are just skipped as non-directories
+      // The security goal (no unauthorized skill loading) is still met
+    });
   });
 
   describe('getSkillContent', () => {
@@ -449,6 +648,7 @@ describe('createSkillLoader', () => {
     const loader = createSkillLoader({
       bundledDir: '/custom/bundled',
       userDir: '/custom/user',
+      claudeDir: '/custom/claude/skills',
       projectDir: '/custom/project',
     });
     expect(loader).toBeInstanceOf(SkillLoader);

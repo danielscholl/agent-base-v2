@@ -35,8 +35,13 @@ export interface SkillContent {
 
 /**
  * Skill source location type.
+ * - 'bundled': Shipped with the agent (src/_bundled_skills/)
+ * - 'user': User's personal skills (~/.agent/skills/)
+ * - 'claude': Claude Code compatible skills (./.claude/skills/)
+ * - 'project': Project-specific skills (./.agent/skills/)
+ * - 'plugin': Installed plugin skills (~/.agent/plugins/)
  */
-export type SkillSource = 'bundled' | 'user' | 'project' | 'plugin';
+export type SkillSource = 'bundled' | 'user' | 'claude' | 'project' | 'plugin';
 
 /**
  * Discovered skill with filesystem location.
@@ -88,6 +93,8 @@ export interface SkillLoaderOptions {
   bundledDir?: string;
   /** User skills directory (defaults to ~/.agent/skills) */
   userDir?: string;
+  /** Claude skills directory (defaults to ./.claude/skills) for Claude Code compatibility */
+  claudeDir?: string;
   /** Project skills directory (defaults to ./.agent/skills) */
   projectDir?: string;
   /** Plugins directory (defaults to ~/.agent/plugins) */

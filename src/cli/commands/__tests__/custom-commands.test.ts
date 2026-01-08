@@ -504,4 +504,246 @@ description: Broken`);
     expect(result.commands[0].name).toBe('build');
     expect(result.commands[0].namespace).toBe('frontend');
   });
+
+  it('discovers commands from .claude/commands directory', async () => {
+    mockStat.mockImplementation((path) => {
+      if (path === '/test/workspace/.claude/commands') {
+        return Promise.resolve({ isDirectory: () => true, size: 0 }) as ReturnType<typeof stat>;
+      }
+      return Promise.reject(new Error('ENOENT'));
+    });
+
+    mockRealpath.mockImplementation((path) => Promise.resolve(String(path)));
+
+    mockReaddir.mockResolvedValue([
+      { name: 'claude-cmd.md', isDirectory: () => false },
+    ] as unknown as Awaited<ReturnType<typeof readdir>>);
+
+    mockReadFile.mockResolvedValue(`---
+description: A Claude Code compatible command
+---
+Claude command content`);
+
+    const loader = new CustomCommandLoader({
+      workspaceRoot: '/test/workspace',
+      claudeDir: '/test/workspace/.claude/commands',
+    });
+    const result = await loader.discover();
+
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].name).toBe('claude-cmd');
+    expect(result.commands[0].source).toBe('claude');
+  });
+
+  it('handles missing .claude/commands directory gracefully', async () => {
+    mockStat.mockRejectedValue(new Error('ENOENT'));
+
+    const loader = new CustomCommandLoader({
+      workspaceRoot: '/test/workspace',
+      claudeDir: '/test/workspace/.claude/commands',
+    });
+    const result = await loader.discover();
+
+    expect(result.commands).toHaveLength(0);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('project commands override claude commands with same name', async () => {
+    mockStat.mockImplementation((path) => {
+      if (
+        path === '/test/workspace/.claude/commands' ||
+        path === '/test/workspace/.agent/commands'
+      ) {
+        return Promise.resolve({ isDirectory: () => true, size: 0 }) as ReturnType<typeof stat>;
+      }
+      return Promise.reject(new Error('ENOENT'));
+    });
+
+    mockRealpath.mockImplementation((path) => Promise.resolve(String(path)));
+
+    mockReaddir.mockResolvedValue([
+      { name: 'deploy.md', isDirectory: () => false },
+    ] as unknown as Awaited<ReturnType<typeof readdir>>);
+
+    mockReadFile.mockImplementation((path: unknown) => {
+      const pathStr = typeof path === 'string' ? path : '';
+      if (pathStr.includes('.claude')) {
+        return Promise.resolve('Claude version');
+      }
+      return Promise.resolve('Project version');
+    });
+
+    const loader = new CustomCommandLoader({
+      workspaceRoot: '/test/workspace',
+      claudeDir: '/test/workspace/.claude/commands',
+    });
+    const result = await loader.discover();
+
+    // Project wins over claude
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].source).toBe('project');
+    expect(result.commands[0].content.body).toBe('Project version');
+  });
+
+  it('claude commands override user commands with same name', async () => {
+    mockStat.mockImplementation((path) => {
+      if (path === '/test/user/.agent/commands' || path === '/test/workspace/.claude/commands') {
+        return Promise.resolve({ isDirectory: () => true, size: 0 }) as ReturnType<typeof stat>;
+      }
+      return Promise.reject(new Error('ENOENT'));
+    });
+
+    mockRealpath.mockImplementation((path) => Promise.resolve(String(path)));
+
+    mockReaddir.mockResolvedValue([
+      { name: 'test.md', isDirectory: () => false },
+    ] as unknown as Awaited<ReturnType<typeof readdir>>);
+
+    mockReadFile.mockImplementation((path: unknown) => {
+      const pathStr = typeof path === 'string' ? path : '';
+      if (pathStr.includes('.claude')) {
+        return Promise.resolve('Claude version');
+      }
+      return Promise.resolve('User version');
+    });
+
+    const loader = new CustomCommandLoader({
+      workspaceRoot: '/test/workspace',
+      userDir: '/test/user/.agent/commands',
+      claudeDir: '/test/workspace/.claude/commands',
+    });
+    const result = await loader.discover();
+
+    // Claude wins over user
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].source).toBe('claude');
+    expect(result.commands[0].content.body).toBe('Claude version');
+  });
+
+  it('respects priority order: project > claude > user > bundled', async () => {
+    mockStat.mockImplementation((path) => {
+      if (
+        path === '/test/bundled' ||
+        path === '/test/user/.agent/commands' ||
+        path === '/test/workspace/.claude/commands' ||
+        path === '/test/workspace/.agent/commands'
+      ) {
+        return Promise.resolve({ isDirectory: () => true, size: 0 }) as ReturnType<typeof stat>;
+      }
+      return Promise.reject(new Error('ENOENT'));
+    });
+
+    mockRealpath.mockImplementation((path) => Promise.resolve(String(path)));
+
+    mockReaddir.mockResolvedValue([
+      { name: 'cmd.md', isDirectory: () => false },
+    ] as unknown as Awaited<ReturnType<typeof readdir>>);
+
+    mockReadFile.mockImplementation((path: unknown) => {
+      const pathStr = typeof path === 'string' ? path : '';
+      if (pathStr.includes('bundled')) {
+        return Promise.resolve('Bundled version');
+      }
+      if (pathStr.includes('user')) {
+        return Promise.resolve('User version');
+      }
+      if (pathStr.includes('.claude')) {
+        return Promise.resolve('Claude version');
+      }
+      return Promise.resolve('Project version');
+    });
+
+    const loader = new CustomCommandLoader({
+      workspaceRoot: '/test/workspace',
+      bundledDir: '/test/bundled',
+      userDir: '/test/user/.agent/commands',
+      claudeDir: '/test/workspace/.claude/commands',
+    });
+    const result = await loader.discover();
+
+    // Project should win (highest priority)
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].source).toBe('project');
+    expect(result.commands[0].content.body).toBe('Project version');
+  });
+
+  it('handles subdirectories for namespacing in .claude/commands', async () => {
+    mockStat.mockImplementation((path) => {
+      const pathStr = String(path);
+      if (
+        pathStr === '/test/workspace/.claude/commands' ||
+        pathStr === '/test/workspace/.claude/commands/deploy'
+      ) {
+        return Promise.resolve({ isDirectory: () => true, size: 0 }) as ReturnType<typeof stat>;
+      }
+      return Promise.reject(new Error('ENOENT'));
+    });
+
+    mockRealpath.mockImplementation((path) => Promise.resolve(String(path)));
+
+    mockReaddir.mockImplementation((path) => {
+      const pathStr = String(path);
+      if (pathStr === '/test/workspace/.claude/commands') {
+        return Promise.resolve([
+          { name: 'deploy', isDirectory: () => true },
+        ]) as unknown as ReturnType<typeof readdir>;
+      }
+      if (pathStr === '/test/workspace/.claude/commands/deploy') {
+        return Promise.resolve([
+          { name: 'production.md', isDirectory: () => false },
+        ]) as unknown as ReturnType<typeof readdir>;
+      }
+      return Promise.resolve([]);
+    });
+
+    mockReadFile.mockResolvedValue('Deploy to production');
+
+    const loader = new CustomCommandLoader({
+      workspaceRoot: '/test/workspace',
+      claudeDir: '/test/workspace/.claude/commands',
+    });
+    const result = await loader.discover();
+
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0].name).toBe('production');
+    expect(result.commands[0].namespace).toBe('deploy');
+    expect(result.commands[0].source).toBe('claude');
+  });
+
+  it('rejects symlink escape attempts in .claude/commands directory', async () => {
+    mockStat.mockImplementation((path) => {
+      const pathStr = String(path);
+      if (pathStr === '/test/workspace/.claude/commands') {
+        return Promise.resolve({ isDirectory: () => true, size: 0 }) as ReturnType<typeof stat>;
+      }
+      return Promise.reject(new Error('ENOENT'));
+    });
+
+    // Simulate symlink escape: realpath returns a path outside the commands directory
+    mockRealpath.mockImplementation((path) => {
+      const pathStr = String(path);
+      if (pathStr === '/test/workspace/.claude/commands') {
+        return Promise.resolve('/test/workspace/.claude/commands');
+      }
+      if (pathStr.includes('escape-cmd')) {
+        // Symlink resolves to /tmp (outside commands directory)
+        return Promise.resolve('/tmp/malicious');
+      }
+      return Promise.resolve(pathStr);
+    });
+
+    mockReaddir.mockResolvedValue([
+      { name: 'escape-cmd', isDirectory: () => true },
+    ] as unknown as Awaited<ReturnType<typeof readdir>>);
+
+    const loader = new CustomCommandLoader({
+      workspaceRoot: '/test/workspace',
+      claudeDir: '/test/workspace/.claude/commands',
+    });
+    const result = await loader.discover();
+
+    // The symlink should be rejected - no commands discovered from the escaped path
+    const escapedCmd = result.commands.find((c) => c.name.includes('escape'));
+    expect(escapedCmd).toBeUndefined();
+  });
 });

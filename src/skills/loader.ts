@@ -15,14 +15,16 @@ import type {
 } from './types.js';
 import { parseSkillMd } from './parser.js';
 import { extractRepoName } from './installer.js';
-import { getBundledSkillsDir } from '../utils/paths.js';
+import { getBundledSkillsDir, getClaudeSkillsDir } from '../utils/paths.js';
+import { getWorkspaceRoot } from '../tools/workspace.js';
 import { checkSkillDependencies } from './dependencies.js';
 
-// Default directories
+// Default directories (user-home-relative, safe to compute at module load)
 const DEFAULT_BUNDLED_DIR = getBundledSkillsDir();
 const DEFAULT_USER_DIR = join(homedir(), '.agent', 'skills');
 const DEFAULT_PLUGINS_DIR = join(homedir(), '.agent', 'plugins');
-const DEFAULT_PROJECT_DIR = join(process.cwd(), '.agent', 'skills');
+// Note: claudeDir and projectDir are computed lazily in constructor
+// to respect AGENT_WORKSPACE_ROOT set via initializeWorkspaceRoot()
 
 /**
  * Skill loader that discovers and validates skills from configured directories.
@@ -30,6 +32,7 @@ const DEFAULT_PROJECT_DIR = join(process.cwd(), '.agent', 'skills');
 export class SkillLoader {
   private readonly bundledDir: string;
   private readonly userDir: string;
+  private readonly claudeDir: string;
   private readonly projectDir: string;
   private readonly pluginsDir: string;
   private readonly plugins: SkillLoaderOptions['plugins'];
@@ -42,7 +45,10 @@ export class SkillLoader {
   constructor(options: SkillLoaderOptions = {}) {
     this.bundledDir = options.bundledDir ?? DEFAULT_BUNDLED_DIR;
     this.userDir = options.userDir ?? DEFAULT_USER_DIR;
-    this.projectDir = options.projectDir ?? DEFAULT_PROJECT_DIR;
+    // Compute workspace-relative dirs lazily to respect AGENT_WORKSPACE_ROOT
+    // set via initializeWorkspaceRoot() after module load
+    this.claudeDir = options.claudeDir ?? getClaudeSkillsDir();
+    this.projectDir = options.projectDir ?? join(getWorkspaceRoot(), '.agent', 'skills');
     this.pluginsDir = options.pluginsDir ?? DEFAULT_PLUGINS_DIR;
     this.plugins = options.plugins;
     this.disabledBundled = options.disabledBundled ?? [];
@@ -68,9 +74,11 @@ export class SkillLoader {
     const errors: SkillError[] = [];
 
     // Scan each directory with appropriate source type
+    // Priority order: bundled < user < claude < project (later sources override earlier)
     const sources: Array<{ dir: string; source: SkillSource }> = [
       { dir: this.bundledDir, source: 'bundled' },
       { dir: this.userDir, source: 'user' },
+      { dir: this.claudeDir, source: 'claude' },
       { dir: this.projectDir, source: 'project' },
     ];
 

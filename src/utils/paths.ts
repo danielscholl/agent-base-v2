@@ -13,9 +13,25 @@
  */
 
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+
+/**
+ * Get workspace root from environment or current directory.
+ * Priority: AGENT_WORKSPACE_ROOT env var > process.cwd()
+ *
+ * This is a local implementation to avoid circular dependencies with tools/workspace.ts.
+ */
+function getWorkspaceRootLocal(): string {
+  const envRoot = process.env['AGENT_WORKSPACE_ROOT'];
+  if (envRoot !== undefined && envRoot !== '') {
+    // Expand ~ to home directory
+    const expanded = envRoot.startsWith('~') ? join(homedir(), envRoot.slice(1)) : envRoot;
+    return resolve(expanded);
+  }
+  return process.cwd();
+}
 
 /**
  * Get the agent home directory.
@@ -158,4 +174,35 @@ export function getBundledCommandsDir(): string {
 
   // Fallback to installed path (will fail but gives meaningful error)
   return installedPath;
+}
+
+/**
+ * Get the Claude directory path (.claude/) for Claude Code compatibility.
+ * Respects AGENT_WORKSPACE_ROOT environment variable for proper sandbox support.
+ *
+ * @param workspaceRoot - Workspace root directory (defaults to AGENT_WORKSPACE_ROOT or cwd)
+ * @returns Path to .claude directory
+ */
+export function getClaudeDir(workspaceRoot?: string): string {
+  return join(workspaceRoot ?? getWorkspaceRootLocal(), '.claude');
+}
+
+/**
+ * Get the Claude skills directory path (.claude/skills/).
+ *
+ * @param workspaceRoot - Workspace root directory (defaults to cwd)
+ * @returns Path to .claude/skills directory
+ */
+export function getClaudeSkillsDir(workspaceRoot?: string): string {
+  return join(getClaudeDir(workspaceRoot), 'skills');
+}
+
+/**
+ * Get the Claude commands directory path (.claude/commands/).
+ *
+ * @param workspaceRoot - Workspace root directory (defaults to cwd)
+ * @returns Path to .claude/commands directory
+ */
+export function getClaudeCommandsDir(workspaceRoot?: string): string {
+  return join(getClaudeDir(workspaceRoot), 'commands');
 }

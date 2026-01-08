@@ -212,6 +212,21 @@ Add slash commands in `~/.agent/commands/` to create reusable workflows. Command
 
 Install skills to add capabilities. Skills use progressive disclosure — they inject documentation only when relevant to the user's query.
 
+### Claude Code Compatibility
+
+Agent Harness supports the `.claude/` directory structure for Claude Code compatibility. This allows you to maintain a single set of workspace customizations that work across both tools:
+
+```
+<workspace>/.claude/
+├── skills/           # Claude Code compatible skills
+│   └── my-skill/
+│       └── SKILL.md
+└── commands/         # Claude Code compatible commands
+    └── deploy.md
+```
+
+Skills and commands in `.claude/` are automatically discovered. If you have both `.agent/` and `.claude/` directories, `.agent/` takes precedence.
+
 See [Architecture](docs/architecture/README.md) for details.
 
 ---

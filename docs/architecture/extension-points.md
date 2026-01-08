@@ -211,6 +211,27 @@ Instructions for using this skill...
 
 **Note:** Toolsets and triggers are planned features not yet implemented. The manifest schema is **strict** - unknown fields will be rejected. See [Skills Architecture](./skills.md) for the current manifest schema.
 
+### Claude Code Compatibility
+
+Skills and commands can also be placed in the `.claude/` directory for compatibility with Claude Code:
+
+```
+<workspace>/.claude/
+├── skills/           # Project-specific skills (Claude Code compatible)
+│   └── my-skill/
+│       └── SKILL.md
+└── commands/         # Project-specific commands (Claude Code compatible)
+    └── deploy.md
+```
+
+**Priority order:**
+- Skills: `plugin > project (.agent) > claude (.claude) > user (~/.agent) > bundled`
+- Commands: `project (.agent) > claude (.claude) > user (~/.agent) > bundled`
+
+When both `.agent/` and `.claude/` directories contain a skill or command with the same name, the `.agent/` version takes precedence. This allows users to:
+1. Maintain a single `.claude/` directory for both Claude Code and Agent Harness
+2. Override specific items in `.agent/` when different behavior is needed
+
 ---
 
 ## Adding a Command

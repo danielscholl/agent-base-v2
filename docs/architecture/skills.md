@@ -179,9 +179,32 @@ The `getTier1Context()` method generates an `<available_skills>` XML block:
 | Bundled | `src/_bundled_skills/` | Shipped with agent |
 | Plugin | `~/.agent/plugins/` | Installed via `agent skill install` |
 | User | `~/.agent/skills/` | Manually created by user |
+| Claude | `./.claude/skills/` | Claude Code compatible (project-specific) |
 | Project | `./.agent/skills/` | Project-specific |
 
-**Priority:** When skills have the same name, later sources override earlier ones: `plugin > project > user > bundled`
+**Priority:** When skills have the same name, later sources override earlier ones: `plugin > project > claude > user > bundled`
+
+### Claude Code Compatibility
+
+The `.claude/skills/` directory provides compatibility with [Claude Code](https://claude.ai/code)'s project customization conventions. This allows users to maintain a single set of workspace customizations that work across both Claude Code and Agent Harness.
+
+**Directory structure:**
+```
+<workspace-root>/.claude/
+├── skills/           # Claude Code compatible skills
+│   └── my-skill/
+│       ├── SKILL.md
+│       ├── scripts/
+│       └── references/
+└── commands/         # Claude Code compatible commands
+    └── deploy.md
+```
+
+**Behavior:**
+- Skills in `.claude/skills/` are automatically discovered alongside `.agent/skills/`
+- `.agent/skills/` takes priority over `.claude/skills/` (allows project-specific overrides)
+- Missing `.claude/` directory is handled gracefully (no errors)
+- Same symlink security validation applies to `.claude/` directories
 
 ---
 
