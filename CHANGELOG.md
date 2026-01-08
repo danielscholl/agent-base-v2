@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.20](https://github.com/danielscholl/agent-harness/compare/v0.3.19...v0.3.20) (2026-01-08)
+
+
+### Features
+
+* **cli:** support YAML array syntax for custom command front matter ([b20151c](https://github.com/danielscholl/agent-harness/commit/b20151cb9ecabfa72d5423e83665c7b85de59daf))
+* **manifest:** allow string or array for allowed-tools ([e718044](https://github.com/danielscholl/agent-harness/commit/e718044d6c404ae448bb548b3f9f834d9c6f32a6))
+
+
+### Bug Fixes
+
+* **manifest:** allow string or array for allowed-tools ([c08275a](https://github.com/danielscholl/agent-harness/commit/c08275ac9d13cf3583e3c029913538a76cf1bd5e))
+
 ## [0.3.19](https://github.com/danielscholl/agent-harness/compare/v0.3.18...v0.3.19) (2026-01-08)
 
 
