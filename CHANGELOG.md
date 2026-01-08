@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.21](https://github.com/danielscholl/agent-harness/compare/v0.3.20...v0.3.21) (2026-01-08)
+
+
+### Features
+
+* add windowed CommandAutocomplete with above/below indicators ([2a96b20](https://github.com/danielscholl/agent-harness/commit/2a96b20d9c9784176f17ab57f6d65fad95cc89f5))
+
+
+### Bug Fixes
+
+* **cli:** add scrolling window to command autocomplete ([84e5d17](https://github.com/danielscholl/agent-harness/commit/84e5d17c7f9a9711b4c223a439ed5c26fe1d337c))
+
 ## [0.3.20](https://github.com/danielscholl/agent-harness/compare/v0.3.19...v0.3.20) (2026-01-08)
 
 
