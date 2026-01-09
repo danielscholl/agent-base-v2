@@ -38,7 +38,9 @@ export function CLI({ flags }: CLIProps): React.ReactElement {
 
   // Single prompt mode
   if (flags.prompt !== undefined && flags.prompt !== '') {
-    return <SinglePrompt prompt={flags.prompt} verbose={flags.verbose} />;
+    return (
+      <SinglePrompt prompt={flags.prompt} verbose={flags.verbose} resumeSession={flags.continue} />
+    );
   }
 
   // Default: Interactive mode

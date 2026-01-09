@@ -2,6 +2,7 @@
  * SinglePrompt component.
  * Executes a single query and exits.
  * Used for -p/--prompt CLI mode for scripting and automation.
+ * Supports slash commands (e.g., /clone, /help) in addition to regular prompts.
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -15,10 +16,19 @@ import { Spinner } from './Spinner.js';
 import { ExecutionStatus } from './ExecutionStatus.js';
 import type { ToolNode, ExecutionPhase } from './ExecutionStatus.js';
 import { getUserFriendlyMessage } from '../errors/index.js';
-import { resolveModelName } from '../utils/index.js';
+import { resolveModelName, SessionManager, getAgentHome } from '../utils/index.js';
 import type { SinglePromptProps } from '../cli/types.js';
 import type { AgentErrorResponse } from '../errors/index.js';
 import type { AppConfig } from '../config/schema.js';
+import type { Message } from '../agent/types.js';
+import { isSlashCommand, isShellCommand, unescapeSlash } from '../cli/constants.js';
+import { executeCommand } from '../cli/commands/index.js';
+import { helpHandler } from '../cli/commands/help.js';
+import { createCliContextWithConfig } from '../cli/cli-context.js';
+import type { CommandContext, CommandResult } from '../cli/commands/types.js';
+
+/** Commands that are not supported in prompt mode */
+const UNSUPPORTED_PROMPT_MODE_COMMANDS = ['/save', '/resume', '/clear'];
 
 /**
  * Tool execution tracking for verbose mode.
@@ -66,11 +76,12 @@ export function SinglePrompt({
   prompt,
   verbose,
   initialHistory,
+  resumeSession,
 }: SinglePromptProps): React.ReactElement {
   const { exit } = useApp();
 
   const [state, setState] = useState<{
-    phase: 'loading' | 'executing' | 'done' | 'error';
+    phase: 'loading' | 'processing-command' | 'executing' | 'done' | 'error';
     spinnerMessage: string;
     output: string;
     error: AgentErrorResponse | null;
@@ -103,11 +114,130 @@ export function SinglePrompt({
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  /**
+   * Process a slash command and return the result.
+   * Returns the command result, which may include a customCommandPrompt.
+   */
+  async function processSlashCommand(
+    input: string,
+    config: AppConfig | null
+  ): Promise<{ result: CommandResult | undefined; shouldContinueToAgent: boolean }> {
+    // Create a CLI context for command execution
+    // Override exit to not actually exit (we handle exit via state/useApp)
+    const context: CommandContext = {
+      ...createCliContextWithConfig(config),
+      exit: () => {
+        // No-op - we handle exit via state/useApp
+      },
+    };
+
+    const result = await executeCommand(input, context);
+
+    // Determine if we should continue to agent execution
+    // - If command has customCommandPrompt, use it as the agent prompt
+    // - If command executed successfully but no prompt (e.g., /help), we're done
+    // - If command failed, we're done with error
+    // - If result is undefined, it's not a command - pass to agent as-is
+    if (result === undefined) {
+      // Not a command - should not happen since we checked isSlashCommand/isShellCommand
+      return { result: undefined, shouldContinueToAgent: true };
+    }
+
+    if (result.customCommandPrompt !== undefined) {
+      // Custom command with prompt injection - continue to agent with new prompt
+      return { result, shouldContinueToAgent: true };
+    }
+
+    // Built-in command or failed custom command - don't continue to agent
+    return { result, shouldContinueToAgent: false };
+  }
+
   // Execute the prompt
   useEffect(() => {
     mountedRef.current = true;
 
     async function execute(): Promise<void> {
+      // Handle // escape: "//foo" becomes "/foo" (literal slash, not a command)
+      let processedPrompt = prompt;
+      if (prompt.trim().startsWith('//')) {
+        const unescaped = unescapeSlash(prompt);
+        if (unescaped !== undefined) {
+          processedPrompt = unescaped;
+        }
+        // Fall through to normal agent execution with the unescaped prompt
+      }
+
+      // Block shell commands in prompt mode for security
+      if (isShellCommand(processedPrompt)) {
+        setState((s) => ({
+          ...s,
+          phase: 'error',
+          spinnerMessage: '',
+          output: '',
+          error: {
+            success: false,
+            error: 'PERMISSION_DENIED',
+            message:
+              'Shell commands (!) are not supported in prompt mode for security reasons. Use interactive mode instead.',
+          },
+        }));
+        return;
+      }
+
+      // Check if this is a slash command
+      const isCommand = isSlashCommand(processedPrompt);
+
+      // Handle /help before config loading (doesn't need config)
+      if (isCommand) {
+        const commandName = processedPrompt.split(/\s+/)[0]?.toLowerCase() ?? '';
+        const commandArgs = processedPrompt.slice(commandName.length).trim();
+
+        // Check for unsupported commands in prompt mode
+        if (UNSUPPORTED_PROMPT_MODE_COMMANDS.includes(commandName)) {
+          setState((s) => ({
+            ...s,
+            phase: 'error',
+            spinnerMessage: '',
+            output: '',
+            error: {
+              success: false,
+              error: 'UNKNOWN',
+              message: `Command "${commandName}" is not supported in prompt mode. Use interactive mode instead.`,
+            },
+          }));
+          return;
+        }
+
+        // Handle /help without config
+        if (commandName === '/help') {
+          const context: CommandContext = {
+            ...createCliContextWithConfig(null),
+            exit: () => {
+              // No-op
+            },
+          };
+          await helpHandler(commandArgs, context);
+          setState((s) => ({
+            ...s,
+            phase: 'done',
+            spinnerMessage: '',
+            output: '',
+          }));
+          return;
+        }
+
+        // Handle /exit without config
+        if (commandName === '/exit' || commandName === '/quit') {
+          setState((s) => ({
+            ...s,
+            phase: 'done',
+            spinnerMessage: '',
+            output: '',
+          }));
+          return;
+        }
+      }
+
       // Check if any config file exists (user or project)
       const hasConfigFile = await configFileExists();
       if (!hasConfigFile) {
@@ -147,7 +277,86 @@ export function SinglePrompt({
 
       const config = configResult.result as AppConfig;
 
-      // Validate provider credentials
+      // The prompt to actually send to the agent (may be transformed by custom command)
+      let actualPrompt = processedPrompt;
+
+      // Process slash commands that require config
+      if (isCommand) {
+        // Process slash command before agent execution
+        if (verbose === true) {
+          const commandName = processedPrompt.split(/\s+/)[0] ?? processedPrompt;
+          setState((s) => ({
+            ...s,
+            phase: 'processing-command',
+            spinnerMessage: `Processing ${commandName}...`,
+          }));
+        }
+
+        const { result: cmdResult, shouldContinueToAgent } = await processSlashCommand(
+          processedPrompt,
+          config
+        );
+
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- mountedRef may change during await
+        if (!mountedRef.current) return;
+
+        if (!shouldContinueToAgent) {
+          // Command executed but doesn't need agent
+          // Check if it was successful or had an error
+          if (cmdResult !== undefined && !cmdResult.success) {
+            // Command failed - exit with error
+            setState((s) => ({
+              ...s,
+              phase: 'error',
+              spinnerMessage: '',
+              output: '',
+              error: {
+                success: false,
+                error: 'UNKNOWN', // Using UNKNOWN for command errors
+                message: cmdResult.message ?? 'Command failed',
+              },
+            }));
+            return;
+          }
+
+          // Command succeeded (e.g., /telemetry) - exit gracefully
+          // For commands that output directly, the output was already written
+          setState((s) => ({
+            ...s,
+            phase: 'done',
+            spinnerMessage: '',
+            output: cmdResult?.message ?? '',
+          }));
+          return;
+        }
+
+        // Custom command with prompt - use transformed prompt for agent
+        if (cmdResult?.customCommandPrompt !== undefined) {
+          actualPrompt = cmdResult.customCommandPrompt;
+        }
+      }
+
+      // Load session history if --continue flag was passed
+      let historyToUse: Message[] | undefined = initialHistory;
+      if (resumeSession === true && historyToUse === undefined) {
+        const agentHome = getAgentHome();
+        const sessionManager = new SessionManager({
+          sessionDir: `${agentHome}/sessions`,
+          maxSessions: config.session.maxSessions,
+        });
+        const lastSessionId = await sessionManager.getLastSession();
+        if (lastSessionId !== null) {
+          const session = await sessionManager.loadSession(lastSessionId);
+          if (session !== null) {
+            historyToUse = session.messages;
+            if (verbose === true) {
+              process.stderr.write(`[session] Resuming session: ${lastSessionId}\n`);
+            }
+          }
+        }
+      }
+
+      // Validate provider credentials (only needed if we're going to use the agent)
       const validation = validateProviderCredentials(config);
       if (!validation.isValid) {
         setState((s) => ({
@@ -323,7 +532,8 @@ export function SinglePrompt({
         // Verbose mode gets streaming output via onLLMStream callback
         // Non-verbose mode gets clean final answer
         // Pass initialHistory if provided for context continuation
-        const result = await agent.run(prompt, initialHistory);
+        // Use actualPrompt which may have been transformed from a custom command
+        const result = await agent.run(actualPrompt, historyToUse);
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- mountedRef may be false after await
         if (mountedRef.current) {
           setState((s) => {
@@ -359,7 +569,7 @@ export function SinglePrompt({
     return () => {
       mountedRef.current = false;
     };
-  }, [prompt, verbose, initialHistory]);
+  }, [prompt, verbose, initialHistory, resumeSession]);
 
   // Exit after completion or error
   useEffect(() => {
@@ -418,6 +628,10 @@ export function SinglePrompt({
 
   // Verbose mode: show spinner and streaming output
   if (state.phase === 'loading') {
+    return <Spinner message={state.spinnerMessage} />;
+  }
+
+  if (state.phase === 'processing-command') {
     return <Spinner message={state.spinnerMessage} />;
   }
 

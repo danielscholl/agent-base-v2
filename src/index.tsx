@@ -29,7 +29,7 @@ const cli = meow(
     update        Check for and install updates
 
   Options
-    -p, --prompt  Execute single prompt and exit
+    -p, --prompt  Execute single prompt and exit (supports slash commands)
     --check       Show configuration and connectivity
     --tools       Show tool configuration
     --version     Show version
@@ -38,6 +38,12 @@ const cli = meow(
     --continue    Resume last session
     --verbose     Show detailed execution
     --sandbox     Run inside Docker container
+
+  Examples
+    agent -p "What is TypeScript?"    Run a single query
+    agent -p "/greet World"           Execute custom command
+    agent -p "/help"                  Show help and exit
+    agent --continue -p "And more?"   Continue last session
 
   Run 'agent <command> --help' for command details.
 `,

@@ -46,6 +46,8 @@ export interface SinglePromptProps {
   verbose?: boolean;
   /** Optional initial history for context continuation */
   initialHistory?: Message[];
+  /** Whether to resume the previous session (--continue flag) */
+  resumeSession?: boolean;
 }
 
 /**
