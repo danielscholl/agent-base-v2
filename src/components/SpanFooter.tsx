@@ -2,7 +2,7 @@
  * SpanFooter component for verbose mode execution summary.
  *
  * Displays a compact span summary near the input prompt in verbose mode.
- * Shows after agent completion with span chips for keyboard navigation.
+ * Shows after agent completion with expandable span details.
  *
  * Note: "Span" aligns with OpenTelemetry terminology - each LLM reasoning
  * cycle produces a span with associated tool calls.
@@ -30,12 +30,6 @@ export interface SpanFooterProps {
   toolCount: number;
   /** Set of expanded span numbers */
   expandedSpans: Set<number>;
-  /** Currently selected span for keyboard navigation */
-  selectedSpan?: number;
-  /** Callback when a span expansion is toggled */
-  onToggleExpand?: (spanNum: number) => void;
-  /** Whether to show keyboard hints */
-  showHints?: boolean;
 }
 
 /**
@@ -66,18 +60,13 @@ function hasErrors(spans: ExecutionSpan[]): boolean {
  * S1 • S2 • S3
  * ```
  *
- * @example With selected span
- * ```
- * ✓ 3 spans, 12 tools (4.2s)
- * S1 • [S2] • S3
- * ```
- *
  * @example Expanded
  * ```
  * ✓ 3 spans, 12 tools (4.2s)
- * S1 • ▼S2 • S3
- * ├── • glob **\/*.ts → 42 files
- * └── • read file.ts → 270 lines
+ * ▼S1 • ▼S2 • ▼S3
+ *  ▼ S1 (1.2s)
+ *  ├── • Thinking (3 messages)
+ *  └── • glob **\/*.ts → 42 files
  * ```
  */
 export function SpanFooter({
@@ -85,13 +74,7 @@ export function SpanFooter({
   duration,
   toolCount,
   expandedSpans,
-  selectedSpan,
-  onToggleExpand,
-  showHints = false,
 }: SpanFooterProps): React.ReactElement | null {
-  // onToggleExpand reserved for future click/tap support
-  void onToggleExpand;
-
   // Don't render if no spans
   if (spans.length === 0) {
     return null;
@@ -117,31 +100,15 @@ export function SpanFooter({
       <Box flexWrap="wrap">
         {spans.map((span, index) => {
           const isExpanded = expandedSpans.has(span.number);
-          const isSelected = selectedSpan === span.number;
           const hasError =
             span.status === 'error' || span.toolNodes.some((tool) => tool.status === 'error');
-
-          // Determine chip color
-          let chipColor: string | undefined;
-          if (isSelected) {
-            chipColor = 'cyan';
-          } else if (hasError) {
-            chipColor = 'red';
-          } else {
-            chipColor = undefined; // Default
-          }
 
           return (
             <React.Fragment key={span.number}>
               {/* Separator between chips */}
               {index > 0 && <Text dimColor> {SYMBOL_SEPARATOR} </Text>}
               {/* Span chip */}
-              <Text
-                color={chipColor}
-                bold={isSelected}
-                underline={isSelected}
-                dimColor={!isSelected && !hasError}
-              >
+              <Text color={hasError ? 'red' : undefined} dimColor={!hasError}>
                 {isExpanded ? '▼' : ''}S{span.number}
               </Text>
             </React.Fragment>
@@ -154,22 +121,9 @@ export function SpanFooter({
         .filter((span) => expandedSpans.has(span.number))
         .map((span) => (
           <Box key={`expanded-${String(span.number)}`} marginLeft={1} marginTop={0}>
-            <SpanNode
-              span={span}
-              expanded={true}
-              compact={true}
-              isSelected={selectedSpan === span.number}
-              showToolHistory={true}
-            />
+            <SpanNode span={span} expanded={true} compact={true} showToolHistory={true} />
           </Box>
         ))}
-
-      {/* Keyboard hints */}
-      {showHints && (
-        <Box marginTop={1}>
-          <Text dimColor>Tab select span • Enter expand • Esc close</Text>
-        </Box>
-      )}
     </Box>
   );
 }

@@ -36,8 +36,6 @@ export interface SpanNodeProps {
   isLast?: boolean;
   /** Whether to show tool history (verbose mode) */
   showToolHistory?: boolean;
-  /** Whether this span is selected for keyboard navigation */
-  isSelected?: boolean;
   /** Compact mode for footer display (S1 instead of Span 1) */
   compact?: boolean;
 }
@@ -142,7 +140,6 @@ export function SpanNode({
   expanded = false,
   isLast = false,
   showToolHistory = true,
-  isSelected = false,
   compact = false,
 }: SpanNodeProps): React.ReactElement {
   const { symbol, color } = getSpanStyle(span);
@@ -156,11 +153,8 @@ export function SpanNode({
   if (!expanded || !showToolHistory) {
     return (
       <Box>
-        {/* Leading pointer for selected span */}
-        {isSelected && <Text color="cyan">{'▸ '}</Text>}
-        {/* Status symbol */}
-        <Text color={isSelected ? 'cyan' : color}>{symbol} </Text>
-        <Text color={isSelected ? 'cyan' : color}>{spanLabel}</Text>
+        <Text color={color}>{symbol} </Text>
+        <Text color={color}>{spanLabel}</Text>
         {span.duration !== undefined && <Text dimColor> ({formatDuration(span.duration)})</Text>}
         <Text dimColor>
           {' '}
@@ -174,11 +168,8 @@ export function SpanNode({
   return (
     <Box flexDirection="column">
       <Box>
-        {/* Leading pointer for selected span */}
-        {isSelected && <Text color="cyan">{'▸ '}</Text>}
-        {/* Expansion indicator */}
-        <Text color={isSelected ? 'cyan' : color}>{SYMBOL_EXPANDED} </Text>
-        <Text color={isSelected ? 'cyan' : color}>{spanLabel}</Text>
+        <Text color={color}>{SYMBOL_EXPANDED} </Text>
+        <Text color={color}>{spanLabel}</Text>
         {span.duration !== undefined && <Text dimColor> ({formatDuration(span.duration)})</Text>}
       </Box>
       {/* Thinking summary if applicable */}

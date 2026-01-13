@@ -201,10 +201,6 @@ interface ShellState {
   spanState: SpanState;
   /** Version check result for update banner */
   versionCheck: VersionCheckResult | null;
-  /** Set of span numbers that are manually expanded (for verbose progressive disclosure) */
-  expandedSpans: Set<number>;
-  /** Currently selected span for keyboard navigation (for verbose progressive disclosure) */
-  selectedSpan: number | undefined;
 }
 
 /**
@@ -263,8 +259,6 @@ export function InteractiveShell({
       spanReasoningBuffers: [],
     },
     versionCheck: null,
-    expandedSpans: new Set<number>(),
-    selectedSpan: undefined,
   });
 
   // Load config on mount and handle session resume
@@ -889,8 +883,6 @@ export function InteractiveShell({
               spanMessageCounts: [],
               spanReasoningBuffers: [],
             },
-            expandedSpans: new Set<number>(),
-            selectedSpan: undefined,
           }));
 
           // Sync filesystem writes and fall through to agent execution
@@ -929,8 +921,6 @@ export function InteractiveShell({
           spanMessageCounts: [],
           spanReasoningBuffers: [],
         },
-        expandedSpans: new Set<number>(),
-        selectedSpan: undefined,
       }));
 
       // Synchronize filesystem writes config to env var before each run
@@ -1446,52 +1436,10 @@ export function InteractiveShell({
       : [];
     const hasAutocomplete = filteredCommands.length > 0;
 
-    // ESC to clear input (or close autocomplete), or collapse all expanded spans
+    // ESC to clear input (or close autocomplete)
     if (key.escape) {
-      // If in verbose mode with expanded spans, collapse them all
-      if (verbose && state.expandedSpans.size > 0) {
-        setState((s) => ({ ...s, expandedSpans: new Set<number>(), selectedSpan: undefined }));
-        return;
-      }
       setState((s) => ({ ...s, input: '', cursorPosition: 0, autocompleteIndex: 0 }));
       historyRef.current.reset();
-      return;
-    }
-
-    // Progressive disclosure navigation (verbose mode, empty input, has spans)
-    const hasCompletedSpans = state.lastExecutionSpans.length > 0;
-    const canNavigateSpans =
-      verbose && state.input === '' && hasCompletedSpans && !state.isProcessing;
-
-    // Tab to cycle through spans for selection (verbose mode only)
-    if (key.tab && canNavigateSpans) {
-      setState((s) => {
-        const spanCount = s.lastExecutionSpans.length;
-        if (spanCount === 0) return s;
-
-        // Cycle through spans (wrap around)
-        const currentSelected = s.selectedSpan ?? 0;
-        const nextSelected = currentSelected >= spanCount ? 1 : currentSelected + 1;
-        return { ...s, selectedSpan: nextSelected };
-      });
-      return;
-    }
-
-    // Enter to expand/collapse selected span (verbose mode only, when not typing)
-    // Note: Only when input is empty - otherwise Enter submits input
-    if (key.return && canNavigateSpans && state.selectedSpan !== undefined) {
-      setState((s) => {
-        const spanNum = s.selectedSpan;
-        if (spanNum === undefined) return s;
-
-        const newExpanded = new Set(s.expandedSpans);
-        if (newExpanded.has(spanNum)) {
-          newExpanded.delete(spanNum);
-        } else {
-          newExpanded.add(spanNum);
-        }
-        return { ...s, expandedSpans: newExpanded };
-      });
       return;
     }
 
@@ -1669,76 +1617,6 @@ export function InteractiveShell({
     }
   });
 
-  // Build spans array for ExecutionStatus
-  const buildSpans = (): ExecutionSpan[] => {
-    const { spanState, completedTasks, activeTasks, messageCount, spinnerMessage } = state;
-
-    if (spanState.currentSpan === 0) {
-      return [];
-    }
-
-    const spans: ExecutionSpan[] = [];
-    const now = Date.now();
-
-    for (let i = 0; i < spanState.currentSpan; i++) {
-      const spanNumber = i + 1;
-      const isCurrentSpan = spanNumber === spanState.currentSpan;
-      const startTime = spanState.spanStartTimes[i] ?? now;
-      const spanMessageCount = spanState.spanMessageCounts[i] ?? messageCount;
-
-      // Get tools for this span
-      const spanCompletedTools = completedTasks.filter((t) => t.span === spanNumber);
-      const spanActiveTools = activeTasks.filter((t) => t.span === spanNumber);
-
-      // Calculate span duration (for completed spans, use next span start or now)
-      const nextSpanStart = spanState.spanStartTimes[i + 1];
-      const spanDuration = isCurrentSpan
-        ? undefined
-        : nextSpanStart !== undefined
-          ? (nextSpanStart - startTime) / 1000
-          : (now - startTime) / 1000;
-
-      // Build tool nodes for this span
-      const toolNodes: ToolNode[] = [
-        ...spanCompletedTools.map(
-          (task): ToolNode => ({
-            id: task.id,
-            name: task.name,
-            status: task.success ? 'complete' : 'error',
-            duration: task.duration >= 0 ? task.duration / 1000 : undefined,
-            error: task.error,
-            span: spanNumber,
-            primaryArg: task.primaryArg,
-            resultSummary: task.resultSummary,
-            hasDetailedOutput: task.hasDetailedOutput,
-          })
-        ),
-        ...spanActiveTools.map(
-          (task): ToolNode => ({
-            id: task.id,
-            name: task.name,
-            args: task.args !== undefined ? formatToolArgs(task.args) : undefined,
-            status: 'running',
-            span: spanNumber,
-          })
-        ),
-      ];
-
-      spans.push({
-        number: spanNumber,
-        status: isCurrentSpan ? 'working' : 'complete',
-        duration: spanDuration,
-        messageCount: spanMessageCount,
-        // isThinking remains true while spinner is showing (even with streaming output)
-        // This allows reasoning display in verbose mode Focus Zone
-        isThinking: isCurrentSpan && spinnerMessage !== '',
-        toolNodes,
-      });
-    }
-
-    return spans;
-  };
-
   // Render config loading state
   if (!state.configLoaded) {
     return <Spinner message="Loading configuration..." />;
@@ -1871,21 +1749,13 @@ export function InteractiveShell({
               })
             ),
           ]}
-          spans={buildSpans()}
-          showToolHistory={verbose}
-          activeReasoning={state.spinnerMessage !== '' ? state.streamingOutput : undefined}
-          expandedSpans={state.expandedSpans}
-          selectedSpan={state.selectedSpan}
         />
       )}
 
       {/* Streaming output with AnswerBox */}
-      {/* In verbose mode, reasoning is shown in FocusZone during thinking */}
-      {/* Show AnswerBox when: has output AND (not verbose OR not thinking) */}
-      {(state.streamingOutput !== '' || (state.isProcessing && state.spinnerMessage === '')) &&
-        (!verbose || state.spinnerMessage === '') && (
-          <AnswerBox content={state.streamingOutput} isStreaming={state.isProcessing} />
-        )}
+      {(state.streamingOutput !== '' || (state.isProcessing && state.spinnerMessage === '')) && (
+        <AnswerBox content={state.streamingOutput} isStreaming={state.isProcessing} />
+      )}
 
       {/* Error display */}
       {state.error !== null && (
@@ -1917,7 +1787,7 @@ export function InteractiveShell({
         (state.sessionSelection === null || !state.sessionSelection.active) &&
         state.messages.length > 0 && <PromptDivider cwd={process.cwd()} />}
 
-      {/* SpanFooter for verbose mode - shows execution summary near input */}
+      {/* SpanFooter for verbose mode - shows execution summary with auto-expanded spans */}
       {verbose &&
         !state.isProcessing &&
         state.promptState === null &&
@@ -1927,9 +1797,7 @@ export function InteractiveShell({
             spans={state.lastExecutionSpans}
             duration={state.lastExecutionDuration ?? 0}
             toolCount={state.lastExecutionToolNodes.length}
-            expandedSpans={state.expandedSpans}
-            selectedSpan={state.selectedSpan}
-            showHints={true}
+            expandedSpans={new Set(state.lastExecutionSpans.map((s) => s.number))}
           />
         )}
 

@@ -806,7 +806,6 @@ export function SinglePrompt({
           duration={state.finalDuration ?? 0}
           toolCount={totalToolCount}
           expandedSpans={new Set(state.finalSpans.map((s) => s.number))}
-          showHints={false}
         />
       )}
       {/* Separator line between trace and answer in verbose mode */}

@@ -142,52 +142,6 @@ describe('SpanFooter', () => {
     });
   });
 
-  describe('selected span', () => {
-    it('highlights selected span chip', () => {
-      const spans = [createSpan({ number: 1 }), createSpan({ number: 2 })];
-      const { lastFrame } = render(
-        <SpanFooter
-          spans={spans}
-          duration={2.0}
-          toolCount={3}
-          expandedSpans={new Set()}
-          selectedSpan={2}
-        />
-      );
-      // The selected span should be in the output
-      const frame = lastFrame() ?? '';
-      expect(frame).toContain('S2');
-    });
-  });
-
-  describe('keyboard hints', () => {
-    it('shows keyboard hints when showHints is true', () => {
-      const spans = [createSpan({ number: 1 })];
-      const { lastFrame } = render(
-        <SpanFooter
-          spans={spans}
-          duration={1.0}
-          toolCount={1}
-          expandedSpans={new Set()}
-          showHints={true}
-        />
-      );
-      const frame = lastFrame() ?? '';
-      expect(frame).toContain('Tab');
-      expect(frame).toContain('Enter');
-      expect(frame).toContain('Esc');
-    });
-
-    it('hides keyboard hints by default', () => {
-      const spans = [createSpan({ number: 1 })];
-      const { lastFrame } = render(
-        <SpanFooter spans={spans} duration={1.0} toolCount={1} expandedSpans={new Set()} />
-      );
-      const frame = lastFrame() ?? '';
-      expect(frame).not.toContain('↑↓');
-    });
-  });
-
   describe('empty state', () => {
     it('returns null when no spans', () => {
       const { lastFrame } = render(

@@ -12,8 +12,6 @@
 
 import React from 'react';
 import { Box, Text } from 'ink';
-import { FocusZone } from './FocusZone.js';
-import { SpanNode } from './SpanNode.js';
 
 // Visual symbols (from agent-base)
 const SYMBOL_ACTIVE = '●'; // Yellow - working/thinking
@@ -92,20 +90,10 @@ export interface ExecutionStatusProps {
     messageCount: number;
     isActive: boolean;
   };
-  /** Tool execution nodes (flat list, legacy mode) */
+  /** Tool execution nodes (flat list) */
   toolNodes?: ToolNode[];
-  /** Execution spans (for multi-span display in verbose mode) */
-  spans?: ExecutionSpan[];
   /** Error message (if status is error) */
   errorMessage?: string;
-  /** Whether to show detailed tool history (verbose mode) */
-  showToolHistory?: boolean;
-  /** Streaming LLM reasoning output (verbose mode) */
-  activeReasoning?: string;
-  /** Set of span numbers that are manually expanded */
-  expandedSpans?: Set<number>;
-  /** Currently selected span for keyboard navigation */
-  selectedSpan?: number;
 }
 
 /**
@@ -197,16 +185,11 @@ function ToolNodeRow({ node, isLast }: { node: ToolNode; isLast: boolean }): Rea
  * Displays EPHEMERAL execution status during working state only.
  * Returns null on completion (parent uses SpanFooter for verbose mode).
  *
- * Non-verbose working state:
+ * Working state:
  * ```
  * ● working... (msg:1 tool:0)
- * └── ● Thinking (1 messages)
- * ```
- *
- * Verbose working state (showToolHistory=true):
- * ```
- * ● Span 1
- * └── ● Thinking (1 messages)
+ * ├── ● Thinking (1 messages)
+ * └── • glob **\/*.ts → 42 files
  * ```
  *
  * Note: Completion state returns null. Parent component should:
@@ -220,18 +203,8 @@ export function ExecutionStatus({
   duration,
   thinkingState,
   toolNodes = [],
-  spans,
   errorMessage,
-  showToolHistory = false,
-  activeReasoning,
-  expandedSpans,
-  selectedSpan,
 }: ExecutionStatusProps): React.ReactElement | null {
-  // Note: expandedSpans and selectedSpan are kept for working state span navigation
-  // but are primarily used by SpanFooter for post-completion interaction
-  void expandedSpans;
-  void selectedSpan;
-
   // Completion state - return null (parent shows SpanFooter for verbose mode)
   // This makes ExecutionStatus ephemeral - visible only during execution
   if (status === 'complete') {
@@ -260,143 +233,10 @@ export function ExecutionStatus({
     );
   }
 
-  // Working state - build tree structure
+  // Working state - unified view for both verbose and non-verbose modes
   const hasThinking = thinkingState?.isActive ?? false;
   const hasTools = toolNodes.length > 0;
 
-  // Verbose mode with spans - Three-Zone Progressive Disclosure Layout
-  if (showToolHistory && spans !== undefined && spans.length > 0) {
-    const currentSpan = spans[spans.length - 1];
-    const completedSpans = spans.slice(0, -1);
-
-    // Find active tool (running) for Focus Zone
-    const activeTools = currentSpan?.toolNodes.filter((t) => t.status === 'running') ?? [];
-    const completedCurrentTools =
-      currentSpan?.toolNodes.filter((t) => t.status !== 'running') ?? [];
-
-    // Check if a span is expanded (manually or selected)
-    const isSpanExpanded = (spanNum: number): boolean => {
-      return expandedSpans?.has(spanNum) ?? false;
-    };
-
-    return (
-      <Box flexDirection="column" marginBottom={1}>
-        {/* ═══ HISTORY ZONE: Collapsed completed spans using SpanNode ═══ */}
-        {completedSpans.map((span, index) => (
-          <SpanNode
-            key={span.number}
-            span={span}
-            expanded={isSpanExpanded(span.number)}
-            isSelected={selectedSpan === span.number}
-            isLast={index === completedSpans.length - 1}
-            showToolHistory={true}
-          />
-        ))}
-
-        {/* Visual separator between History and Active zones */}
-        {completedSpans.length > 0 && currentSpan !== undefined && (
-          <Text dimColor>{'─'.repeat(40)}</Text>
-        )}
-
-        {/* ═══ CONTEXT ZONE: Current span header + completed tools ═══ */}
-        {currentSpan !== undefined && (
-          <>
-            <Box>
-              {/* Leading pointer for selected span */}
-              {selectedSpan === currentSpan.number && <Text color="cyan">{'▸ '}</Text>}
-              <Text color="yellow">
-                {SYMBOL_ACTIVE} Span {currentSpan.number}
-              </Text>
-            </Box>
-
-            {/* Thinking state with optional streaming reasoning */}
-            {currentSpan.isThinking && (
-              <>
-                <Box>
-                  <Text dimColor>
-                    {currentSpan.toolNodes.length > 0 ||
-                    (activeReasoning !== undefined && activeReasoning.length > 0)
-                      ? TREE_BRANCH
-                      : TREE_LAST}{' '}
-                  </Text>
-                  <Text color="yellow">{SYMBOL_ACTIVE} Thinking</Text>
-                  <Text dimColor> ({currentSpan.messageCount} messages)</Text>
-                </Box>
-                {/* Streaming reasoning in Focus Zone */}
-                {activeReasoning !== undefined && activeReasoning.length > 0 && (
-                  <Box marginLeft={4}>
-                    <FocusZone
-                      content={activeReasoning}
-                      maxLines={6}
-                      isStreaming={true}
-                      bordered={true}
-                      boxWidth={56}
-                      title="Streaming..."
-                    />
-                  </Box>
-                )}
-              </>
-            )}
-
-            {/* Completed tools in current span (Context Zone) */}
-            {completedCurrentTools.map((node, index) => {
-              const isLastCompleted = index === completedCurrentTools.length - 1;
-              const isActuallyLast = isLastCompleted && activeTools.length === 0;
-              return <ToolNodeRow key={node.id} node={node} isLast={isActuallyLast} />;
-            })}
-
-            {/* ═══ FOCUS ZONE: Active running tools in bordered box ═══ */}
-            {activeTools.map((node) => {
-              // Build content for FocusZone from tool info
-              const primaryArg = node.primaryArg ?? '';
-              const toolContent = primaryArg.length > 0 ? `${node.name}: ${primaryArg}` : node.name;
-
-              return (
-                <Box key={node.id} marginLeft={2}>
-                  <FocusZone
-                    content={toolContent}
-                    title={`${SYMBOL_TOOL} Running`}
-                    bordered={true}
-                    boxWidth={50}
-                    maxLines={3}
-                    isStreaming={true}
-                  />
-                </Box>
-              );
-            })}
-          </>
-        )}
-      </Box>
-    );
-  }
-
-  // Verbose mode without spans (legacy - single span)
-  if (showToolHistory) {
-    return (
-      <Box flexDirection="column" marginBottom={1}>
-        {/* Span header */}
-        <Box>
-          <Text color="yellow">{SYMBOL_ACTIVE} Span 1</Text>
-        </Box>
-
-        {/* Thinking node */}
-        {hasThinking && (
-          <Box>
-            <Text dimColor>{hasTools ? TREE_BRANCH : TREE_LAST} </Text>
-            <Text color="yellow">{SYMBOL_ACTIVE} Thinking</Text>
-            <Text dimColor> ({thinkingState?.messageCount ?? 0} messages)</Text>
-          </Box>
-        )}
-
-        {/* Tool nodes */}
-        {toolNodes.map((node, index) => (
-          <ToolNodeRow key={node.id} node={node} isLast={index === toolNodes.length - 1} />
-        ))}
-      </Box>
-    );
-  }
-
-  // Non-verbose working state
   return (
     <Box flexDirection="column" marginBottom={1}>
       {/* Header line */}

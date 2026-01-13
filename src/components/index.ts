@@ -28,4 +28,3 @@ export { PromptDivider, type PromptDividerProps } from './PromptDivider.js';
 export { FocusZone, type FocusZoneProps } from './FocusZone.js';
 export { SpanNode, type SpanNodeProps } from './SpanNode.js';
 export { SpanFooter, type SpanFooterProps } from './SpanFooter.js';
-export { ToolSummary, ToolSummaryList, type ToolSummaryProps } from './ToolSummary.js';
