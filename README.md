@@ -2,7 +2,7 @@
 
 **The rig. Not the driver.**
 
-A TypeScript runtime for building, running, and composing AI agents with any LLM.
+A TypeScript runtime for configuring and running AI agents with any LLM.
 
 [![Bun 1.3.4+](https://img.shields.io/badge/bun-1.3.4+-black.svg)](https://bun.sh/)
 [![TypeScript 5.x](https://img.shields.io/badge/typescript-5.x-blue.svg)](https://www.typescriptlang.org/)
@@ -12,7 +12,7 @@ A TypeScript runtime for building, running, and composing AI agents with any LLM
 
 ## What is a Harness?
 
-A harness is infrastructure — it constrains, orchestrates, and connects an AI model to tools, policies, and workflows. It is not intelligent on its own; it channels intelligence safely and repeatably.
+A harness is infrastructure. It connects an AI model to tools and policies. Not intelligent itself, just reliable plumbing.
 
 | | Harness (this project) | Agent (the LLM) |
 |---|------------------------|-----------------|
@@ -21,20 +21,18 @@ A harness is infrastructure — it constrains, orchestrates, and connects an AI 
 | Has goals | No | Yes (when configured) |
 | Ships with behavior | No | Yes (when configured) |
 
-**Agent Harness is the rig that runs agents. The LLM is the driver.**
-
 ---
 
 ## What You Get
 
 **The harness provides:**
 
-- **Multi-provider LLM support** — swap between local and cloud models at runtime
-- **Tool execution pipeline** — filesystem, shell, search, and custom tools
-- **Session persistence** — conversation memory across interactions
-- **Observability** — tracing, timing, and execution logs via OpenTelemetry
-- **Extension points** — skills, commands, and workflows
-- **CLI-first interface** — interactive use and scripting
+- **Model access** — multi-provider, swap between local and cloud at runtime
+- **Tool handling** — filesystem, shell, and search tools
+- **Safety layer** — workspace constraints and sandbox isolation
+- **Session memory** — conversation persistence across interactions
+- **Observability** — tracing and logs via OpenTelemetry
+- **Extension points** — skills, commands, lifecycle hooks
 
 **The harness does NOT provide:**
 
@@ -42,7 +40,7 @@ A harness is infrastructure — it constrains, orchestrates, and connects an AI 
 - Domain-specific behavior
 - Autonomous planning out of the box
 
-The power comes when you configure it: add AGENTS.md, custom commands, and skills. Then it becomes whatever you need.
+Drop in AGENTS.md, commands, and skills. They define the agent.
 
 ---
 
@@ -126,9 +124,6 @@ agent config show
 agent config provider local       # Docker/Ollama
 agent config provider github      # GitHub Models
 agent config provider openai      # OpenAI
-
-# Memory backend
-agent config memory               # Switch between in_memory and mem0
 ```
 
 See [docs/architecture/configuration.md](docs/architecture/configuration.md) for complete options.
@@ -174,31 +169,25 @@ agent --provider anthropic --model claude-sonnet-4-5-20250929 -p "Hello"
 
 ## Security Model
 
-Agent Harness provides two layers of security:
-
 | Layer | Mechanism | Protection |
 |-------|-----------|------------|
-| **Application** | Workspace root constraints | Prevents tools from accessing files outside the designated workspace |
-| **OS (with --sandbox)** | Docker container isolation | Provides OS-level process and filesystem isolation |
-
-### Sandbox Mode
-
-Run the agent inside a Docker container for enhanced isolation:
+| Application | Workspace root constraints | Tools can't access files outside the workspace |
+| OS | `--sandbox` flag | Docker container isolation for process and filesystem |
 
 ```bash
-# Run with sandbox isolation (image auto-pulled on first use)
+# Run with sandbox isolation
 agent --sandbox -p "Analyze this codebase"
 ```
 
-When `--sandbox` is passed, the harness automatically pulls the sandbox image from the registry (if needed) and re-executes itself inside a Docker container with your workspace mounted and credentials passed through securely.
-
-See [docs/guides/sandbox.md](docs/guides/sandbox.md) for complete sandbox documentation.
+See [docs/guides/sandbox.md](docs/guides/sandbox.md) for details.
 
 ---
 
 ## Making it Yours
 
 Agent Harness ships neutral. Here's how to configure it:
+
+<img src="docs/images/harness-architecture.jpg" alt="Agent Harness architecture showing Skills and AGENTS.md defining the agent, with the harness providing tool handling, prompt presets, lifecycle hooks, filesystem access, and a safety layer" width="320">
 
 ### AGENTS.md
 
@@ -226,8 +215,6 @@ Agent Harness supports the `.claude/` directory structure for Claude Code compat
 ```
 
 Skills and commands in `.claude/` are automatically discovered. If you have both `.agent/` and `.claude/` directories, `.agent/` takes precedence.
-
-See [Architecture](docs/architecture/README.md) for details.
 
 ---
 
