@@ -17,6 +17,8 @@ export interface ActiveTask {
   name: string;
   /** Tool arguments (for display) */
   args?: Record<string, unknown>;
+  /** Primary argument for display (e.g., file path, command) */
+  primaryArg?: string;
   /** Timestamp when tool started */
   startTime: number;
   /** Span number this task belongs to (1-indexed) */

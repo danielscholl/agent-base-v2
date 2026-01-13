@@ -25,6 +25,6 @@ export {
 } from './ExecutionStatus.js';
 export { PromptLine, type PromptLineProps } from './PromptLine.js';
 export { PromptDivider, type PromptDividerProps } from './PromptDivider.js';
-export { FocusZone, type FocusZoneProps } from './FocusZone.js';
+export { ToolRow, type ToolRowProps } from './ToolRow.js';
 export { SpanNode, type SpanNodeProps } from './SpanNode.js';
 export { SpanFooter, type SpanFooterProps } from './SpanFooter.js';

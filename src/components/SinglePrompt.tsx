@@ -42,6 +42,7 @@ interface ActiveTask {
   id: string;
   name: string;
   args?: Record<string, unknown>;
+  primaryArg?: string;
   startTime: number;
   span: number;
 }
@@ -543,13 +544,13 @@ export function SinglePrompt({
               });
             }
           },
-          addActiveTask: (id, name, args) => {
+          addActiveTask: (id, name, args, primaryArg) => {
             if (mountedRef.current) {
               setState((s) => ({
                 ...s,
                 activeTasks: [
                   ...s.activeTasks,
-                  { id, name, args, startTime: Date.now(), span: s.currentSpan },
+                  { id, name, args, primaryArg, startTime: Date.now(), span: s.currentSpan },
                 ],
               }));
             }

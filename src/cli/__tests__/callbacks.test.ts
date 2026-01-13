@@ -145,7 +145,8 @@ describe('createCallbacks', () => {
     const args = { path: '/test' };
 
     callbacks.onToolStart?.(ctx, 'read_file', args);
-    expect(addActiveTask).toHaveBeenCalledWith(ctx.spanId, 'read_file', args);
+    // Now includes primaryArg from generateToolSummary
+    expect(addActiveTask).toHaveBeenCalledWith(ctx.spanId, 'read_file', args, expect.any(String));
 
     const result: ToolResponse = { success: true, result: { content: 'test' }, message: 'OK' };
     callbacks.onToolEnd?.(ctx, 'read_file', result);

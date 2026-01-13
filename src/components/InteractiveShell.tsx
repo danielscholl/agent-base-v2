@@ -1039,12 +1039,12 @@ export function InteractiveShell({
             };
           });
         },
-        addActiveTask: (id, name, args) => {
+        addActiveTask: (id, name, args, primaryArg) => {
           setState((s) => ({
             ...s,
             activeTasks: [
               ...s.activeTasks,
-              { id, name, args, startTime: Date.now(), span: s.spanState.currentSpan },
+              { id, name, args, primaryArg, startTime: Date.now(), span: s.spanState.currentSpan },
             ],
           }));
         },
@@ -1744,6 +1744,7 @@ export function InteractiveShell({
                 id: task.id,
                 name: task.name,
                 args: task.args !== undefined ? formatToolArgs(task.args) : undefined,
+                primaryArg: task.primaryArg,
                 status: 'running',
                 span: task.span,
               })

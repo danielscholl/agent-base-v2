@@ -11,7 +11,8 @@
 
 import React from 'react';
 import { Box, Text } from 'ink';
-import type { ExecutionSpan, ToolNode } from './ExecutionStatus.js';
+import type { ExecutionSpan } from './ExecutionStatus.js';
+import { ToolRow } from './ToolRow.js';
 
 // Tree drawing characters
 const TREE_BRANCH = '├──';
@@ -20,7 +21,6 @@ const TREE_LAST = '└──';
 // Status symbols
 const SYMBOL_WORKING = '●'; // Yellow - working/active
 const SYMBOL_COMPLETE = '•'; // Dim - completed
-const SYMBOL_TOOL = '→'; // Tool executing/result separator
 const SYMBOL_ERROR = '✗'; // Red - error
 const SYMBOL_EXPANDED = '▼'; // Expanded indicator
 
@@ -60,55 +60,6 @@ function getSpanStyle(span: ExecutionSpan): { symbol: string; color: string } {
     return { symbol: SYMBOL_ERROR, color: 'red' };
   }
   return { symbol: SYMBOL_COMPLETE, color: 'gray' };
-}
-
-/**
- * Render a single tool in the span tree.
- */
-function ToolNodeRow({ node, isLast }: { node: ToolNode; isLast: boolean }): React.ReactElement {
-  const prefix = isLast ? TREE_LAST : TREE_BRANCH;
-
-  let symbol: string;
-  let color: string;
-
-  if (node.status === 'running') {
-    symbol = SYMBOL_TOOL;
-    color = 'yellow';
-  } else if (node.status === 'complete') {
-    symbol = SYMBOL_COMPLETE;
-    color = 'gray';
-  } else {
-    symbol = SYMBOL_ERROR;
-    color = 'red';
-  }
-
-  const hasPrimaryArg = node.primaryArg !== undefined && node.primaryArg !== '';
-  const hasResultSummary = node.resultSummary !== undefined && node.resultSummary !== '';
-  const showDuration = node.duration !== undefined && node.duration >= 1.0;
-
-  return (
-    <Box marginLeft={2}>
-      <Text dimColor>{prefix} </Text>
-      <Text color={color}>{symbol} </Text>
-      <Text color={color}>{node.name}</Text>
-      {hasPrimaryArg && (
-        <Text color="gray">
-          {node.name === 'bash' ? ': ' : ' '}
-          {node.primaryArg}
-        </Text>
-      )}
-      {node.status !== 'running' && hasResultSummary && (
-        <Text dimColor>
-          {' '}
-          {SYMBOL_TOOL} {node.resultSummary}
-        </Text>
-      )}
-      {showDuration && <Text dimColor> ({formatDuration(node.duration ?? 0)})</Text>}
-      {node.status === 'error' && node.error !== undefined && (
-        <Text color="red"> - {node.error}</Text>
-      )}
-    </Box>
-  );
 }
 
 /**
@@ -197,7 +148,12 @@ export function SpanNode({
       )}
       {/* Tool tree */}
       {span.toolNodes.map((node, index) => (
-        <ToolNodeRow key={node.id} node={node} isLast={index === span.toolNodes.length - 1} />
+        <ToolRow
+          key={node.id}
+          node={node}
+          isLast={index === span.toolNodes.length - 1}
+          indent={2}
+        />
       ))}
     </Box>
   );

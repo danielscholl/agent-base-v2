@@ -44,7 +44,13 @@ export interface CallbackState {
   /** Called when agent finishes with final answer */
   onComplete?: (answer: string) => void;
   /** Add active tool to tracking (id from SpanContext.spanId) */
-  addActiveTask?: (id: string, name: string, args?: Record<string, unknown>) => void;
+  addActiveTask?: (
+    id: string,
+    name: string,
+    args?: Record<string, unknown>,
+    /** Primary argument for display (e.g., file path, command) */
+    primaryArg?: string
+  ) => void;
   /**
    * Mark tool as completed by id.
    * Note: The duration parameter is ignored by the implementation - actual duration is calculated
@@ -164,8 +170,13 @@ export function createCallbacks(
     onToolStart: (ctx, toolName, args) => {
       // Cache args for use in onToolEnd (generateToolSummary needs original args)
       toolArgsCache.set(ctx.spanId, args);
+
+      // Generate summary to get primaryArg for immediate display
+      // This ensures running tools show "bash: npm test" instead of "(command: npm test)"
+      const summary = generateToolSummary(toolName, args, { success: true, message: '' }, {});
+
       // Use spanId as unique identifier for concurrent tool calls
-      state.addActiveTask?.(ctx.spanId, toolName, args);
+      state.addActiveTask?.(ctx.spanId, toolName, args, summary.primary);
     },
 
     onToolEnd: (ctx, toolName, result, executionResult) => {

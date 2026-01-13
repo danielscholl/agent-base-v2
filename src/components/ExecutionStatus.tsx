@@ -12,11 +12,10 @@
 
 import React from 'react';
 import { Box, Text } from 'ink';
+import { ToolRow } from './ToolRow.js';
 
 // Visual symbols (from agent-base)
 const SYMBOL_ACTIVE = '●'; // Yellow - working/thinking
-const SYMBOL_COMPLETE = '•'; // Dim - completed node
-const SYMBOL_TOOL = '→'; // Tool executing
 const SYMBOL_ERROR = '✗'; // Red - error
 
 // Tree drawing characters
@@ -104,83 +103,6 @@ function formatDuration(seconds: number): string {
 }
 
 /**
- * Check if duration is significant enough to display (>= 1 second).
- */
-function isSignificantDuration(duration: number | undefined): boolean {
-  return duration !== undefined && duration >= 1.0;
-}
-
-/**
- * Render a tool node in the tree.
- *
- * Format: tool primaryArg -> resultSummary (Xs)
- *
- * Examples:
- * - Running: -> bash: npm test
- * - Complete: glob star.ts -> 42 files
- * - Complete with duration: bash: npm test -> passed (2.1s)
- * - Error: read file.ts - File not found
- */
-function ToolNodeRow({ node, isLast }: { node: ToolNode; isLast: boolean }): React.ReactElement {
-  const prefix = isLast ? TREE_LAST : TREE_BRANCH;
-
-  // Determine symbol and color based on status
-  let symbol: string;
-  let color: string;
-
-  if (node.status === 'running') {
-    symbol = SYMBOL_TOOL;
-    color = 'yellow';
-  } else if (node.status === 'complete') {
-    symbol = SYMBOL_COMPLETE;
-    color = 'gray';
-  } else {
-    symbol = SYMBOL_ERROR;
-    color = 'red';
-  }
-
-  // Build the display line using new summary format
-  // Format: `tool primaryArg → resultSummary`
-  const hasPrimaryArg = node.primaryArg !== undefined && node.primaryArg !== '';
-  const hasResultSummary = node.resultSummary !== undefined && node.resultSummary !== '';
-  const showDuration = isSignificantDuration(node.duration) || node.status === 'error';
-
-  return (
-    <Box>
-      <Text dimColor>{prefix} </Text>
-      <Text color={color}>{symbol} </Text>
-      <Text color={color}>{node.name}</Text>
-      {/* Show primary arg inline (e.g., file path, command, pattern) */}
-      {hasPrimaryArg && (
-        <Text color={node.status === 'running' ? 'yellow' : 'gray'}>
-          {node.name === 'bash' ? ': ' : ' '}
-          {node.primaryArg}
-        </Text>
-      )}
-      {/* Fallback to legacy args format if no primaryArg */}
-      {!hasPrimaryArg && node.args !== undefined && node.args !== '' && (
-        <Text dimColor> ({node.args})</Text>
-      )}
-      {/* Show result summary with arrow separator */}
-      {node.status !== 'running' && hasResultSummary && (
-        <Text dimColor>
-          {' '}
-          {SYMBOL_TOOL} {node.resultSummary}
-        </Text>
-      )}
-      {/* Show duration only if significant (>= 1s) or on error */}
-      {showDuration && node.duration !== undefined && (
-        <Text dimColor> ({formatDuration(node.duration)})</Text>
-      )}
-      {/* Show error message */}
-      {node.status === 'error' && node.error !== undefined && (
-        <Text color="red"> - {node.error}</Text>
-      )}
-    </Box>
-  );
-}
-
-/**
  * ExecutionStatus component.
  * Displays EPHEMERAL execution status during working state only.
  * Returns null on completion (parent uses SpanFooter for verbose mode).
@@ -259,7 +181,7 @@ export function ExecutionStatus({
 
       {/* Tool nodes */}
       {toolNodes.map((node, index) => (
-        <ToolNodeRow key={node.id} node={node} isLast={index === toolNodes.length - 1} />
+        <ToolRow key={node.id} node={node} isLast={index === toolNodes.length - 1} />
       ))}
     </Box>
   );
