@@ -129,7 +129,7 @@ export const listTool = Tool.define<
     path: z.ZodOptional<z.ZodString>;
     recursive: z.ZodOptional<z.ZodBoolean>;
     include_hidden: z.ZodOptional<z.ZodBoolean>;
-    max_entries: z.ZodOptional<z.ZodNumber>;
+    max_entries: z.ZodOptional<z.ZodType<number>>;
   }>,
   ListMetadata
 >('list', {
@@ -138,7 +138,7 @@ export const listTool = Tool.define<
     path: z.string().optional().describe('Directory path (default: current directory)'),
     recursive: z.boolean().optional().describe('List recursively (default: false)'),
     include_hidden: z.boolean().optional().describe('Include hidden files (default: false)'),
-    max_entries: z
+    max_entries: z.coerce
       .number()
       .optional()
       .describe(`Max entries (default: ${String(DEFAULT_MAX_ENTRIES)})`),

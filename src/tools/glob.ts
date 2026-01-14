@@ -145,7 +145,7 @@ export const globTool = Tool.define<
   z.ZodObject<{
     pattern: z.ZodString;
     path: z.ZodOptional<z.ZodString>;
-    max_results: z.ZodOptional<z.ZodNumber>;
+    max_results: z.ZodOptional<z.ZodType<number>>;
   }>,
   GlobMetadata
 >('glob', {
@@ -153,7 +153,7 @@ export const globTool = Tool.define<
   parameters: z.object({
     pattern: z.string().describe('Glob pattern (e.g., "**/*.ts", "src/**/*.js")'),
     path: z.string().optional().describe('Base directory (default: workspace root)'),
-    max_results: z
+    max_results: z.coerce
       .number()
       .optional()
       .describe(`Max results (default: ${String(DEFAULT_MAX_RESULTS)})`),

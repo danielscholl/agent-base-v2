@@ -82,16 +82,16 @@ async function isBinaryFile(fd: fs.FileHandle): Promise<boolean> {
 export const readTool = Tool.define<
   z.ZodObject<{
     file_path: z.ZodString;
-    offset: z.ZodOptional<z.ZodNumber>;
-    limit: z.ZodOptional<z.ZodNumber>;
+    offset: z.ZodOptional<z.ZodType<number>>;
+    limit: z.ZodOptional<z.ZodType<number>>;
   }>,
   ReadMetadata
 >('read', {
   description: 'Read file with line numbers. Supports offset/limit for large files.',
   parameters: z.object({
     file_path: z.string().describe('Absolute or workspace-relative file path'),
-    offset: z.number().optional().describe('Starting line number (1-based, default: 1)'),
-    limit: z
+    offset: z.coerce.number().optional().describe('Starting line number (1-based, default: 1)'),
+    limit: z.coerce
       .number()
       .optional()
       .describe(`Max lines to read (default: ${String(DEFAULT_MAX_LINES)})`),
