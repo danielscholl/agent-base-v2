@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.3.23](https://github.com/danielscholl/agent-harness/compare/v0.3.22...v0.3.23) (2026-01-14)
+
+
+### Features
+
+* **cli:** add clipboard paste and multi-line input support ([62fda52](https://github.com/danielscholl/agent-harness/commit/62fda529239eeb61f1b3e67448c724e3c0f79c82))
+* **clipboard:** add cross-platform clipboard support and integration ([c7376cb](https://github.com/danielscholl/agent-harness/commit/c7376cbb2b3af00c504083781ce65270663351f4))
+* **shell:** add cursor-aware paste and key handling in InteractiveShell ([9e087d5](https://github.com/danielscholl/agent-harness/commit/9e087d5912a9fe1054d44b87bfae339eae822f84))
+* **shell:** enhance interactive shell clipboard handling and navigation ([78d16d0](https://github.com/danielscholl/agent-harness/commit/78d16d09c1da26f07b5cde1f9dbd506a34184ad7))
+* **toolrow:** add ToolRow component for displaying tool execution ([b5a2c37](https://github.com/danielscholl/agent-harness/commit/b5a2c374921e73c3fbe3f34765427a4852505bc9))
+* **ui:** add span-based progressive disclosure for execution ([8f877fa](https://github.com/danielscholl/agent-harness/commit/8f877fa8eeaa3977130c5d05f5f652fe6d297761))
+* **ui:** add span-based progressive disclosure for execution visibility ([af9f389](https://github.com/danielscholl/agent-harness/commit/af9f389bc6f84a155b91296f999b7cf263ee175a))
+
+
+### Bug Fixes
+
+* **tools:** add type coercion for numeric parameters ([3449140](https://github.com/danielscholl/agent-harness/commit/3449140b8dbffd20d0676f5851e319304c56b5a7))
+* **tools:** add type coercion for numeric parameters in zod schemas ([719fd51](https://github.com/danielscholl/agent-harness/commit/719fd51eddff0400c6e1ec2e44716c24db145713))
+
+
+### Documentation
+
+* **readme:** consolidate harness description sections ([e5ab2a9](https://github.com/danielscholl/agent-harness/commit/e5ab2a9a61edd3948664c3707eff3cda4275e300))
+* **readme:** reflect tool execution and user-supplied behavior ([a4f5466](https://github.com/danielscholl/agent-harness/commit/a4f54669f923d591763415cacfce3644f02b415b))
+* **readme:** update readme wording and add harness architecture image ([5af25ab](https://github.com/danielscholl/agent-harness/commit/5af25abd804393bba0c73ad3b43baf85bb634f78))
+
+
+### Code Refactoring
+
+* **components:** remove span-based progressive disclosure and ToolSummary ([647f8ac](https://github.com/danielscholl/agent-harness/commit/647f8ac7d60aa67cc6c6aa671afbc610032338c8))
+* **components:** remove ToolSummary component and adjust SpanFooter/SpanNode UI ([647f8ac](https://github.com/danielscholl/agent-harness/commit/647f8ac7d60aa67cc6c6aa671afbc610032338c8))
+* **components:** simplify ExecutionStatus and InteractiveShell to drop expandedSpans, selectedSpan, and spans ([647f8ac](https://github.com/danielscholl/agent-harness/commit/647f8ac7d60aa67cc6c6aa671afbc610032338c8))
+
+
+### Build System
+
+* **bun:** regenerate bun.lock for dependency updates ([4be03ce](https://github.com/danielscholl/agent-harness/commit/4be03ce175fa41c38069c05b3ce63582abaae845))
+
+
+### Continuous Integration
+
+* **deps:** bump the actions group with 2 updates ([a63728f](https://github.com/danielscholl/agent-harness/commit/a63728fe3f9e8230595852aee061d582ddcfc60a))
+* **deps:** bump the actions group with 2 updates ([bbe3ba2](https://github.com/danielscholl/agent-harness/commit/bbe3ba25a9ac3698e91a3f2d952fb7776d3871e7))
+
+
+### Miscellaneous
+
+* **deps:** bump the production-dependencies group with 2 updates ([c1caa5c](https://github.com/danielscholl/agent-harness/commit/c1caa5c8891b90b0564e2c25ec8f342063b2f576))
+* **deps:** bump the production-dependencies group with 2 updates ([b74953e](https://github.com/danielscholl/agent-harness/commit/b74953e0b3c3fbc9b0ca80beb358aa8f0ab7b7bb))
+
 ## [0.3.22](https://github.com/danielscholl/agent-harness/compare/v0.3.21...v0.3.22) (2026-01-09)
 
 
