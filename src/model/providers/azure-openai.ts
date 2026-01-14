@@ -32,6 +32,9 @@ import { DEFAULT_AZURE_API_VERSION } from '../../config/constants.js';
 // Azure Responses API requires this preview version or later
 const RESPONSES_API_VERSION = '2025-03-01-preview';
 
+// Default timeout for Responses API calls (5 minutes - reasoning models can be slow)
+const RESPONSES_API_TIMEOUT_MS = 5 * 60 * 1000;
+
 // Models that require the Responses API (reasoning models)
 const RESPONSES_API_MODELS = ['gpt-5-codex', 'o1', 'o3', 'o1-preview', 'o1-mini'];
 
@@ -292,33 +295,39 @@ class AzureResponsesChatModel extends BaseChatModel {
   }
 
   /**
-   * Convert LangChain messages to Responses API conversation items.
-   * Used for initial requests (not tool continuations).
+   * Convert LangChain messages to Responses API format.
+   * Separates system messages (for `instructions`) from conversation (for `input`).
+   *
+   * The Responses API expects:
+   * - `instructions`: System/developer messages (the system prompt)
+   * - `input`: User/assistant conversation messages
    */
-  private messagesToConversation(
-    messages: BaseMessage[]
-  ): Array<{ type: 'message'; role: 'user' | 'assistant' | 'system'; content: string }> {
-    const items: Array<{
-      type: 'message';
-      role: 'user' | 'assistant' | 'system';
-      content: string;
-    }> = [];
+  private messagesToResponsesFormat(messages: BaseMessage[]): {
+    instructions: string | null;
+    input: Array<{ role: 'user' | 'assistant'; content: string }>;
+  } {
+    const systemParts: string[] = [];
+    const conversationItems: Array<{ role: 'user' | 'assistant'; content: string }> = [];
 
     for (const msg of messages) {
       if (msg instanceof SystemMessage) {
-        items.push({ type: 'message', role: 'system', content: msg.content as string });
+        // Collect system messages for instructions parameter
+        systemParts.push(msg.content as string);
       } else if (msg instanceof HumanMessage) {
-        items.push({ type: 'message', role: 'user', content: msg.content as string });
+        conversationItems.push({ role: 'user', content: msg.content as string });
       } else if (msg instanceof AIMessage) {
         const content = typeof msg.content === 'string' ? msg.content : '';
         if (content !== '') {
-          items.push({ type: 'message', role: 'assistant', content });
+          conversationItems.push({ role: 'assistant', content });
         }
       }
       // Skip ToolMessages for initial conversation - they're handled via previous_response_id
     }
 
-    return items;
+    return {
+      instructions: systemParts.length > 0 ? systemParts.join('\n\n') : null,
+      input: conversationItems,
+    };
   }
 
   /**
@@ -378,14 +387,26 @@ class AzureResponsesChatModel extends BaseChatModel {
   /**
    * Core implementation of chat generation.
    * Handles both initial requests and tool continuations.
+   * Includes timeout to prevent hanging on slow reasoning model responses.
    */
   async _generate(
     messages: BaseMessage[],
-    _options?: this['ParsedCallOptions'],
+    options?: this['ParsedCallOptions'],
     _runManager?: CallbackManagerForLLMRun
   ): Promise<ChatResult> {
     // Check if this is a tool continuation (returns last AIMessage with response_id)
     const continuation = this.detectToolContinuation(messages);
+
+    // Extract signal from options if provided (for cancellation support)
+    const signal = options?.signal;
+
+    // Request options with timeout and optional signal
+    const requestOptions: { timeout: number; signal?: AbortSignal } = {
+      timeout: RESPONSES_API_TIMEOUT_MS,
+    };
+    if (signal !== undefined) {
+      requestOptions.signal = signal;
+    }
 
     let response;
 
@@ -394,29 +415,63 @@ class AzureResponsesChatModel extends BaseChatModel {
       // (those that immediately follow the AIMessage at continuation.index)
       const toolOutputs = this.extractToolOutputs(messages, continuation.index);
 
-      response = await this.client.responses.create({
-        model: this.deployment,
-        previous_response_id: continuation.responseId,
-        input: toolOutputs as unknown as ResponseInput,
-      });
-    } else {
-      // Initial request: send full conversation
-      const input = this.messagesToConversation(messages) as ResponseInput;
+      // Debug: log continuation request details
+      if (process.env.AGENT_DEBUG !== undefined) {
+        console.error(
+          '[DEBUG] Responses API continuation',
+          JSON.stringify({
+            responseId: continuation.responseId,
+            toolOutputCount: toolOutputs.length,
+            toolOutputs: toolOutputs.map((o) => ({
+              call_id: o.call_id,
+              outputLength: o.output.length,
+            })),
+          })
+        );
+      }
 
-      const requestParams: {
+      // Include tools for continuation (Azure may require this)
+      const continuationParams: {
         model: string;
+        previous_response_id: string;
         input: ResponseInput;
         tools?: FunctionTool[];
       } = {
         model: this.deployment,
-        input,
+        previous_response_id: continuation.responseId,
+        input: toolOutputs as unknown as ResponseInput,
       };
+
+      // Re-include tools if bound (required for multi-turn tool interactions)
+      if (this.boundTools.length > 0) {
+        continuationParams.tools = this.boundTools;
+      }
+
+      response = await this.client.responses.create(continuationParams, requestOptions);
+    } else {
+      // Initial request: separate system messages into instructions
+      const { instructions, input } = this.messagesToResponsesFormat(messages);
+
+      const requestParams: {
+        model: string;
+        input: ResponseInput;
+        instructions?: string;
+        tools?: FunctionTool[];
+      } = {
+        model: this.deployment,
+        input: input as ResponseInput,
+      };
+
+      // Add system prompt as instructions (required for reasoning models)
+      if (instructions !== null) {
+        requestParams.instructions = instructions;
+      }
 
       if (this.boundTools.length > 0) {
         requestParams.tools = this.boundTools;
       }
 
-      response = await this.client.responses.create(requestParams);
+      response = await this.client.responses.create(requestParams, requestOptions);
     }
 
     // Extract tool calls from response
