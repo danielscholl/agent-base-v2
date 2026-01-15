@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.24](https://github.com/danielscholl/agent-harness/compare/v0.3.23...v0.3.24) (2026-01-15)
+
+
+### Bug Fixes
+
+* **azure:** Responses API message format and continuation handling ([f7ba285](https://github.com/danielscholl/agent-harness/commit/f7ba285b827d14578639f3d810ed5544ce85906b))
+* **azure:** separate system messages into instructions parameter for Responses API ([4f09698](https://github.com/danielscholl/agent-harness/commit/4f096984bc426b12d8a3444fe9f6ea6f127ce9f5))
+
+
+### Code Refactoring
+
+* **azure-openai:** simplify request options construction with spread operator ([66ea8aa](https://github.com/danielscholl/agent-harness/commit/66ea8aafde1f124bfc1a140a347056d68316e546))
+
 ## [0.3.23](https://github.com/danielscholl/agent-harness/compare/v0.3.22...v0.3.23) (2026-01-14)
 
 
