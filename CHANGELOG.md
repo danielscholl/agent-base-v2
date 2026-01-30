@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.25](https://github.com/danielscholl/agent-harness/compare/v0.3.24...v0.3.25) (2026-01-30)
+
+
+### Build System
+
+* **bun:** regenerate bun.lock for dependency updates ([0a7aecc](https://github.com/danielscholl/agent-harness/commit/0a7aecc44f3ac15720ce37cb9e52af2db5af04b7))
+
+
+### Miscellaneous
+
+* **deps:** bump the production-dependencies group with 2 updates ([dba0a19](https://github.com/danielscholl/agent-harness/commit/dba0a19b39cbaf272e9648a183c53f7298c82478))
+* **deps:** bump the production-dependencies group with 2 updates ([45a764a](https://github.com/danielscholl/agent-harness/commit/45a764a3047a6f8c4e6f4a53cebce090da4909d8))
+
 ## [0.3.24](https://github.com/danielscholl/agent-harness/compare/v0.3.23...v0.3.24) (2026-01-15)
 
 
